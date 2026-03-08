@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Teamgle.Api</RootNamespace>
+    <AssemblyName>Teamgle.Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Firebase Admin SDK for token verification -->
+    <PackageReference Include="FirebaseAdmin" Version="3.1.0" />
+    <!-- SQL Server client -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.1" />
+  </ItemGroup>
+
+</Project>

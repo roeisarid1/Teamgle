@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teamgle — Sign In</title>
+  <link rel="stylesheet" href="css/auth.css" />
+  <!-- Inter font (optional, falls back to system-ui) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+</head>
+<body>
+
+  <div class="auth-card">
+
+    <!-- ── Header ───────────────────────────────────────────────────────── -->
+    <div class="auth-header">
+      <img
+        src="../logo/ChatGPT Image Mar 8, 2026, 04_50_09 AM.png"
+        alt="Teamgle logo"
+        class="logo"
+      />
+      <h1>Teamgle</h1>
+      <p>Workforce management platform</p>
+    </div>
+
+    <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
+    <div class="auth-tabs">
+      <button id="tab-login" class="active">Sign In</button>
+      <button id="tab-register">First Registration</button>
+    </div>
+
+    <!-- ── Forms ────────────────────────────────────────────────────────── -->
+    <div class="auth-body">
+
+      <!-- Login form -->
+      <form id="form-login" class="auth-form active" novalidate>
+
+        <div class="field">
+          <label for="login-email">Email address</label>
+          <input
+            type="email"
+            id="login-email"
+            placeholder="you@example.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input
+            type="password"
+            id="login-password"
+            placeholder="Your password"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <div id="login-error" class="msg-error" role="alert"></div>
+
+        <button type="button" id="login-btn" class="btn-primary">Sign In</button>
+
+        <p class="form-hint">
+          Only pre-registered users can sign in.<br />
+          Contact your manager if you need access.
+        </p>
+
+      </form>
+
+      <!-- First Registration form -->
+      <form id="form-register" class="auth-form" novalidate>
+
+        <div class="field">
+          <label for="reg-email">Email address</label>
+          <input
+            type="email"
+            id="reg-email"
+            placeholder="The email your manager registered you with"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="field">
+          <label for="reg-password">Create password</label>
+          <input
+            type="password"
+            id="reg-password"
+            placeholder="At least 8 characters"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="field">
+          <label for="reg-confirm">Confirm password</label>
+          <input
+            type="password"
+            id="reg-confirm"
+            placeholder="Repeat your password"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div id="reg-error"   class="msg-error"   role="alert"></div>
+        <div id="reg-success" class="msg-success" role="status"></div>
+
+        <button type="button" id="reg-btn" class="btn-primary">Create Account</button>
+
+        <p class="form-hint">
+          First Registration is only available to users<br />
+          who were already added to the system by a manager.
+        </p>
+
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Load the auth logic as an ES module (uses Firebase JS SDK via CDN) -->
+  <script type="module" src="js/auth.js"></script>
+
+</body>
+</html>

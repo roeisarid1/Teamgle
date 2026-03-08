@@ -1,0 +1,35 @@
+# ===== .NET =====
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+
+# ===== Secrets (NEVER commit these) =====
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+secrets/
+
+# ===== Firebase service account =====
+firebase-service-account.json
+*service-account*.json
+
+# ===== Environment files =====
+.env
+.env.*
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+
+# ===== Node (if any tooling is added later) =====
+node_modules/
+npm-debug.log*
