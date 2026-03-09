@@ -81,13 +81,65 @@ body {
 .btn-logout:hover { background: rgba(255,255,255,.25); }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
+.body-layout {
+  display: flex;
+  min-height: calc(100vh - 60px);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  padding: 24px 12px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background var(--transition), color var(--transition);
+}
+
+.nav-item:hover:not(.disabled) {
+  background: var(--blue-light);
+  color: var(--blue);
+}
+
+.nav-item.active {
+  background: var(--blue-light);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.nav-item.disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nav-icon { font-size: 16px; }
+
 .page-content {
-  max-width: 1100px;
-  margin: 0 auto;
+  flex: 1;
   padding: 32px 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 0;
 }
 
 /* ── Info cards row ──────────────────────────────────────────────────────── */
@@ -226,6 +278,71 @@ tbody tr:hover { background: #fafbff; }
   padding: 48px 24px;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+/* ── Add role inline ─────────────────────────────────────────────────────── */
+.roles-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-add-role {
+  background: none;
+  border: 1.5px dashed var(--blue);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.btn-add-role:hover { background: var(--blue-light); }
+
+.add-role-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.add-role-inline input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.add-role-inline input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+}
+
+.btn-save-role {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-cancel-role {
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 /* ── Modal overlay ───────────────────────────────────────────────────────── */

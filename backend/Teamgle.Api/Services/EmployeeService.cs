@@ -12,8 +12,29 @@ public class EmployeeService : IEmployeeService
         _employeeRepo = employeeRepo;
     }
 
-    public Task<List<RoleResponse>> GetRolesAsync() =>
-        _employeeRepo.GetAllRolesAsync();
+    public async Task<List<RoleResponse>> GetRolesAsync(string firebaseUid)
+    {
+        var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+        return await _employeeRepo.GetAllRolesAsync(companyId);
+    }
+
+    // ── Create a new company-specific role ────────────────────────────────
+    public async Task CreateRoleAsync(string firebaseUid, string roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+            throw new ArgumentException("Role name is required.");
+
+        var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        if (await _employeeRepo.RoleNameExistsForCompanyAsync(roleName.Trim(), companyId))
+            throw new InvalidOperationException($"A role named '{roleName}' already exists.");
+
+        await _employeeRepo.CreateRoleAsync(roleName, companyId);
+    }
 
     // ── Get employees — only for the manager's company ────────────────────
     public async Task<List<EmployeeResponse>> GetEmployeesForManagerAsync(string firebaseUid)
@@ -50,8 +71,8 @@ public class EmployeeService : IEmployeeService
         if (await _employeeRepo.EmailExistsAsync(request.Email.Trim().ToLower()))
             throw new InvalidOperationException("An employee with this email already exists.");
 
-        // 4. Validate that all provided role IDs exist in Roll table
-        if (!await _employeeRepo.RoleIdsExistAsync(request.RoleIds))
+        // 4. Validate that all provided role IDs belong to this company (or are global)
+        if (!await _employeeRepo.RoleIdsExistAsync(request.RoleIds, companyId))
             throw new ArgumentException("One or more selected roles are invalid.");
 
         // 5. Insert transactionally

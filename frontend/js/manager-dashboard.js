@@ -33,7 +33,7 @@ let profile        = null;
 // ── Auth gate ──────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    window.location.href = "/auth.html";
+    window.location.href = "/frontend/auth.html";
     return;
   }
 
@@ -45,7 +45,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!profile || profile.role !== "Manager") {
     alert("Access denied. Manager accounts only.");
     await signOut(auth);
-    window.location.href = "/auth.html";
+    window.location.href = "/frontend/auth.html";
     return;
   }
 
@@ -70,7 +70,10 @@ async function getToken() {
 // ── Load roles ─────────────────────────────────────────────────────────────
 async function loadRoles() {
   try {
-    const res = await fetch(`${API_BASE}/roles`);
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/roles`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
     if (!res.ok) throw new Error("Failed to load roles.");
     const roles = await res.json();
     renderRoles(roles);
@@ -223,11 +226,81 @@ btnSave.addEventListener("click", async () => {
   }
 });
 
+// ── Add role inline ────────────────────────────────────────────────────────
+document.getElementById("btn-add-role").addEventListener("click", () => {
+  // Prevent opening a second input if one already exists
+  if (document.getElementById("new-role-input-row")) return;
+
+  const row = document.createElement("div");
+  row.id = "new-role-input-row";
+  row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:8px;width:100%";
+  row.innerHTML = `
+    <input id="new-role-input" type="text" placeholder="Role name…"
+      style="flex:1;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" />
+    <button type="button" id="btn-confirm-role"
+      style="padding:6px 12px;background:#3b5bdb;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer">Add</button>
+    <button type="button" id="btn-cancel-role"
+      style="padding:6px 10px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:13px;cursor:pointer">✕</button>
+  `;
+  rolesGrid.after(row);
+
+  const input = document.getElementById("new-role-input");
+  input.focus();
+
+  document.getElementById("btn-cancel-role").addEventListener("click", () => row.remove());
+
+  document.getElementById("btn-confirm-role").addEventListener("click", () => submitNewRole(input, row));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitNewRole(input, row);
+    if (e.key === "Escape") row.remove();
+  });
+});
+
+async function submitNewRole(input, row) {
+  const roleName = input.value.trim();
+  if (!roleName) { input.focus(); return; }
+
+  const btn = document.getElementById("btn-confirm-role");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/roles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ roleName })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Failed to create role."); btn.disabled = false; btn.textContent = "Add"; return; }
+
+    // Add the new checkbox directly to the grid
+    const label = document.createElement("label");
+    label.className = "role-check";
+    label.innerHTML = `<input type="checkbox" value="__pending__" checked /> ${capitalize(roleName)}`;
+    rolesGrid.appendChild(label);
+
+    row.remove();
+
+    // Reload roles to get the real ID
+    await loadRoles();
+    // Re-check the newly added role by name
+    document.querySelectorAll("#roles-grid input[type='checkbox']").forEach(cb => {
+      if (cb.closest("label")?.textContent.trim().toLowerCase() === roleName.toLowerCase()) cb.checked = true;
+    });
+
+  } catch {
+    alert("Network error. Could not save role.");
+    btn.disabled = false;
+    btn.textContent = "Add";
+  }
+}
+
 // ── Logout ─────────────────────────────────────────────────────────────────
 btnLogout.addEventListener("click", async () => {
   await signOut(auth);
   sessionStorage.removeItem("userProfile");
-  window.location.href = "/auth.html";
+  window.location.href = "/frontend/auth.html";
 });
 
 // ── Utilities ──────────────────────────────────────────────────────────────

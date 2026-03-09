@@ -13,14 +13,21 @@ public class EmployeeRepository : IEmployeeRepository
             ?? throw new InvalidOperationException("ConnectionStrings:myProjDB is not set.");
     }
 
-    // ── Get all roles from Roll table ──────────────────────────────────────
-    public async Task<List<RoleResponse>> GetAllRolesAsync()
+    // ── Get roles: global (no entry in Roll_company) + company-specific ───
+    public async Task<List<RoleResponse>> GetAllRolesAsync(string companyId)
     {
-        const string sql = "SELECT Roll_ID, Roll_name FROM Roll ORDER BY Roll_name";
+        const string sql = """
+            SELECT r.Roll_ID, r.Roll_name
+            FROM Roll r
+            LEFT JOIN Roll_company rc ON r.Roll_ID = rc.roll_ID
+            WHERE rc.company_ID IS NULL OR rc.company_ID = @companyId
+            ORDER BY r.Roll_name
+            """;
         var roles = new List<RoleResponse>();
 
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@companyId", companyId);
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
 
@@ -35,19 +42,74 @@ public class EmployeeRepository : IEmployeeRepository
         return roles;
     }
 
-    // ── Validate that all provided role IDs exist ──────────────────────────
-    public async Task<bool> RoleIdsExistAsync(List<string> roleIds)
+    // ── Check if role name already exists for this company ─────────────────
+    public async Task<bool> RoleNameExistsForCompanyAsync(string roleName, string companyId)
+    {
+        const string sql = """
+            SELECT COUNT(*) FROM Roll r
+            LEFT JOIN Roll_company rc ON r.Roll_ID = rc.roll_ID
+            WHERE LOWER(r.Roll_name) = LOWER(@name)
+              AND (rc.company_ID IS NULL OR rc.company_ID = @companyId)
+            """;
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@name", roleName);
+        cmd.Parameters.AddWithValue("@companyId", companyId);
+        await conn.OpenAsync();
+        return (int)await cmd.ExecuteScalarAsync()! > 0;
+    }
+
+    // ── Create a new company-specific role ─────────────────────────────────
+    public async Task CreateRoleAsync(string roleName, string companyId)
+    {
+        var rollId = Guid.NewGuid().ToString();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = conn.BeginTransaction();
+        try
+        {
+            await using (var cmd = new SqlCommand("INSERT INTO Roll (Roll_ID, Roll_name) VALUES (@id, @name)", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@id",   rollId);
+                cmd.Parameters.AddWithValue("@name", roleName.Trim().ToLower());
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await using (var cmd = new SqlCommand("INSERT INTO Roll_company (roll_ID, company_ID) VALUES (@rollId, @companyId)", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@rollId",    rollId);
+                cmd.Parameters.AddWithValue("@companyId", companyId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    // ── Validate that all provided role IDs belong to company or are global ─
+    public async Task<bool> RoleIdsExistAsync(List<string> roleIds, string companyId)
     {
         if (roleIds.Count == 0) return false;
 
-        // Build parameterized IN clause
         var paramNames = roleIds.Select((_, i) => $"@r{i}").ToList();
-        var sql = $"SELECT COUNT(*) FROM Roll WHERE Roll_ID IN ({string.Join(",", paramNames)})";
+        var sql = $"""
+            SELECT COUNT(*) FROM Roll r
+            LEFT JOIN Roll_company rc ON r.Roll_ID = rc.roll_ID
+            WHERE r.Roll_ID IN ({string.Join(",", paramNames)})
+              AND (rc.company_ID IS NULL OR rc.company_ID = @companyId)
+            """;
 
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd = new SqlCommand(sql, conn);
         for (int i = 0; i < roleIds.Count; i++)
             cmd.Parameters.AddWithValue($"@r{i}", roleIds[i]);
+        cmd.Parameters.AddWithValue("@companyId", companyId);
 
         await conn.OpenAsync();
         var count = (int)await cmd.ExecuteScalarAsync()!;

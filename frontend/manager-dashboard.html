@@ -22,6 +22,31 @@
     </div>
   </nav>
 
+  <!-- ── Body layout ───────────────────────────────────────────────────── -->
+  <div class="body-layout">
+
+  <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active">
+        <span class="nav-icon">👥</span>
+        <span>Employees</span>
+      </a>
+      <a href="#" class="nav-item disabled">
+        <span class="nav-icon">📅</span>
+        <span>Shifts</span>
+      </a>
+      <a href="#" class="nav-item disabled">
+        <span class="nav-icon">📋</span>
+        <span>Events</span>
+      </a>
+      <a href="#" class="nav-item disabled">
+        <span class="nav-icon">💰</span>
+        <span>Invoices</span>
+      </a>
+    </nav>
+  </aside>
+
   <!-- ── Page content ───────────────────────────────────────────────────── -->
   <div class="page-content">
 
@@ -110,10 +135,19 @@
         </div>
 
         <div class="field">
-          <label>Roles * (select at least one)</label>
+          <div class="roles-label-row">
+            <label>Roles * (select at least one)</label>
+            <button type="button" id="btn-add-role" class="btn-add-role">+ Add Role</button>
+          </div>
           <div class="roles-grid" id="roles-grid">
             <span style="color:#6b7280;font-size:13px">Loading roles…</span>
           </div>
+          <div class="add-role-inline" id="add-role-inline" style="display:none">
+            <input type="text" id="new-role-input" placeholder="e.g. photographer" maxlength="50" />
+            <button type="button" id="btn-save-role" class="btn-save-role">Save</button>
+            <button type="button" id="btn-cancel-role" class="btn-cancel-role">Cancel</button>
+          </div>
+          <div id="role-error" class="msg-error" style="margin-top:4px"></div>
         </div>
 
         <div id="form-error"   class="msg-error"   role="alert"></div>
@@ -128,6 +162,8 @@
 
     </div>
   </div>
+
+  </div> <!-- end body-layout -->
 
   <script type="module" src="js/manager-dashboard.js"></script>
 </body>
