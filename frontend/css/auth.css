@@ -290,6 +290,84 @@ body {
   border: 1px dashed var(--border);
 }
 
+/* ── Forgot password link ────────────────────────────────────────────────── */
+.forgot-link-wrap {
+  text-align: right;
+  margin-top: -4px;
+}
+
+.forgot-link-wrap button {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition);
+}
+
+.forgot-link-wrap button:hover {
+  color: var(--blue-dark);
+}
+
+/* ── Forgot password section ─────────────────────────────────────────────── */
+.forgot-section {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.forgot-section.active {
+  display: flex;
+}
+
+.forgot-back {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  width: fit-content;
+  transition: color var(--transition);
+}
+
+.forgot-back:hover {
+  color: var(--blue);
+}
+
+.forgot-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--blue-light);
+  border-radius: var(--radius-input);
+}
+
+.forgot-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.forgot-heading h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.forgot-heading p {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .auth-body    { padding: 20px; }

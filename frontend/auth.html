@@ -68,6 +68,10 @@
 
         <div id="login-error" class="msg-error" role="alert"></div>
 
+        <div class="forgot-link-wrap">
+          <button type="button" id="forgot-link">Forgot password?</button>
+        </div>
+
         <button type="button" id="login-btn" class="btn-primary">Sign In</button>
 
         <p class="form-hint">
@@ -76,6 +80,39 @@
         </p>
 
       </form>
+
+      <!-- Forgot Password inline section -->
+      <div id="forgot-section" class="forgot-section" aria-hidden="true">
+
+        <button type="button" id="forgot-back" class="forgot-back">← Back to Sign In</button>
+
+        <div class="forgot-heading">
+          <span class="forgot-icon">🔑</span>
+          <div>
+            <h2>Reset your password</h2>
+            <p>Enter your email and we'll send you a reset link.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="forgot-email">Email address</label>
+          <div class="input-wrap">
+            <span class="icon">✉️</span>
+            <input
+              type="email"
+              id="forgot-email"
+              placeholder="you@company.com"
+              autocomplete="email"
+            />
+          </div>
+        </div>
+
+        <div id="forgot-error"   class="msg-error"   role="alert"></div>
+        <div id="forgot-success" class="msg-success" role="status"></div>
+
+        <button type="button" id="forgot-btn" class="btn-primary">Send Reset Email</button>
+
+      </div>
 
       <!-- First Registration form -->
       <form id="form-register" class="auth-form" novalidate>

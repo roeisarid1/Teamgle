@@ -1,7 +1,8 @@
 import { auth } from "./firebase-config.js";
 import {
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ── Backend base URL ───────────────────────────────────────────────────────
@@ -26,6 +27,14 @@ const regError    = document.getElementById("reg-error");
 const regSuccess  = document.getElementById("reg-success");
 const regBtn      = document.getElementById("reg-btn");
 
+const forgotLink    = document.getElementById("forgot-link");
+const forgotSection = document.getElementById("forgot-section");
+const forgotBack    = document.getElementById("forgot-back");
+const forgotEmail   = document.getElementById("forgot-email");
+const forgotError   = document.getElementById("forgot-error");
+const forgotSuccess = document.getElementById("forgot-success");
+const forgotBtn     = document.getElementById("forgot-btn");
+
 // ── Tab switching ──────────────────────────────────────────────────────────
 tabLogin.addEventListener("click", () => switchTab("login"));
 tabRegister.addEventListener("click", () => switchTab("register"));
@@ -46,10 +55,68 @@ function switchTab(tab) {
 }
 
 function clearMessages() {
-  loginError.textContent = "";
-  regError.textContent = "";
-  regSuccess.textContent = "";
+  loginError.textContent  = "";
+  loginError.style.display = "none";
+  regError.textContent    = "";
+  regError.style.display  = "none";
+  regSuccess.textContent  = "";
+  regSuccess.style.display = "none";
+  forgotError.textContent  = "";
+  forgotError.style.display = "none";
+  forgotSuccess.textContent  = "";
+  forgotSuccess.style.display = "none";
 }
+
+// ── FORGOT PASSWORD ────────────────────────────────────────────────────────
+forgotLink.addEventListener("click", () => {
+  formLogin.classList.remove("active");
+  forgotSection.classList.add("active");
+  forgotSection.setAttribute("aria-hidden", "false");
+  forgotEmail.value = loginEmail.value; // pre-fill if already typed
+  clearMessages();
+});
+
+forgotBack.addEventListener("click", () => {
+  forgotSection.classList.remove("active");
+  forgotSection.setAttribute("aria-hidden", "true");
+  formLogin.classList.add("active");
+  forgotEmail.value = "";
+  clearMessages();
+});
+
+forgotBtn.addEventListener("click", async () => {
+  forgotError.style.display   = "none";
+  forgotSuccess.style.display = "none";
+
+  const email = forgotEmail.value.trim().toLowerCase();
+
+  if (!email) {
+    showError(forgotError, "Please enter your email address.");
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    showError(forgotError, "Please enter a valid email address.");
+    return;
+  }
+
+  setLoading(forgotBtn, true);
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (_) {
+    // Intentionally swallow — we never reveal whether an email exists.
+  } finally {
+    setLoading(forgotBtn, false);
+  }
+
+  // Always show the same success message (security: prevents user enumeration)
+  showSuccess(
+    forgotSuccess,
+    "If this email is registered, you will receive a password reset link shortly. Check your inbox."
+  );
+  forgotEmail.value = "";
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function setLoading(btn, loading) {
