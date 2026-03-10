@@ -119,7 +119,7 @@ public class EmployeeRepository : IEmployeeRepository
     // ── Check if an email already exists in User table ─────────────────────
     public async Task<bool> EmailExistsAsync(string email)
     {
-        const string sql = "SELECT COUNT(*) FROM [User] WHERE email = @email";
+        const string sql = "SELECT COUNT(*) FROM [User] WHERE LOWER(email) = LOWER(@email)";
 
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd = new SqlCommand(sql, conn);
@@ -272,7 +272,7 @@ public class EmployeeRepository : IEmployeeRepository
             }
 
             // 3. Insert into Employee_Roll for each role
-            foreach (var roleId in request.RoleIds)
+            foreach (var roleId in request.RoleIds.Distinct())
             {
                 const string rollSql = """
                     INSERT INTO Employee_Roll (employee_user_ID, roll_ID)
