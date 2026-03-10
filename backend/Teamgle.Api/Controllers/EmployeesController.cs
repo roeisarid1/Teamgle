@@ -71,8 +71,8 @@ public class EmployeesController : ControllerBase
 
         try
         {
-            await _employeeService.CreateEmployeeAsync(uid, request);
-            return Ok(new { message = "Employee created successfully." });
+            var employeeId = await _employeeService.CreateEmployeeAsync(uid, request);
+            return Ok(new { message = "Employee created successfully.", employeeId });
         }
         catch (UnauthorizedAccessException ex)
         {

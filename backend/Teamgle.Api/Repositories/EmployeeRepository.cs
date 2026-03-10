@@ -228,7 +228,7 @@ public class EmployeeRepository : IEmployeeRepository
     }
 
     // ── Create employee: User + Employee + Employee_Roll (transactional) ───
-    public async Task CreateEmployeeAsync(string companyId, CreateEmployeeRequest request)
+    public async Task<string> CreateEmployeeAsync(string companyId, CreateEmployeeRequest request)
     {
         var userId = Guid.NewGuid().ToString();
 
@@ -292,5 +292,6 @@ public class EmployeeRepository : IEmployeeRepository
             await tx.RollbackAsync();
             throw;
         }
+        return userId;
     }
 }

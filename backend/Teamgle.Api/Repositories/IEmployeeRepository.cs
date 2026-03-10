@@ -11,5 +11,5 @@ public interface IEmployeeRepository
     Task<bool> EmailExistsAsync(string email);
     Task<string?> GetManagerCompanyIdAsync(string firebaseUid);
     Task<List<EmployeeResponse>> GetEmployeesByCompanyAsync(string companyId);
-    Task CreateEmployeeAsync(string companyId, CreateEmployeeRequest request);
+    Task<string> CreateEmployeeAsync(string companyId, CreateEmployeeRequest request);
 }

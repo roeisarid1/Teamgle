@@ -48,7 +48,7 @@ public class EmployeeService : IEmployeeService
     }
 
     // ── Create employee — validates then inserts transactionally ──────────
-    public async Task CreateEmployeeAsync(string firebaseUid, CreateEmployeeRequest request)
+    public async Task<string> CreateEmployeeAsync(string firebaseUid, CreateEmployeeRequest request)
     {
         // 1. Resolve manager's company — never trust frontend
         var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
@@ -76,6 +76,6 @@ public class EmployeeService : IEmployeeService
             throw new ArgumentException("One or more selected roles are invalid.");
 
         // 5. Insert transactionally
-        await _employeeRepo.CreateEmployeeAsync(companyId, request);
+        return await _employeeRepo.CreateEmployeeAsync(companyId, request);
     }
 }
