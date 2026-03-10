@@ -1,6 +1,8 @@
 import { auth, storage } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import {
+  ref, uploadBytes, getDownloadURL, listAll, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -27,7 +29,7 @@ const empEmail     = document.getElementById("emp-email");
 const empPhone     = document.getElementById("emp-phone");
 const empCost      = document.getElementById("emp-cost");
 
-// ── File upload DOM refs ───────────────────────────────────────────────────
+// File upload DOM refs
 const profileUploadZone  = document.getElementById("profile-upload-zone");
 const profileFileInput   = document.getElementById("profile-file-input");
 const profilePreview     = document.getElementById("profile-preview");
@@ -39,8 +41,21 @@ const btnAddDoc          = document.getElementById("btn-add-doc");
 // ── State ──────────────────────────────────────────────────────────────────
 let currentIdToken = null;
 let profile        = null;
-let profileFile    = null;        // File | null
+
+// Add mode
+let profileFile    = null;        // File | null — new file chosen for profile
 let documentFiles  = [];          // Array of { file, title } | null (nulled on remove)
+
+// Edit mode
+let editingEmployeeId   = null;   // null = add, string = edit
+let existingProfilePath = null;   // Firebase storage path of current profile image
+let replaceProfile      = false;  // true when user removes existing profile in edit mode
+let existingDocs        = [];     // [{ storagePath, url, name }] loaded from Firebase
+let docsToDelete        = new Set(); // storagePaths marked for removal in edit mode
+
+// Delete modal
+let pendingDeleteId   = null;
+let pendingDeleteName = null;
 
 // ── Auth gate ──────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
@@ -51,7 +66,6 @@ onAuthStateChanged(auth, async (user) => {
 
   currentIdToken = await user.getIdToken();
 
-  // Read profile from sessionStorage (set during login)
   profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
 
   if (!profile || profile.role !== "Manager") {
@@ -61,14 +75,12 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  // Populate header info
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
-  navUsername.textContent  = fullName;
-  infoName.textContent     = fullName;
-  infoRole.textContent     = profile.role;
-  infoCompany.textContent  = profile.companyId || "—";
+  navUsername.textContent = fullName;
+  infoName.textContent    = fullName;
+  infoRole.textContent    = profile.role;
+  infoCompany.textContent = profile.companyId || "—";
 
-  // Load data
   await Promise.all([loadRoles(), loadEmployees()]);
 });
 
@@ -76,7 +88,7 @@ onAuthStateChanged(auth, async (user) => {
 async function getToken() {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated.");
-  return await user.getIdToken(/* forceRefresh */ false);
+  return await user.getIdToken(false);
 }
 
 // ── Load roles ─────────────────────────────────────────────────────────────
@@ -109,7 +121,7 @@ function renderRoles(roles) {
 
 // ── Load employees ─────────────────────────────────────────────────────────
 async function loadEmployees() {
-  employeeTbody.innerHTML = `<tr><td colspan="6" class="empty-state">Loading…</td></tr>`;
+  employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
   try {
     const token = await getToken();
     const res   = await fetch(`${API_BASE}/employees`, {
@@ -119,13 +131,13 @@ async function loadEmployees() {
     const employees = await res.json();
     renderEmployees(employees);
   } catch {
-    employeeTbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:#ef4444">Failed to load employees.</td></tr>`;
+    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load employees.</td></tr>`;
   }
 }
 
 function renderEmployees(employees) {
   if (!employees.length) {
-    employeeTbody.innerHTML = `<tr><td colspan="6" class="empty-state">No employees yet. Click "+ Add Employee" to get started.</td></tr>`;
+    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">No employees yet. Click "+ Add Employee" to get started.</td></tr>`;
     return;
   }
 
@@ -148,21 +160,170 @@ function renderEmployees(employees) {
           ${e.registrationStatus}
         </span>
       </td>
+      <td>
+        <div class="actions-cell">
+          <button class="btn-action btn-action-edit"
+            data-action="edit"
+            data-id="${e.userId}">Edit</button>
+          <button class="btn-action btn-action-delete"
+            data-action="delete"
+            data-id="${e.userId}"
+            data-name="${escape(e.firstName + ' ' + e.lastName)}">Delete</button>
+        </div>
+      </td>
     </tr>
   `).join("");
 }
 
+// ── Table action delegation ────────────────────────────────────────────────
+employeeTbody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+
+  const action = btn.dataset.action;
+  const id     = btn.dataset.id;
+
+  if (action === "edit") {
+    await openEditModal(id);
+  } else if (action === "delete") {
+    openDeleteModal(id, btn.dataset.name);
+  }
+});
+
 // ── Modal open/close ───────────────────────────────────────────────────────
-btnAddEmployee.addEventListener("click", () => openModal());
+btnAddEmployee.addEventListener("click", () => openAddModal());
 modalClose.addEventListener("click", closeModal);
 modalCancel.addEventListener("click", closeModal);
 modalOverlay.addEventListener("click", (e) => {
   if (e.target === modalOverlay) closeModal();
 });
 
-function openModal() {
+function openAddModal() {
   clearForm();
   modalOverlay.classList.add("open");
+}
+
+async function openEditModal(employeeId) {
+  clearForm();
+  editingEmployeeId = employeeId;
+
+  document.getElementById("modal-title").textContent = "Edit Employee";
+  btnSave.textContent = "Save Changes";
+  btnSave.dataset.orig = "Save Changes";
+  empEmail.disabled = true;
+  empEmail.style.opacity = "0.6";
+
+  modalOverlay.classList.add("open");
+
+  // Show loading state while fetching
+  btnSave.disabled = true;
+  btnSave.textContent = "Loading…";
+
+  try {
+    // 1. Load SQL data
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("Failed to load employee.");
+    const emp = await res.json();
+
+    // Pre-fill form fields
+    empFirstname.value = emp.firstName;
+    empLastname.value  = emp.lastName;
+    empEmail.value     = emp.email;
+    empPhone.value     = emp.phoneNum || "";
+    empCost.value      = emp.costPerHour != null ? emp.costPerHour : "";
+
+    // Check the employee's current roles
+    const roleIds = emp.roles.map(r => r.rollId);
+    document.querySelectorAll("#roles-grid input[type='checkbox']").forEach(cb => {
+      cb.checked = roleIds.includes(cb.value);
+    });
+
+    // 2. Load Firebase files
+    await loadEmployeeFirebaseFiles(employeeId);
+
+  } catch {
+    showError("Failed to load employee details. Please try again.");
+  } finally {
+    btnSave.disabled = false;
+    btnSave.textContent = "Save Changes";
+  }
+}
+
+async function loadEmployeeFirebaseFiles(employeeId) {
+  // Load profile image
+  try {
+    const profileDir   = ref(storage, `employees/${employeeId}/profile`);
+    const profileItems = await listAll(profileDir);
+    if (profileItems.items.length > 0) {
+      const profileRef   = profileItems.items[0];
+      existingProfilePath = profileRef.fullPath;
+      const url = await getDownloadURL(profileRef);
+      profilePreview.src               = url;
+      profilePreview.style.display     = "block";
+      profilePlaceholder.style.display = "none";
+      btnRemoveProfile.style.display   = "inline-block";
+    }
+  } catch {
+    // No profile image — that's fine
+  }
+
+  // Load documents
+  try {
+    const docsDir   = ref(storage, `employees/${employeeId}/documents`);
+    const docsItems = await listAll(docsDir);
+    if (docsItems.items.length > 0) {
+      document.getElementById("existing-docs-section").style.display = "block";
+      const existingDocsList = document.getElementById("existing-docs-list");
+      existingDocsList.innerHTML = "";
+
+      for (const item of docsItems.items) {
+        const url     = await getDownloadURL(item);
+        const docInfo = { storagePath: item.fullPath, url, name: item.name };
+        existingDocs.push(docInfo);
+        renderExistingDocItem(docInfo, existingDocsList);
+      }
+    }
+  } catch {
+    // No documents — that's fine
+  }
+}
+
+function renderExistingDocItem(docInfo, container) {
+  const item = document.createElement("div");
+  item.className = "doc-item-existing";
+  item.dataset.path = docInfo.storagePath;
+
+  const safeName = escape(docInfo.name);
+  item.innerHTML = `
+    <span class="doc-item-name" title="${safeName}">${safeName}</span>
+    <a href="${docInfo.url}" target="_blank" rel="noopener" class="btn-open-doc">Open</a>
+    <button type="button" class="btn-remove-doc" title="Mark for removal">✕</button>
+  `;
+
+  const removeBtn = item.querySelector(".btn-remove-doc");
+  removeBtn.addEventListener("click", () => {
+    docsToDelete.add(docInfo.storagePath);
+    item.classList.add("marked-delete");
+    removeBtn.style.display = "none";
+
+    // Undo button
+    const undoBtn = document.createElement("button");
+    undoBtn.type      = "button";
+    undoBtn.className = "btn-undo-doc";
+    undoBtn.textContent = "Undo";
+    undoBtn.addEventListener("click", () => {
+      docsToDelete.delete(docInfo.storagePath);
+      item.classList.remove("marked-delete");
+      undoBtn.remove();
+      removeBtn.style.display = "";
+    });
+    item.appendChild(undoBtn);
+  });
+
+  container.appendChild(item);
 }
 
 function closeModal() {
@@ -171,6 +332,7 @@ function closeModal() {
 }
 
 function clearForm() {
+  // Reset field values
   empFirstname.value = "";
   empLastname.value  = "";
   empEmail.value     = "";
@@ -178,41 +340,72 @@ function clearForm() {
   empCost.value      = "";
   document.querySelectorAll("#roles-grid input[type='checkbox']")
     .forEach(cb => cb.checked = false);
+
+  // Reset messages
   formError.style.display   = "none";
   formSuccess.style.display = "none";
 
-  // Reset profile image
-  profileFile = null;
-  profileFileInput.value        = "";
-  profilePreview.style.display  = "none";
-  profilePreview.src            = "";
+  // Reset profile image state
+  profileFile       = null;
+  existingProfilePath = null;
+  replaceProfile    = false;
+  profileFileInput.value           = "";
+  profilePreview.style.display     = "none";
+  profilePreview.src               = "";
   profilePlaceholder.style.display = "flex";
   btnRemoveProfile.style.display   = "none";
 
-  // Reset documents
+  // Reset documents state
   documentFiles = [];
   documentsList.innerHTML = "";
+  existingDocs  = [];
+  docsToDelete  = new Set();
+  document.getElementById("existing-docs-section").style.display = "none";
+  document.getElementById("existing-docs-list").innerHTML = "";
+  document.getElementById("new-docs-label").style.display = "none";
+
+  // Reset edit mode
+  editingEmployeeId = null;
+  document.getElementById("modal-title").textContent = "Add New Employee";
+  btnSave.textContent = "Save Employee";
+  btnSave.dataset.orig = "Save Employee";
+  btnSave.disabled = false;
+  empEmail.disabled = false;
+  empEmail.style.opacity = "";
 }
 
-// ── Save employee ──────────────────────────────────────────────────────────
+// ── Save (handles both add and edit mode) ──────────────────────────────────
 btnSave.addEventListener("click", async () => {
   formError.style.display   = "none";
   formSuccess.style.display = "none";
 
-  const firstName  = empFirstname.value.trim();
-  const lastName   = empLastname.value.trim();
-  const email      = empEmail.value.trim().toLowerCase();
-  const phoneNum   = empPhone.value.trim();
+  const firstName   = empFirstname.value.trim();
+  const lastName    = empLastname.value.trim();
+  const email       = empEmail.value.trim().toLowerCase();
+  const phoneNum    = empPhone.value.trim();
   const costPerHour = parseFloat(empCost.value);
-  const roleIds    = [...document.querySelectorAll("#roles-grid input:checked")]
-                       .map(cb => cb.value);
+  const roleIds     = [...document.querySelectorAll("#roles-grid input:checked")]
+                        .map(cb => cb.value);
 
   // Client-side validation
   if (!firstName || !lastName) { showError("First and last name are required."); return; }
-  if (!email || !isValidEmail(email)) { showError("A valid email address is required."); return; }
-  if (isNaN(costPerHour) || costPerHour < 0) { showError("Cost per hour must be a valid positive number."); return; }
+  if (!editingEmployeeId && (!email || !isValidEmail(email))) {
+    showError("A valid email address is required."); return;
+  }
+  if (isNaN(costPerHour) || costPerHour < 0) {
+    showError("Cost per hour must be a valid positive number."); return;
+  }
   if (!roleIds.length) { showError("Please select at least one role."); return; }
 
+  if (editingEmployeeId) {
+    await handleSaveEdit(firstName, lastName, phoneNum, costPerHour, roleIds);
+  } else {
+    await handleSaveAdd(firstName, lastName, email, phoneNum, costPerHour, roleIds);
+  }
+});
+
+// ── Add employee ───────────────────────────────────────────────────────────
+async function handleSaveAdd(firstName, lastName, email, phoneNum, costPerHour, roleIds) {
   setLoading(btnSave, true);
 
   try {
@@ -227,16 +420,10 @@ btnSave.addEventListener("click", async () => {
     });
 
     const data = await res.json();
-
-    if (!res.ok) {
-      showError(data.error || "Failed to create employee.");
-      return;
-    }
+    if (!res.ok) { showError(data.error || "Failed to create employee."); return; }
 
     const { employeeId } = data;
-
-    // Upload files tied to the created employee
-    const uploadErrors = [];
+    const uploadErrors   = [];
 
     if (profileFile) {
       btnSave.textContent = "Uploading image…";
@@ -251,11 +438,9 @@ btnSave.addEventListener("click", async () => {
       catch { uploadErrors.push("Some documents failed to upload."); }
     }
 
-    if (uploadErrors.length > 0) {
-      formSuccess.textContent  = `${firstName} ${lastName} added. Note: ${uploadErrors.join(" ")}`;
-    } else {
-      formSuccess.textContent  = `${firstName} ${lastName} was added successfully.`;
-    }
+    formSuccess.textContent = uploadErrors.length > 0
+      ? `${firstName} ${lastName} added. Note: ${uploadErrors.join(" ")}`
+      : `${firstName} ${lastName} was added successfully.`;
     formSuccess.style.display = "block";
 
     await loadEmployees();
@@ -266,11 +451,150 @@ btnSave.addEventListener("click", async () => {
   } finally {
     setLoading(btnSave, false);
   }
+}
+
+// ── Update employee ────────────────────────────────────────────────────────
+async function handleSaveEdit(firstName, lastName, phoneNum, costPerHour, roleIds) {
+  setLoading(btnSave, true);
+
+  const uploadErrors = [];
+
+  try {
+    const token = await getToken();
+
+    // ── Firebase: handle profile image changes ─────────────────────────
+    // Delete old profile if: it exists AND user removed it OR picked a new one
+    if (existingProfilePath && (replaceProfile || profileFile)) {
+      try { await deleteObject(ref(storage, existingProfilePath)); }
+      catch { /* ignore — file may already be gone */ }
+    }
+
+    if (profileFile) {
+      btnSave.textContent = "Uploading image…";
+      try { await uploadProfileImage(editingEmployeeId, profileFile); }
+      catch { uploadErrors.push("Profile image upload failed."); }
+    }
+
+    // ── Firebase: delete documents marked for removal ──────────────────
+    for (const path of docsToDelete) {
+      try { await deleteObject(ref(storage, path)); }
+      catch { uploadErrors.push(`Failed to remove: ${path.split("/").pop()}`); }
+    }
+
+    // ── Firebase: upload new documents ────────────────────────────────
+    const validDocs = documentFiles.filter(d => d && d.file && d.title);
+    if (validDocs.length > 0) {
+      btnSave.textContent = "Uploading documents…";
+      try { await uploadDocuments(editingEmployeeId, validDocs); }
+      catch { uploadErrors.push("Some new documents failed to upload."); }
+    }
+
+    // ── SQL: update employee ───────────────────────────────────────────
+    btnSave.textContent = "Saving…";
+    const res = await fetch(`${API_BASE}/employees/${editingEmployeeId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ firstName, lastName, phoneNum, costPerHour, roleIds })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showError(data.error || "Failed to update employee.");
+      return;
+    }
+
+    formSuccess.textContent = uploadErrors.length > 0
+      ? `Employee updated. Note: ${uploadErrors.join(" ")}`
+      : `${firstName} ${lastName} was updated successfully.`;
+    formSuccess.style.display = "block";
+
+    await loadEmployees();
+    setTimeout(closeModal, 1800);
+
+  } catch {
+    showError("Network error. Please check your connection.");
+  } finally {
+    setLoading(btnSave, false);
+  }
+}
+
+// ── Delete modal ───────────────────────────────────────────────────────────
+function openDeleteModal(employeeId, fullName) {
+  pendingDeleteId   = employeeId;
+  pendingDeleteName = fullName;
+  document.getElementById("delete-confirm-text").textContent =
+    `Are you sure you want to permanently delete "${fullName}"?`;
+  document.getElementById("delete-modal-overlay").classList.add("open");
+}
+
+function closeDeleteModal() {
+  document.getElementById("delete-modal-overlay").classList.remove("open");
+  pendingDeleteId   = null;
+  pendingDeleteName = null;
+}
+
+document.getElementById("delete-modal-close").addEventListener("click", closeDeleteModal);
+document.getElementById("delete-cancel").addEventListener("click", closeDeleteModal);
+document.getElementById("delete-modal-overlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("delete-modal-overlay")) closeDeleteModal();
 });
+
+document.getElementById("btn-confirm-delete").addEventListener("click", async () => {
+  if (!pendingDeleteId) return;
+
+  const btn = document.getElementById("btn-confirm-delete");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+
+  try {
+    const token = await getToken();
+
+    // 1. Delete from SQL first — this is the authoritative source
+    const res = await fetch(`${API_BASE}/employees/${pendingDeleteId}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "Failed to delete employee.");
+      return;
+    }
+
+    // 2. Clean up Firebase Storage (best-effort — SQL is already done)
+    try { await deleteEmployeeStorageFiles(pendingDeleteId); }
+    catch { console.warn("Firebase Storage cleanup failed for employee:", pendingDeleteId); }
+
+    closeDeleteModal();
+    await loadEmployees();
+
+  } catch {
+    alert("Network error. Could not delete employee.");
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Delete Employee";
+  }
+});
+
+async function deleteEmployeeStorageFiles(employeeId) {
+  // Delete profile folder
+  try {
+    const profileItems = await listAll(ref(storage, `employees/${employeeId}/profile`));
+    await Promise.all(profileItems.items.map(item => deleteObject(item)));
+  } catch { /* no profile folder */ }
+
+  // Delete documents folder
+  try {
+    const docsItems = await listAll(ref(storage, `employees/${employeeId}/documents`));
+    await Promise.all(docsItems.items.map(item => deleteObject(item)));
+  } catch { /* no documents folder */ }
+}
 
 // ── Add role inline ────────────────────────────────────────────────────────
 document.getElementById("btn-add-role").addEventListener("click", () => {
-  // Prevent opening a second input if one already exists
   if (document.getElementById("new-role-input-row")) return;
 
   const row = document.createElement("div");
@@ -290,7 +614,6 @@ document.getElementById("btn-add-role").addEventListener("click", () => {
   input.focus();
 
   document.getElementById("btn-cancel-role").addEventListener("click", () => row.remove());
-
   document.getElementById("btn-confirm-role").addEventListener("click", () => submitNewRole(input, row));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitNewRole(input, row);
@@ -303,37 +626,40 @@ async function submitNewRole(input, row) {
   if (!roleName) { input.focus(); return; }
 
   const btn = document.getElementById("btn-confirm-role");
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = "Saving…";
 
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/roles`, {
+    const res   = await fetch(`${API_BASE}/roles`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ roleName })
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || "Failed to create role."); btn.disabled = false; btn.textContent = "Add"; return; }
+    if (!res.ok) {
+      alert(data.error || "Failed to create role.");
+      btn.disabled = false;
+      btn.textContent = "Add";
+      return;
+    }
 
-    // Add the new checkbox directly to the grid
     const label = document.createElement("label");
     label.className = "role-check";
     label.innerHTML = `<input type="checkbox" value="__pending__" checked /> ${capitalize(roleName)}`;
     rolesGrid.appendChild(label);
-
     row.remove();
 
-    // Reload roles to get the real ID
     await loadRoles();
     // Re-check the newly added role by name
     document.querySelectorAll("#roles-grid input[type='checkbox']").forEach(cb => {
-      if (cb.closest("label")?.textContent.trim().toLowerCase() === roleName.toLowerCase()) cb.checked = true;
+      if (cb.closest("label")?.textContent.trim().toLowerCase() === roleName.toLowerCase())
+        cb.checked = true;
     });
 
   } catch {
     alert("Network error. Could not save role.");
-    btn.disabled = false;
+    btn.disabled    = false;
     btn.textContent = "Add";
   }
 }
@@ -348,8 +674,8 @@ profileFileInput.addEventListener("change", () => {
   profileFile = file;
   const reader = new FileReader();
   reader.onload = (e) => {
-    profilePreview.src            = e.target.result;
-    profilePreview.style.display  = "block";
+    profilePreview.src               = e.target.result;
+    profilePreview.style.display     = "block";
     profilePlaceholder.style.display = "none";
     btnRemoveProfile.style.display   = "inline-block";
   };
@@ -358,7 +684,8 @@ profileFileInput.addEventListener("change", () => {
 
 btnRemoveProfile.addEventListener("click", (e) => {
   e.stopPropagation();
-  profileFile = null;
+  replaceProfile   = true;   // mark existing profile for deletion on save
+  profileFile      = null;
   profileFileInput.value           = "";
   profilePreview.style.display     = "none";
   profilePreview.src               = "";
@@ -382,7 +709,13 @@ function validateImage(file) {
 // ── Documents ───────────────────────────────────────────────────────────────
 const DOC_TITLES = ["Form 101", "ID Copy", "Contract", "Medical Approval", "Other"];
 
-btnAddDoc.addEventListener("click", () => addDocumentRow());
+btnAddDoc.addEventListener("click", () => {
+  // Show "Upload new files:" label in edit mode once user starts adding docs
+  if (editingEmployeeId) {
+    document.getElementById("new-docs-label").style.display = "block";
+  }
+  addDocumentRow();
+});
 
 function addDocumentRow() {
   const idx = documentFiles.length;
@@ -460,8 +793,8 @@ async function uploadProfileImage(employeeId, file) {
 async function uploadDocuments(employeeId, docs) {
   for (const doc of docs) {
     if (!doc || !doc.file || !doc.title) continue;
-    const safeTitle = doc.title.replace(/\s+/g, "-").toLowerCase();
-    const safeName  = `${safeTitle}-${doc.file.name}`;
+    const safeTitle  = doc.title.replace(/\s+/g, "-").toLowerCase();
+    const safeName   = `${safeTitle}-${doc.file.name}`;
     const storageRef = ref(storage, `employees/${employeeId}/documents/${safeName}`);
     await uploadBytes(storageRef, doc.file);
   }
@@ -476,12 +809,12 @@ btnLogout.addEventListener("click", async () => {
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 function showError(msg) {
-  formError.textContent  = msg;
+  formError.textContent   = msg;
   formError.style.display = "block";
 }
 
 function setLoading(btn, loading) {
-  btn.disabled = loading;
+  btn.disabled    = loading;
   btn.dataset.orig = btn.dataset.orig || btn.textContent;
   btn.textContent  = loading ? "Saving…" : btn.dataset.orig;
 }

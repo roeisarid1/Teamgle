@@ -47,6 +47,52 @@ public class EmployeeService : IEmployeeService
         return await _employeeRepo.GetEmployeesByCompanyAsync(companyId);
     }
 
+    // ── Get a single employee (manager's company only) ────────────────────
+    public async Task<EmployeeDetailResponse> GetEmployeeByIdAsync(string firebaseUid, string employeeId)
+    {
+        var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        var employee = await _employeeRepo.GetEmployeeByIdAsync(employeeId, companyId);
+        if (employee == null)
+            throw new KeyNotFoundException("Employee not found.");
+
+        return employee;
+    }
+
+    // ── Update employee fields ─────────────────────────────────────────────
+    public async Task UpdateEmployeeAsync(string firebaseUid, string employeeId, UpdateEmployeeRequest request)
+    {
+        var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        if (string.IsNullOrWhiteSpace(request.FirstName))
+            throw new ArgumentException("First name is required.");
+        if (string.IsNullOrWhiteSpace(request.LastName))
+            throw new ArgumentException("Last name is required.");
+        if (request.CostPerHour < 0)
+            throw new ArgumentException("Cost per hour cannot be negative.");
+        if (request.RoleIds == null || request.RoleIds.Count == 0)
+            throw new ArgumentException("At least one role must be selected.");
+
+        if (!await _employeeRepo.RoleIdsExistAsync(request.RoleIds, companyId))
+            throw new ArgumentException("One or more selected roles are invalid.");
+
+        await _employeeRepo.UpdateEmployeeAsync(employeeId, companyId, request);
+    }
+
+    // ── Delete employee (SQL only — Firebase cleanup is done by the client) ─
+    public async Task DeleteEmployeeAsync(string firebaseUid, string employeeId)
+    {
+        var companyId = await _employeeRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        await _employeeRepo.DeleteEmployeeAsync(employeeId, companyId);
+    }
+
     // ── Create employee — validates then inserts transactionally ──────────
     public async Task<string> CreateEmployeeAsync(string firebaseUid, CreateEmployeeRequest request)
     {

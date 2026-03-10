@@ -92,4 +92,85 @@ public class EmployeesController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
+    // ── GET /api/employees/{id} ────────────────────────────────────────────
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetEmployee(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var employee = await _employeeService.GetEmployeeByIdAsync(uid, id);
+            return Ok(employee);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching employee {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── PUT /api/employees/{id} ────────────────────────────────────────────
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateEmployee(string id, [FromBody] UpdateEmployeeRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            await _employeeService.UpdateEmployeeAsync(uid, id, request);
+            return Ok(new { message = "Employee updated successfully." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating employee {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── DELETE /api/employees/{id} ─────────────────────────────────────────
+    // NOTE: Firebase Storage cleanup is handled client-side before this call.
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteEmployee(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            await _employeeService.DeleteEmployeeAsync(uid, id);
+            return Ok(new { message = "Employee deleted successfully." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting employee {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }

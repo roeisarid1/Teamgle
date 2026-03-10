@@ -12,4 +12,9 @@ public interface IEmployeeRepository
     Task<string?> GetManagerCompanyIdAsync(string firebaseUid);
     Task<List<EmployeeResponse>> GetEmployeesByCompanyAsync(string companyId);
     Task<string> CreateEmployeeAsync(string companyId, CreateEmployeeRequest request);
+
+    // ── CRUD extensions ───────────────────────────────────────────────────
+    Task<EmployeeDetailResponse?> GetEmployeeByIdAsync(string userId, string companyId);
+    Task UpdateEmployeeAsync(string userId, string companyId, UpdateEmployeeRequest request);
+    Task DeleteEmployeeAsync(string userId, string companyId);
 }
