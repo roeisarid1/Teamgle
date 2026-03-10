@@ -30,6 +30,9 @@ desktop.ini
 .idea/
 *.swp
 
+# ===== Claude Code =====
+.claude/
+
 # ===== Node (if any tooling is added later) =====
 node_modules/
 npm-debug.log*

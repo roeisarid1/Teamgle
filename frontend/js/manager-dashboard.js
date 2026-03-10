@@ -1,5 +1,6 @@
-import { auth } from "./firebase-config.js";
+import { auth, storage } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -26,9 +27,20 @@ const empEmail     = document.getElementById("emp-email");
 const empPhone     = document.getElementById("emp-phone");
 const empCost      = document.getElementById("emp-cost");
 
+// ── File upload DOM refs ───────────────────────────────────────────────────
+const profileUploadZone  = document.getElementById("profile-upload-zone");
+const profileFileInput   = document.getElementById("profile-file-input");
+const profilePreview     = document.getElementById("profile-preview");
+const profilePlaceholder = document.getElementById("profile-placeholder");
+const btnRemoveProfile   = document.getElementById("btn-remove-profile");
+const documentsList      = document.getElementById("documents-list");
+const btnAddDoc          = document.getElementById("btn-add-doc");
+
 // ── State ──────────────────────────────────────────────────────────────────
 let currentIdToken = null;
 let profile        = null;
+let profileFile    = null;        // File | null
+let documentFiles  = [];          // Array of { file, title } | null (nulled on remove)
 
 // ── Auth gate ──────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
@@ -168,6 +180,18 @@ function clearForm() {
     .forEach(cb => cb.checked = false);
   formError.style.display   = "none";
   formSuccess.style.display = "none";
+
+  // Reset profile image
+  profileFile = null;
+  profileFileInput.value        = "";
+  profilePreview.style.display  = "none";
+  profilePreview.src            = "";
+  profilePlaceholder.style.display = "flex";
+  btnRemoveProfile.style.display   = "none";
+
+  // Reset documents
+  documentFiles = [];
+  documentsList.innerHTML = "";
 }
 
 // ── Save employee ──────────────────────────────────────────────────────────
@@ -209,14 +233,32 @@ btnSave.addEventListener("click", async () => {
       return;
     }
 
-    // Success
-    formSuccess.textContent  = `${firstName} ${lastName} was added successfully.`;
+    const { employeeId } = data;
+
+    // Upload files tied to the created employee
+    const uploadErrors = [];
+
+    if (profileFile) {
+      btnSave.textContent = "Uploading image…";
+      try { await uploadProfileImage(employeeId, profileFile); }
+      catch { uploadErrors.push("Profile image upload failed."); }
+    }
+
+    const validDocs = documentFiles.filter(d => d && d.file && d.title);
+    if (validDocs.length > 0) {
+      btnSave.textContent = "Uploading documents…";
+      try { await uploadDocuments(employeeId, validDocs); }
+      catch { uploadErrors.push("Some documents failed to upload."); }
+    }
+
+    if (uploadErrors.length > 0) {
+      formSuccess.textContent  = `${firstName} ${lastName} added. Note: ${uploadErrors.join(" ")}`;
+    } else {
+      formSuccess.textContent  = `${firstName} ${lastName} was added successfully.`;
+    }
     formSuccess.style.display = "block";
 
-    // Reload the employee list
     await loadEmployees();
-
-    // Close modal after a short delay
     setTimeout(closeModal, 1800);
 
   } catch {
@@ -293,6 +335,135 @@ async function submitNewRole(input, row) {
     alert("Network error. Could not save role.");
     btn.disabled = false;
     btn.textContent = "Add";
+  }
+}
+
+// ── Profile image ──────────────────────────────────────────────────────────
+profileUploadZone.addEventListener("click", () => profileFileInput.click());
+
+profileFileInput.addEventListener("change", () => {
+  const file = profileFileInput.files[0];
+  if (!file) return;
+  if (!validateImage(file)) { profileFileInput.value = ""; return; }
+  profileFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    profilePreview.src            = e.target.result;
+    profilePreview.style.display  = "block";
+    profilePlaceholder.style.display = "none";
+    btnRemoveProfile.style.display   = "inline-block";
+  };
+  reader.readAsDataURL(file);
+});
+
+btnRemoveProfile.addEventListener("click", (e) => {
+  e.stopPropagation();
+  profileFile = null;
+  profileFileInput.value           = "";
+  profilePreview.style.display     = "none";
+  profilePreview.src               = "";
+  profilePlaceholder.style.display = "flex";
+  btnRemoveProfile.style.display   = "none";
+});
+
+function validateImage(file) {
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(file.type)) {
+    showError("Profile image must be JPG, PNG, or WEBP.");
+    return false;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showError("Profile image must be under 5 MB.");
+    return false;
+  }
+  return true;
+}
+
+// ── Documents ───────────────────────────────────────────────────────────────
+const DOC_TITLES = ["Form 101", "ID Copy", "Contract", "Medical Approval", "Other"];
+
+btnAddDoc.addEventListener("click", () => addDocumentRow());
+
+function addDocumentRow() {
+  const idx = documentFiles.length;
+  documentFiles.push({ file: null, title: "" });
+
+  const item = document.createElement("div");
+  item.className = "doc-item";
+
+  const titleOptions = DOC_TITLES.map(t =>
+    `<option value="${t}">${t}</option>`
+  ).join("");
+
+  item.innerHTML = `
+    <select class="doc-title-select">
+      <option value="">— Select title —</option>
+      ${titleOptions}
+    </select>
+    <div class="doc-file-area">
+      <span class="doc-file-name">No file chosen</span>
+      <button type="button" class="btn-pick-file">Choose File</button>
+      <input type="file" accept=".pdf,.doc,.docx" hidden />
+    </div>
+    <button type="button" class="btn-remove-doc" title="Remove">✕</button>
+  `;
+
+  const select       = item.querySelector(".doc-title-select");
+  const fileInput    = item.querySelector("input[type='file']");
+  const fileNameSpan = item.querySelector(".doc-file-name");
+  const pickBtn      = item.querySelector(".btn-pick-file");
+  const removeBtn    = item.querySelector(".btn-remove-doc");
+
+  select.addEventListener("change", () => {
+    if (documentFiles[idx]) documentFiles[idx].title = select.value;
+  });
+
+  pickBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (!validateDocument(file)) { fileInput.value = ""; return; }
+    if (documentFiles[idx]) documentFiles[idx].file = file;
+    fileNameSpan.textContent = file.name;
+    fileNameSpan.title       = file.name;
+  });
+
+  removeBtn.addEventListener("click", () => {
+    documentFiles[idx] = null;
+    item.remove();
+  });
+
+  documentsList.appendChild(item);
+}
+
+function validateDocument(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (!["pdf", "doc", "docx"].includes(ext)) {
+    alert("Documents must be PDF, DOC, or DOCX.");
+    return false;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    alert("Each document must be under 10 MB.");
+    return false;
+  }
+  return true;
+}
+
+// ── Firebase Storage uploads ────────────────────────────────────────────────
+async function uploadProfileImage(employeeId, file) {
+  const ext        = file.name.split(".").pop().toLowerCase();
+  const storageRef = ref(storage, `employees/${employeeId}/profile/profile.${ext}`);
+  await uploadBytes(storageRef, file);
+}
+
+async function uploadDocuments(employeeId, docs) {
+  for (const doc of docs) {
+    if (!doc || !doc.file || !doc.title) continue;
+    const safeTitle = doc.title.replace(/\s+/g, "-").toLowerCase();
+    const safeName  = `${safeTitle}-${doc.file.name}`;
+    const storageRef = ref(storage, `employees/${employeeId}/documents/${safeName}`);
+    await uploadBytes(storageRef, doc.file);
   }
 }
 

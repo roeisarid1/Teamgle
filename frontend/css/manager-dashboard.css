@@ -363,7 +363,7 @@ tbody tr:hover { background: #fafbff; }
   background: var(--card);
   border-radius: var(--radius);
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 40px rgba(0,0,0,.18);
@@ -505,6 +505,158 @@ tbody tr:hover { background: #fafbff; }
 }
 
 .btn-cancel:hover { background: #f3f4f6; }
+
+/* ── Profile image upload ────────────────────────────────────────────────── */
+.profile-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  min-height: 120px;
+  background: #fafafa;
+}
+
+.profile-upload-zone:hover {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
+.upload-zone-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.upload-icon { font-size: 30px; line-height: 1; }
+
+.upload-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.profile-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--blue);
+  box-shadow: 0 2px 10px rgba(91,123,240,.25);
+}
+
+.btn-remove-file {
+  align-self: center;
+  margin-top: 6px;
+  background: none;
+  border: 1.5px solid var(--red);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.btn-remove-file:hover { background: #fef2f2; }
+
+/* ── Documents list ──────────────────────────────────────────────────────── */
+.documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  flex-wrap: wrap;
+  transition: border-color var(--transition);
+}
+
+.doc-item:hover { border-color: #d1d5db; }
+
+.doc-title-select {
+  flex: 0 0 140px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.doc-title-select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+}
+
+.doc-file-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-file-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.btn-pick-file {
+  background: var(--blue-light);
+  color: var(--blue);
+  border: 1.5px solid var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
+}
+
+.btn-pick-file:hover {
+  background: var(--blue);
+  color: #fff;
+}
+
+.btn-remove-doc {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color var(--transition), background var(--transition);
+}
+
+.btn-remove-doc:hover { color: var(--red); background: #fef2f2; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {

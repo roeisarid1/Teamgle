@@ -150,6 +150,30 @@
           <div id="role-error" class="msg-error" style="margin-top:4px"></div>
         </div>
 
+        <!-- ── Profile image ─────────────────────────────────────────── -->
+        <div class="field">
+          <label>Profile Image</label>
+          <div class="profile-upload-zone" id="profile-upload-zone">
+            <div class="upload-zone-inner" id="profile-placeholder">
+              <span class="upload-icon">🖼️</span>
+              <span>Click to upload profile image</span>
+              <span class="upload-hint">JPG, PNG, WEBP · max 5 MB</span>
+            </div>
+            <img id="profile-preview" class="profile-preview" alt="Preview" style="display:none" />
+            <input type="file" id="profile-file-input" accept=".jpg,.jpeg,.png,.webp" hidden />
+          </div>
+          <button type="button" id="btn-remove-profile" class="btn-remove-file" style="display:none">✕ Remove image</button>
+        </div>
+
+        <!-- ── Documents ─────────────────────────────────────────────── -->
+        <div class="field">
+          <div class="roles-label-row">
+            <label>Documents</label>
+            <button type="button" id="btn-add-doc" class="btn-add-role">+ Add Document</button>
+          </div>
+          <div id="documents-list" class="documents-list"></div>
+        </div>
+
         <div id="form-error"   class="msg-error"   role="alert"></div>
         <div id="form-success" class="msg-success" role="status"></div>
 
