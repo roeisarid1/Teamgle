@@ -175,9 +175,9 @@ loginBtn.addEventListener("click", async () => {
     sessionStorage.setItem("userProfile", JSON.stringify(profile));
 
     if (profile.role === "Manager") {
-      window.location.href = "/manager-dashboard.html";
+      window.location.href = "/frontend/manager-dashboard.html";
     } else {
-      window.location.href = "/employee-dashboard.html";
+      window.location.href = "/frontend/employee-dashboard.html";
     }
 
   } catch (err) {
