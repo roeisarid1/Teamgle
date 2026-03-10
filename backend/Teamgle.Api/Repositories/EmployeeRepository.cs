@@ -227,6 +227,199 @@ public class EmployeeRepository : IEmployeeRepository
         return [.. employees.Values];
     }
 
+    // ── Get a single employee by userId (must belong to companyId) ────────
+    public async Task<EmployeeDetailResponse?> GetEmployeeByIdAsync(string userId, string companyId)
+    {
+        const string empSql = """
+            SELECT u.user_ID, u.firstName, u.lastName, u.email, u.phoneNum, u.FBUID, e.cost_per_hour
+            FROM [User] u
+            INNER JOIN Employee e ON u.user_ID = e.user_ID
+            WHERE u.user_ID = @userId AND u.company_ID = @companyId
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        EmployeeDetailResponse? emp = null;
+
+        await using (var cmd = new SqlCommand(empSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@userId",    userId);
+            cmd.Parameters.AddWithValue("@companyId", companyId);
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            if (await reader.ReadAsync())
+            {
+                var hasFbUid = reader["FBUID"] != DBNull.Value && !string.IsNullOrEmpty(reader["FBUID"].ToString());
+                emp = new EmployeeDetailResponse
+                {
+                    UserId             = userId,
+                    FirstName          = reader["firstName"]?.ToString() ?? "",
+                    LastName           = reader["lastName"]?.ToString() ?? "",
+                    Email              = reader["email"]?.ToString() ?? "",
+                    PhoneNum           = reader["phoneNum"]?.ToString() ?? "",
+                    CostPerHour        = reader["cost_per_hour"] == DBNull.Value ? null : (decimal?)reader["cost_per_hour"],
+                    RegistrationStatus = hasFbUid ? "Active" : "Pending Registration",
+                    Roles              = []
+                };
+            }
+        }
+
+        if (emp == null) return null;
+
+        const string roleSql = """
+            SELECT er.roll_ID, r.Roll_name
+            FROM Employee_Roll er
+            INNER JOIN Roll r ON er.roll_ID = r.Roll_ID
+            WHERE er.employee_user_ID = @userId
+            """;
+
+        await using (var cmd = new SqlCommand(roleSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@userId", userId);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                emp.Roles.Add(new RoleDetail
+                {
+                    RollId   = reader["roll_ID"].ToString()!,
+                    RollName = reader["Roll_name"].ToString()!
+                });
+            }
+        }
+
+        return emp;
+    }
+
+    // ── Update employee fields + replace roles (transactional) ────────────
+    public async Task UpdateEmployeeAsync(string userId, string companyId, UpdateEmployeeRequest request)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = conn.BeginTransaction();
+
+        try
+        {
+            // Safety: confirm employee belongs to this company
+            const string checkSql = """
+                SELECT COUNT(*)
+                FROM [User] u
+                INNER JOIN Employee e ON u.user_ID = e.user_ID
+                WHERE u.user_ID = @userId AND u.company_ID = @companyId
+                """;
+            await using (var cmd = new SqlCommand(checkSql, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId",    userId);
+                cmd.Parameters.AddWithValue("@companyId", companyId);
+                if ((int)await cmd.ExecuteScalarAsync()! == 0)
+                    throw new UnauthorizedAccessException("Employee not found or access denied.");
+            }
+
+            // 1. Update User fields
+            const string userSql = """
+                UPDATE [User]
+                SET firstName = @firstName, lastName = @lastName, phoneNum = @phoneNum
+                WHERE user_ID = @userId
+                """;
+            await using (var cmd = new SqlCommand(userSql, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@firstName", request.FirstName.Trim());
+                cmd.Parameters.AddWithValue("@lastName",  request.LastName.Trim());
+                cmd.Parameters.AddWithValue("@phoneNum",  (object?)request.PhoneNum?.Trim() ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@userId",    userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 2. Update Employee cost
+            const string empSql = "UPDATE Employee SET cost_per_hour = @cost WHERE user_ID = @userId";
+            await using (var cmd = new SqlCommand(empSql, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@cost",   request.CostPerHour);
+                cmd.Parameters.AddWithValue("@userId", userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 3. Replace roles: delete all then re-insert
+            await using (var cmd = new SqlCommand("DELETE FROM Employee_Roll WHERE employee_user_ID = @userId", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId", userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            foreach (var roleId in request.RoleIds.Distinct())
+            {
+                await using var cmd = new SqlCommand(
+                    "INSERT INTO Employee_Roll (employee_user_ID, roll_ID) VALUES (@userId, @roleId)", conn, tx);
+                cmd.Parameters.AddWithValue("@userId", userId);
+                cmd.Parameters.AddWithValue("@roleId", roleId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    // ── Delete employee: Employee_Roll → Employee → User (transactional) ──
+    public async Task DeleteEmployeeAsync(string userId, string companyId)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = conn.BeginTransaction();
+
+        try
+        {
+            // Safety: confirm employee belongs to this company
+            const string checkSql = """
+                SELECT COUNT(*)
+                FROM [User] u
+                INNER JOIN Employee e ON u.user_ID = e.user_ID
+                WHERE u.user_ID = @userId AND u.company_ID = @companyId
+                """;
+            await using (var cmd = new SqlCommand(checkSql, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId",    userId);
+                cmd.Parameters.AddWithValue("@companyId", companyId);
+                if ((int)await cmd.ExecuteScalarAsync()! == 0)
+                    throw new UnauthorizedAccessException("Employee not found or access denied.");
+            }
+
+            // 1. Remove role assignments
+            await using (var cmd = new SqlCommand("DELETE FROM Employee_Roll WHERE employee_user_ID = @userId", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId", userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 2. Remove Employee row
+            await using (var cmd = new SqlCommand("DELETE FROM Employee WHERE user_ID = @userId", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId", userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 3. Remove User row (company_ID guard = extra safety)
+            await using (var cmd = new SqlCommand(
+                "DELETE FROM [User] WHERE user_ID = @userId AND company_ID = @companyId", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@userId",    userId);
+                cmd.Parameters.AddWithValue("@companyId", companyId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
     // ── Create employee: User + Employee + Employee_Roll (transactional) ───
     public async Task<string> CreateEmployeeAsync(string companyId, CreateEmployeeRequest request)
     {

@@ -83,11 +83,12 @@
               <th>Cost / hr</th>
               <th>Roles</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="employee-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Loading employees…</td>
+              <td colspan="7" class="empty-state">Loading employees…</td>
             </tr>
           </tbody>
         </table>
@@ -171,6 +172,12 @@
             <label>Documents</label>
             <button type="button" id="btn-add-doc" class="btn-add-role">+ Add Document</button>
           </div>
+          <!-- existing files shown only in edit mode -->
+          <div id="existing-docs-section" style="display:none">
+            <p class="field-sublabel">Current files (click ✕ to remove on save):</p>
+            <div id="existing-docs-list" class="documents-list"></div>
+            <div class="field-sublabel" id="new-docs-label" style="display:none;margin-top:10px">Upload new files:</div>
+          </div>
           <div id="documents-list" class="documents-list"></div>
         </div>
 
@@ -182,6 +189,28 @@
       <div class="modal-footer">
         <button class="btn-cancel" id="modal-cancel">Cancel</button>
         <button class="btn-primary" id="btn-save-employee">Save Employee</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Delete Confirmation Modal ─────────────────────────────────────── -->
+  <div class="modal-overlay" id="delete-modal-overlay">
+    <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+
+      <div class="modal-header">
+        <h3 id="delete-modal-title">Delete Employee</h3>
+        <button class="btn-close" id="delete-modal-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <p id="delete-confirm-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
+        <p class="delete-warning">This will permanently delete all employee data and any associated files. This action cannot be undone.</p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="delete-cancel">Cancel</button>
+        <button class="btn-danger" id="btn-confirm-delete">Delete Employee</button>
       </div>
 
     </div>
