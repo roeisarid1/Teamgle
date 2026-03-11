@@ -41,6 +41,8 @@ const btnAddDoc          = document.getElementById("btn-add-doc");
 // ── State ──────────────────────────────────────────────────────────────────
 let currentIdToken = null;
 let profile        = null;
+let allEmployees   = [];
+let allCustomers   = [];
 
 // Add mode
 let profileFile    = null;        // File | null — new file chosen for profile
@@ -119,6 +121,30 @@ function renderRoles(roles) {
   `).join("");
 }
 
+// ── Search helpers ─────────────────────────────────────────────────────────
+function filterEmployees(list) {
+  const q = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(e => {
+    const full = `${e.firstName} ${e.lastName}`.toLowerCase();
+    return full.startsWith(q) || e.firstName.toLowerCase().startsWith(q) || e.lastName.toLowerCase().startsWith(q);
+  });
+}
+
+function filterCustomers(list) {
+  const q = (document.getElementById("customer-search")?.value ?? "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(c => (c.customerCompanyName ?? "").toLowerCase().startsWith(q));
+}
+
+document.getElementById("employee-search")?.addEventListener("input", () => {
+  renderEmployees(filterEmployees(allEmployees));
+});
+
+document.getElementById("customer-search")?.addEventListener("input", () => {
+  renderCustomers(filterCustomers(allCustomers));
+});
+
 // ── Load employees ─────────────────────────────────────────────────────────
 async function loadEmployees() {
   employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
@@ -128,8 +154,8 @@ async function loadEmployees() {
       headers: { "Authorization": `Bearer ${token}` }
     });
     if (!res.ok) throw new Error("Failed to load employees.");
-    const employees = await res.json();
-    renderEmployees(employees);
+    allEmployees = await res.json();
+    renderEmployees(filterEmployees(allEmployees));
   } catch {
     employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load employees.</td></tr>`;
   }
@@ -1018,8 +1044,8 @@ async function loadCustomers() {
       headers: { "Authorization": `Bearer ${token}` }
     });
     if (!res.ok) throw new Error();
-    const customers = await res.json();
-    renderCustomers(customers);
+    allCustomers = await res.json();
+    renderCustomers(filterCustomers(allCustomers));
   } catch {
     tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load customers.</td></tr>`;
   }
