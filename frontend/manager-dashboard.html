@@ -28,9 +28,13 @@
   <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
   <aside class="sidebar">
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active">
+      <a href="#" class="nav-item active" data-section="employees">
         <span class="nav-icon">👥</span>
         <span>Employees</span>
+      </a>
+      <a href="#" class="nav-item" data-section="customers">
+        <span class="nav-icon">🏢</span>
+        <span>Customers</span>
       </a>
       <a href="#" class="nav-item disabled">
         <span class="nav-icon">📅</span>
@@ -67,10 +71,14 @@
     </div>
 
     <!-- Employee management section -->
-    <div class="section-card">
+    <div class="section-card page-section" id="section-employees" data-section="employees">
       <div class="section-header">
         <h2>👥 Employees</h2>
         <button class="btn-primary" id="btn-add-employee">+ Add Employee</button>
+      </div>
+      <div class="search-bar">
+        <input type="search" class="search-input" id="employee-search"
+          placeholder="Search by employee name…" autocomplete="off" />
       </div>
 
       <div class="table-wrap">
@@ -90,6 +98,36 @@
             <tr>
               <td colspan="7" class="empty-state">Loading employees…</td>
             </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Customer management section -->
+    <div class="section-card page-section" id="section-customers" data-section="customers" style="display:none">
+      <div class="section-header">
+        <h2>🏢 Customers</h2>
+        <button class="btn-primary" id="btn-add-customer">+ Add Customer</button>
+      </div>
+      <div class="search-bar">
+        <input type="search" class="search-input" id="customer-search"
+          placeholder="Search by company name…" autocomplete="off" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Company Name</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>City</th>
+              <th>Business #</th>
+              <th>Added</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="customer-tbody">
+            <tr><td colspan="7" class="empty-state">Select "Customers" to load.</td></tr>
           </tbody>
         </table>
       </div>
@@ -194,6 +232,26 @@
     </div>
   </div>
 
+  <!-- ── View Employee Modal ───────────────────────────────────────────── -->
+  <div class="modal-overlay" id="view-modal-overlay">
+    <div class="modal view-modal" role="dialog" aria-modal="true" aria-labelledby="view-modal-title">
+
+      <div class="modal-header">
+        <h3 id="view-modal-title">Employee Details</h3>
+        <button class="btn-close" id="view-modal-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body" id="view-modal-body">
+        <div class="empty-state">Loading…</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="view-modal-cancel">Close</button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── Delete Confirmation Modal ─────────────────────────────────────── -->
   <div class="modal-overlay" id="delete-modal-overlay">
     <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
@@ -211,6 +269,212 @@
       <div class="modal-footer">
         <button class="btn-cancel" id="delete-cancel">Cancel</button>
         <button class="btn-danger" id="btn-confirm-delete">Delete Employee</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Customer Add/Edit Modal ────────────────────────────────────────── -->
+  <div class="modal-overlay" id="customer-form-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="customer-form-title">
+
+      <div class="modal-header">
+        <h3 id="customer-form-title">Add New Customer</h3>
+        <button class="btn-close" id="customer-form-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field">
+          <label for="cust-name">Company Name *</label>
+          <input type="text" id="cust-name" placeholder="e.g. Acme Corp" />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cust-phone">Phone</label>
+            <input type="tel" id="cust-phone" placeholder="+1 234 567 8900" />
+          </div>
+          <div class="field">
+            <label for="cust-email">Company Email</label>
+            <input type="email" id="cust-email" placeholder="info@company.com" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cust-city">City</label>
+            <input type="text" id="cust-city" placeholder="Tel Aviv" />
+          </div>
+          <div class="field">
+            <label for="cust-address">Address</label>
+            <input type="text" id="cust-address" placeholder="123 Main St" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cust-billing-email">Billing Email</label>
+            <input type="email" id="cust-billing-email" placeholder="billing@company.com" />
+          </div>
+          <div class="field">
+            <label for="cust-business-number">Business Number</label>
+            <input type="text" id="cust-business-number" placeholder="123456789" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="cust-payment-terms">Payment Terms</label>
+          <input type="text" id="cust-payment-terms" placeholder="e.g. Net 30" />
+        </div>
+        <div class="field">
+          <label for="cust-notes">Notes</label>
+          <textarea id="cust-notes" rows="3" placeholder="Additional notes…"></textarea>
+        </div>
+
+        <div id="cust-form-error"   class="msg-error"   role="alert"></div>
+        <div id="cust-form-success" class="msg-success" role="status"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="customer-form-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-save-customer">Save Customer</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Customer View Modal ────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="customer-view-overlay">
+    <div class="modal customer-view-modal" role="dialog" aria-modal="true" aria-labelledby="customer-view-title">
+
+      <div class="modal-header">
+        <h3 id="customer-view-title">Customer Details</h3>
+        <button class="btn-close" id="customer-view-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body" id="customer-view-body">
+        <div class="empty-state">Loading…</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="customer-view-done">Close</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Customer Delete Modal ──────────────────────────────────────────── -->
+  <div class="modal-overlay" id="customer-delete-overlay">
+    <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="customer-delete-title">
+
+      <div class="modal-header">
+        <h3 id="customer-delete-title">Delete Customer</h3>
+        <button class="btn-close" id="customer-delete-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <p id="customer-delete-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
+        <p class="delete-warning">This will permanently delete the customer, all their contact persons, and associated files. This action cannot be undone.</p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="customer-delete-cancel">Cancel</button>
+        <button class="btn-danger" id="btn-confirm-customer-delete">Delete Customer</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Contact Add/Edit Modal (z-index 200) ───────────────────────────── -->
+  <div class="modal-overlay modal-overlay-top" id="contact-form-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="contact-form-title">
+
+      <div class="modal-header">
+        <h3 id="contact-form-title">Add Contact Person</h3>
+        <button class="btn-close" id="contact-form-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="ct-firstname">First Name *</label>
+            <input type="text" id="ct-firstname" placeholder="e.g. Jane" />
+          </div>
+          <div class="field">
+            <label for="ct-lastname">Last Name *</label>
+            <input type="text" id="ct-lastname" placeholder="e.g. Doe" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="ct-phone">Phone</label>
+            <input type="tel" id="ct-phone" placeholder="+1 234 567 8900" />
+          </div>
+          <div class="field">
+            <label for="ct-email">Email</label>
+            <input type="email" id="ct-email" placeholder="contact@company.com" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="ct-jobtitle">Job Title</label>
+          <input type="text" id="ct-jobtitle" placeholder="e.g. Procurement Manager" />
+        </div>
+        <div class="field">
+          <label class="role-check" style="border:none;padding:0;gap:10px;font-size:13px;font-weight:600">
+            <input type="checkbox" id="ct-primary" style="accent-color:var(--green);width:16px;height:16px" />
+            Primary Contact
+          </label>
+        </div>
+        <div class="field">
+          <label for="ct-notes">Notes</label>
+          <textarea id="ct-notes" rows="2" placeholder="Additional notes…"></textarea>
+        </div>
+
+        <div id="ct-form-error"   class="msg-error"   role="alert"></div>
+        <div id="ct-form-success" class="msg-success" role="status"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="contact-form-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-save-contact">Save Contact</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Contact View Modal (z-index 200) ──────────────────────────────── -->
+  <div class="modal-overlay modal-overlay-top" id="contact-view-overlay">
+    <div class="modal view-modal" role="dialog" aria-modal="true" aria-labelledby="contact-view-title">
+
+      <div class="modal-header">
+        <h3 id="contact-view-title">Contact Details</h3>
+        <button class="btn-close" id="contact-view-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body" id="contact-view-body">
+        <div class="empty-state">Loading…</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="contact-view-done">Close</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Contact Delete Modal (z-index 200) ────────────────────────────── -->
+  <div class="modal-overlay modal-overlay-top" id="contact-delete-overlay">
+    <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="contact-delete-title">
+
+      <div class="modal-header">
+        <h3 id="contact-delete-title">Delete Contact</h3>
+        <button class="btn-close" id="contact-delete-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <p id="contact-delete-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
+        <p class="delete-warning">This will permanently remove this contact person. This action cannot be undone.</p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="contact-delete-cancel">Cancel</button>
+        <button class="btn-danger" id="btn-confirm-contact-delete">Delete Contact</button>
       </div>
 
     </div>
