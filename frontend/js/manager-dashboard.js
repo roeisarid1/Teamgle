@@ -164,7 +164,8 @@ function renderEmployees(employees) {
         <div class="actions-cell">
           <button class="btn-action btn-action-view"
             data-action="view"
-            data-id="${e.userId}">View</button>
+            data-id="${e.userId}"
+            title="Open to view details, roles & documents">View</button>
           <button class="btn-action btn-action-edit"
             data-action="edit"
             data-id="${e.userId}">Edit</button>
@@ -250,7 +251,12 @@ async function openViewModal(employeeId) {
 
     const rolesHtml = emp.roles && emp.roles.length
       ? emp.roles.map(r => `<span class="role-chip">${capitalize(escape(r.rollName || r))}</span>`).join("")
-      : `<span style="color:#6b7280;font-size:12px">No roles assigned</span>`;
+      : `<div class="empty-state-cta">
+          <span class="empty-state-icon">🏷️</span>
+          <p class="empty-state-title">No roles assigned</p>
+          <p class="empty-state-hint">Assign roles to define this employee's responsibilities.</p>
+          <button class="btn-empty-cta" data-edit-emp="${employeeId}">Edit Employee</button>
+        </div>`;
 
     const docsHtml = docs.length
       ? `<div class="view-docs-list">${docs.map(d => `
@@ -259,7 +265,12 @@ async function openViewModal(employeeId) {
             <a href="${d.url}" target="_blank" rel="noopener" class="btn-open-doc">Open</a>
           </div>`).join("")}
         </div>`
-      : `<span style="color:#6b7280;font-size:13px">No documents uploaded</span>`;
+      : `<div class="empty-state-cta">
+          <span class="empty-state-icon">📄</span>
+          <p class="empty-state-title">No documents uploaded</p>
+          <p class="empty-state-hint">Upload contracts, certificates or any relevant files for this employee.</p>
+          <button class="btn-empty-cta" data-edit-emp="${employeeId}">Edit Employee</button>
+        </div>`;
 
     body.innerHTML = `
       <div class="view-profile-section">
@@ -290,6 +301,14 @@ async function openViewModal(employeeId) {
         ${docsHtml}
       </div>
     `;
+
+    // Wire empty-state "Edit Employee" buttons
+    body.querySelectorAll("[data-edit-emp]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        closeViewModal();
+        openEditModal(btn.dataset.editEmp);
+      });
+    });
   } catch {
     body.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load employee details.</div>`;
   }
@@ -380,6 +399,7 @@ async function loadEmployeeFirebaseFiles(employeeId) {
     const docsDir   = ref(storage, `employees/${employeeId}/documents`);
     const docsItems = await listAll(docsDir);
     if (docsItems.items.length > 0) {
+      documentsList.querySelector(".empty-state-cta")?.remove();
       document.getElementById("existing-docs-section").style.display = "block";
       const existingDocsList = document.getElementById("existing-docs-list");
       existingDocsList.innerHTML = "";
@@ -462,7 +482,17 @@ function clearForm() {
 
   // Reset documents state
   documentFiles = [];
-  documentsList.innerHTML = "";
+  documentsList.innerHTML = `
+    <div class="empty-state-cta" id="docs-empty-state">
+      <span class="empty-state-icon">📄</span>
+      <p class="empty-state-title">No documents added</p>
+      <p class="empty-state-hint">Add contracts, certificates or any relevant files for this employee.</p>
+      <button type="button" class="btn-empty-cta" id="btn-add-doc-empty">+ Add First Document</button>
+    </div>`;
+  documentsList.querySelector("#btn-add-doc-empty").addEventListener("click", () => {
+    if (editingEmployeeId) document.getElementById("new-docs-label").style.display = "block";
+    addDocumentRow();
+  });
   existingDocs  = [];
   docsToDelete  = new Set();
   document.getElementById("existing-docs-section").style.display = "none";
@@ -823,6 +853,9 @@ btnAddDoc.addEventListener("click", () => {
 });
 
 function addDocumentRow() {
+  // Remove empty state on first document added
+  documentsList.querySelector(".empty-state-cta")?.remove();
+
   const idx = documentFiles.length;
   documentFiles.push({ file: null, title: "" });
 
@@ -1009,7 +1042,8 @@ function renderCustomers(customers) {
       <td>
         <div class="actions-cell">
           <button class="btn-action btn-action-view"
-            data-cust-action="view" data-id="${c.customerId}">View</button>
+            data-cust-action="view" data-id="${c.customerId}"
+            title="Open to manage contacts, files & details">View</button>
           <button class="btn-action btn-action-edit"
             data-cust-action="edit" data-id="${c.customerId}">Edit</button>
           <button class="btn-action btn-action-delete"
@@ -1246,7 +1280,12 @@ async function refreshCustomerView(customerId) {
             </tbody>
           </table>
         </div>`
-      : `<p style="color:#6b7280;font-size:13px">No contacts yet.</p>`;
+      : `<div class="empty-state-cta">
+          <span class="empty-state-icon">👤</span>
+          <p class="empty-state-title">No contacts yet</p>
+          <p class="empty-state-hint">Add contact persons for this customer — phone, email, job title and more.</p>
+          <button class="btn-empty-cta" id="btn-add-contact-empty">+ Add First Contact</button>
+        </div>`;
 
     // ── files list ──
     const filesHtml = files.length
@@ -1259,7 +1298,12 @@ async function refreshCustomerView(customerId) {
                 data-fpath="${f.storagePath}" title="Delete file">✕</button>
             </div>`).join("")}
         </div>`
-      : `<p style="color:#6b7280;font-size:13px">No files uploaded.</p>`;
+      : `<div class="empty-state-cta">
+          <span class="empty-state-icon">📁</span>
+          <p class="empty-state-title">No files uploaded</p>
+          <p class="empty-state-hint">Upload contracts, quotes or any relevant documents for this customer.</p>
+          <button class="btn-empty-cta" id="btn-upload-cust-empty">+ Upload First File</button>
+        </div>`;
 
     body.innerHTML = `
       <div class="view-info-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -1300,13 +1344,18 @@ async function refreshCustomerView(customerId) {
       </div>
     `;
 
-    // Wire — Add Contact
+    // Wire — Add Contact (header button + empty-state CTA)
     document.getElementById("btn-add-contact-in-view")
       .addEventListener("click", () => openContactFormModal(customerId, null));
+    document.getElementById("btn-add-contact-empty")
+      ?.addEventListener("click", () => openContactFormModal(customerId, null));
 
-    // Wire — Upload File
+    // Wire — Upload File (header button + empty-state CTA)
+    const triggerUpload = () => document.getElementById("cust-file-input-view").click();
     document.getElementById("btn-upload-cust-file")
-      .addEventListener("click", () => document.getElementById("cust-file-input-view").click());
+      .addEventListener("click", triggerUpload);
+    document.getElementById("btn-upload-cust-empty")
+      ?.addEventListener("click", triggerUpload);
 
     document.getElementById("cust-file-input-view")
       .addEventListener("change", async (e) => {
