@@ -162,6 +162,9 @@ function renderEmployees(employees) {
       </td>
       <td>
         <div class="actions-cell">
+          <button class="btn-action btn-action-view"
+            data-action="view"
+            data-id="${e.userId}">View</button>
           <button class="btn-action btn-action-edit"
             data-action="edit"
             data-id="${e.userId}">Edit</button>
@@ -183,12 +186,114 @@ employeeTbody.addEventListener("click", async (e) => {
   const action = btn.dataset.action;
   const id     = btn.dataset.id;
 
-  if (action === "edit") {
+  if (action === "view") {
+    await openViewModal(id);
+  } else if (action === "edit") {
     await openEditModal(id);
   } else if (action === "delete") {
     openDeleteModal(id, btn.dataset.name);
   }
 });
+
+// ── View modal ─────────────────────────────────────────────────────────────
+const viewModalOverlay = document.getElementById("view-modal-overlay");
+document.getElementById("view-modal-close").addEventListener("click", closeViewModal);
+document.getElementById("view-modal-cancel").addEventListener("click", closeViewModal);
+viewModalOverlay.addEventListener("click", (e) => {
+  if (e.target === viewModalOverlay) closeViewModal();
+});
+
+function closeViewModal() {
+  viewModalOverlay.classList.remove("open");
+}
+
+async function openViewModal(employeeId) {
+  const body = document.getElementById("view-modal-body");
+  body.innerHTML = `<div class="empty-state">Loading…</div>`;
+  viewModalOverlay.classList.add("open");
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("Failed to load employee.");
+    const emp = await res.json();
+
+    // Load Firebase profile image
+    let profileUrl = null;
+    try {
+      const profileDir   = ref(storage, `employees/${employeeId}/profile`);
+      const profileItems = await listAll(profileDir);
+      if (profileItems.items.length > 0) {
+        profileUrl = await getDownloadURL(profileItems.items[0]);
+      }
+    } catch { /* no profile image */ }
+
+    // Load Firebase documents
+    let docs = [];
+    try {
+      const docsDir   = ref(storage, `employees/${employeeId}/documents`);
+      const docsItems = await listAll(docsDir);
+      for (const item of docsItems.items) {
+        const url = await getDownloadURL(item);
+        docs.push({ name: item.name, url });
+      }
+    } catch { /* no documents */ }
+
+    const initials   = (emp.firstName[0] + emp.lastName[0]).toUpperCase();
+    const statusClass = emp.registrationStatus === "Active" ? "badge-active" : "badge-pending";
+
+    const profileHtml = profileUrl
+      ? `<img class="view-profile-img" src="${profileUrl}" alt="Profile" />`
+      : `<div class="view-profile-initials">${initials}</div>`;
+
+    const rolesHtml = emp.roles && emp.roles.length
+      ? emp.roles.map(r => `<span class="role-chip">${capitalize(escape(r.rollName || r))}</span>`).join("")
+      : `<span style="color:#6b7280;font-size:12px">No roles assigned</span>`;
+
+    const docsHtml = docs.length
+      ? `<div class="view-docs-list">${docs.map(d => `
+          <div class="view-doc-item">
+            <span class="view-doc-name" title="${escape(d.name)}">${escape(d.name)}</span>
+            <a href="${d.url}" target="_blank" rel="noopener" class="btn-open-doc">Open</a>
+          </div>`).join("")}
+        </div>`
+      : `<span style="color:#6b7280;font-size:13px">No documents uploaded</span>`;
+
+    body.innerHTML = `
+      <div class="view-profile-section">
+        ${profileHtml}
+        <span class="view-profile-name">${escape(emp.firstName)} ${escape(emp.lastName)}</span>
+        <span class="badge ${statusClass}">${escape(emp.registrationStatus)}</span>
+      </div>
+      <div class="view-info-grid">
+        <div class="view-info-item">
+          <label>Email</label>
+          <span>${escape(emp.email)}</span>
+        </div>
+        <div class="view-info-item">
+          <label>Phone</label>
+          <span>${escape(emp.phoneNum || "—")}</span>
+        </div>
+        <div class="view-info-item">
+          <label>Cost per Hour</label>
+          <span>${emp.costPerHour != null ? `₪${Number(emp.costPerHour).toFixed(2)}` : "—"}</span>
+        </div>
+      </div>
+      <div>
+        <p class="view-section-title">Roles</p>
+        <div class="roles-list">${rolesHtml}</div>
+      </div>
+      <div>
+        <p class="view-section-title">Documents</p>
+        ${docsHtml}
+      </div>
+    `;
+  } catch {
+    body.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load employee details.</div>`;
+  }
+}
 
 // ── Modal open/close ───────────────────────────────────────────────────────
 btnAddEmployee.addEventListener("click", () => openAddModal());
