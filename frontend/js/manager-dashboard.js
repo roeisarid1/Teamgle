@@ -939,3 +939,696 @@ function escape(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── SECTION SWITCHING ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+document.querySelectorAll(".nav-item[data-section]").forEach(item => {
+  item.addEventListener("click", (e) => {
+    e.preventDefault();
+    activateSection(item.dataset.section);
+  });
+});
+
+function activateSection(name) {
+  document.querySelectorAll(".nav-item[data-section]").forEach(el => {
+    el.classList.toggle("active", el.dataset.section === name);
+  });
+  document.querySelectorAll(".page-section").forEach(el => {
+    el.style.display = el.dataset.section === name ? "" : "none";
+  });
+  if (name === "customers") loadCustomers();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CUSTOMER STATE ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let editingCustomerId         = null;
+let viewingCustomerId         = null;
+let editingContactId          = null;
+let pendingDeleteCustomerId   = null;
+let pendingDeleteContactId    = null;
+let pendingDeleteContactCustId = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CUSTOMER LIST ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadCustomers() {
+  const tbody = document.getElementById("customer-tbody");
+  tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/customers`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const customers = await res.json();
+    renderCustomers(customers);
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load customers.</td></tr>`;
+  }
+}
+
+function renderCustomers(customers) {
+  const tbody = document.getElementById("customer-tbody");
+  if (!customers.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No customers yet. Click "+ Add Customer" to get started.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = customers.map(c => `
+    <tr>
+      <td><strong>${escape(c.customerCompanyName)}</strong></td>
+      <td>${escape(c.companyPhone || "—")}</td>
+      <td>${escape(c.companyEmail || "—")}</td>
+      <td>${escape(c.companyCity  || "—")}</td>
+      <td>${escape(c.businessNumber || "—")}</td>
+      <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</td>
+      <td>
+        <div class="actions-cell">
+          <button class="btn-action btn-action-view"
+            data-cust-action="view" data-id="${c.customerId}">View</button>
+          <button class="btn-action btn-action-edit"
+            data-cust-action="edit" data-id="${c.customerId}">Edit</button>
+          <button class="btn-action btn-action-delete"
+            data-cust-action="delete" data-id="${c.customerId}"
+            data-name="${escape(c.customerCompanyName)}">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+document.getElementById("customer-tbody").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-cust-action]");
+  if (!btn) return;
+  const action = btn.dataset.custAction;
+  const id     = btn.dataset.id;
+  if (action === "view")   await openCustomerViewModal(id);
+  else if (action === "edit")   await openCustomerFormModal(id);
+  else if (action === "delete") openCustomerDeleteModal(id, btn.dataset.name);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CUSTOMER FORM MODAL (Add / Edit) ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+document.getElementById("btn-add-customer").addEventListener("click", () => openCustomerFormModal(null));
+document.getElementById("customer-form-close").addEventListener("click", closeCustomerFormModal);
+document.getElementById("customer-form-cancel").addEventListener("click", closeCustomerFormModal);
+document.getElementById("customer-form-overlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("customer-form-overlay")) closeCustomerFormModal();
+});
+
+function clearCustomerForm() {
+  ["cust-name","cust-phone","cust-email","cust-city","cust-address",
+   "cust-billing-email","cust-business-number","cust-payment-terms","cust-notes"]
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  document.getElementById("cust-form-error").style.display   = "none";
+  document.getElementById("cust-form-success").style.display = "none";
+  editingCustomerId = null;
+  document.getElementById("customer-form-title").textContent = "Add New Customer";
+  const btn = document.getElementById("btn-save-customer");
+  btn.textContent = "Save Customer";
+  btn.disabled    = false;
+}
+
+async function openCustomerFormModal(customerId) {
+  // Close view if open (same z-index layer)
+  document.getElementById("customer-view-overlay").classList.remove("open");
+  clearCustomerForm();
+  document.getElementById("customer-form-overlay").classList.add("open");
+
+  if (customerId) {
+    editingCustomerId = customerId;
+    document.getElementById("customer-form-title").textContent = "Edit Customer";
+    const btn = document.getElementById("btn-save-customer");
+    btn.textContent = "Loading…";
+    btn.disabled    = true;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/customers/${customerId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+      const c = await res.json();
+      document.getElementById("cust-name").value            = c.customerCompanyName || "";
+      document.getElementById("cust-phone").value           = c.companyPhone || "";
+      document.getElementById("cust-email").value           = c.companyEmail || "";
+      document.getElementById("cust-city").value            = c.companyCity  || "";
+      document.getElementById("cust-address").value         = c.companyAddress || "";
+      document.getElementById("cust-billing-email").value   = c.billingEmail || "";
+      document.getElementById("cust-business-number").value = c.businessNumber || "";
+      document.getElementById("cust-payment-terms").value   = c.paymentTerms || "";
+      document.getElementById("cust-notes").value           = c.notes || "";
+    } catch {
+      document.getElementById("cust-form-error").textContent = "Failed to load customer data.";
+      document.getElementById("cust-form-error").style.display = "block";
+    } finally {
+      btn.textContent = "Save Changes";
+      btn.disabled    = false;
+    }
+  }
+}
+
+function closeCustomerFormModal() {
+  document.getElementById("customer-form-overlay").classList.remove("open");
+  clearCustomerForm();
+}
+
+document.getElementById("btn-save-customer").addEventListener("click", async () => {
+  const name          = document.getElementById("cust-name").value.trim();
+  const phone         = document.getElementById("cust-phone").value.trim();
+  const email         = document.getElementById("cust-email").value.trim();
+  const city          = document.getElementById("cust-city").value.trim();
+  const address       = document.getElementById("cust-address").value.trim();
+  const billingEmail  = document.getElementById("cust-billing-email").value.trim();
+  const businessNum   = document.getElementById("cust-business-number").value.trim();
+  const paymentTerms  = document.getElementById("cust-payment-terms").value.trim();
+  const notes         = document.getElementById("cust-notes").value.trim();
+
+  const errorEl   = document.getElementById("cust-form-error");
+  const successEl = document.getElementById("cust-form-success");
+  errorEl.style.display   = "none";
+  successEl.style.display = "none";
+
+  if (!name) {
+    errorEl.textContent = "Company name is required.";
+    errorEl.style.display = "block";
+    return;
+  }
+
+  const body = {
+    customerCompanyName: name,
+    companyPhone:    phone        || null,
+    companyEmail:    email        || null,
+    companyCity:     city         || null,
+    companyAddress:  address      || null,
+    billingEmail:    billingEmail || null,
+    businessNumber:  businessNum  || null,
+    paymentTerms:    paymentTerms || null,
+    notes:           notes        || null
+  };
+
+  const btn = document.getElementById("btn-save-customer");
+  btn.disabled    = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const token  = await getToken();
+    const url    = editingCustomerId ? `${API_BASE}/customers/${editingCustomerId}` : `${API_BASE}/customers`;
+    const method = editingCustomerId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || "Failed to save customer.";
+      errorEl.style.display = "block";
+      return;
+    }
+    successEl.textContent = editingCustomerId
+      ? "Customer updated successfully."
+      : `${name} added successfully.`;
+    successEl.style.display = "block";
+    await loadCustomers();
+    setTimeout(closeCustomerFormModal, 1800);
+  } catch {
+    errorEl.textContent = "Network error. Please check your connection.";
+    errorEl.style.display = "block";
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = editingCustomerId ? "Save Changes" : "Save Customer";
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CUSTOMER VIEW MODAL ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+const custViewOverlay = document.getElementById("customer-view-overlay");
+document.getElementById("customer-view-close").addEventListener("click", closeCustomerViewModal);
+document.getElementById("customer-view-done").addEventListener("click",  closeCustomerViewModal);
+custViewOverlay.addEventListener("click", (e) => {
+  if (e.target === custViewOverlay) closeCustomerViewModal();
+});
+
+function closeCustomerViewModal() {
+  custViewOverlay.classList.remove("open");
+  viewingCustomerId = null;
+}
+
+async function openCustomerViewModal(customerId) {
+  viewingCustomerId = customerId;
+  const body = document.getElementById("customer-view-body");
+  body.innerHTML = `<div class="empty-state">Loading…</div>`;
+  custViewOverlay.classList.add("open");
+  await refreshCustomerView(customerId);
+}
+
+async function refreshCustomerView(customerId) {
+  const body = document.getElementById("customer-view-body");
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/customers/${customerId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const c = await res.json();
+
+    document.getElementById("customer-view-title").textContent = c.customerCompanyName;
+
+    // Load Firebase files
+    let files = [];
+    try {
+      const filesDir   = ref(storage, `customers/${customerId}/files`);
+      const filesItems = await listAll(filesDir);
+      for (const item of filesItems.items) {
+        const url = await getDownloadURL(item);
+        files.push({ name: item.name, storagePath: item.fullPath, url });
+      }
+    } catch { /* no files folder yet */ }
+
+    // ── contacts table ──
+    const contactsHtml = c.contacts && c.contacts.length
+      ? `<div class="contacts-table-wrap">
+          <table class="contacts-table">
+            <thead><tr>
+              <th>Name</th><th>Job Title</th><th>Phone</th><th>Email</th><th>Primary</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+              ${c.contacts.map(ct => `
+                <tr>
+                  <td><strong>${escape(ct.firstName)} ${escape(ct.lastName)}</strong></td>
+                  <td>${escape(ct.jobTitle || "—")}</td>
+                  <td>${escape(ct.phone    || "—")}</td>
+                  <td>${escape(ct.email    || "—")}</td>
+                  <td>${ct.isPrimary
+                    ? '<span class="badge badge-active">Primary</span>'
+                    : '<span style="color:#9ca3af;font-size:12px">—</span>'}</td>
+                  <td>
+                    <div class="actions-cell">
+                      <button class="btn-action btn-action-view"
+                        data-caction="view" data-cid="${ct.contactId}">View</button>
+                      <button class="btn-action btn-action-edit"
+                        data-caction="edit" data-cid="${ct.contactId}">Edit</button>
+                      <button class="btn-action btn-action-delete"
+                        data-caction="delete" data-cid="${ct.contactId}"
+                        data-cname="${escape(ct.firstName + " " + ct.lastName)}">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>`
+      : `<p style="color:#6b7280;font-size:13px">No contacts yet.</p>`;
+
+    // ── files list ──
+    const filesHtml = files.length
+      ? `<div class="documents-list">
+          ${files.map(f => `
+            <div class="doc-item-existing">
+              <span class="doc-item-name" title="${escape(f.name)}">${escape(f.name)}</span>
+              <a href="${f.url}" target="_blank" rel="noopener" class="btn-open-doc">Open</a>
+              <button type="button" class="btn-remove-doc"
+                data-fpath="${f.storagePath}" title="Delete file">✕</button>
+            </div>`).join("")}
+        </div>`
+      : `<p style="color:#6b7280;font-size:13px">No files uploaded.</p>`;
+
+    body.innerHTML = `
+      <div class="view-info-grid" style="grid-template-columns:repeat(3,1fr)">
+        ${viewField("Phone",         c.companyPhone)}
+        ${viewField("Email",         c.companyEmail)}
+        ${viewField("City",          c.companyCity)}
+        ${viewField("Address",       c.companyAddress)}
+        ${viewField("Billing Email", c.billingEmail)}
+        ${viewField("Business #",    c.businessNumber)}
+        ${viewField("Payment Terms", c.paymentTerms)}
+        ${viewField("Added",         c.createdAt ? new Date(c.createdAt).toLocaleDateString() : null)}
+      </div>
+      ${c.notes ? `<div class="view-info-item" style="margin-top:4px">
+        <label>Notes</label>
+        <span style="white-space:pre-wrap;font-size:14px;font-weight:400;color:var(--text)">${escape(c.notes)}</span>
+      </div>` : ""}
+
+      <div class="view-section-divider"></div>
+
+      <div>
+        <div class="cview-section-header">
+          <p class="view-section-title" style="margin-bottom:0">Contact Persons</p>
+          <button class="btn-add-role" id="btn-add-contact-in-view">+ Add Contact</button>
+        </div>
+        <div style="margin-top:10px">${contactsHtml}</div>
+      </div>
+
+      <div class="view-section-divider"></div>
+
+      <div>
+        <div class="cview-section-header">
+          <p class="view-section-title" style="margin-bottom:0">Files & Documents</p>
+          <button class="btn-add-role" id="btn-upload-cust-file">+ Upload File</button>
+        </div>
+        <input type="file" id="cust-file-input-view"
+          accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" hidden />
+        <div id="cust-files-view-list" style="margin-top:10px">${filesHtml}</div>
+      </div>
+    `;
+
+    // Wire — Add Contact
+    document.getElementById("btn-add-contact-in-view")
+      .addEventListener("click", () => openContactFormModal(customerId, null));
+
+    // Wire — Upload File
+    document.getElementById("btn-upload-cust-file")
+      .addEventListener("click", () => document.getElementById("cust-file-input-view").click());
+
+    document.getElementById("cust-file-input-view")
+      .addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) { alert("File must be under 15 MB."); e.target.value = ""; return; }
+        const uploadBtn = document.getElementById("btn-upload-cust-file");
+        uploadBtn.disabled    = true;
+        uploadBtn.textContent = "Uploading…";
+        try {
+          const safeName   = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+          const storageRef = ref(storage, `customers/${customerId}/files/${safeName}`);
+          await uploadBytes(storageRef, file);
+          await refreshCustomerView(customerId);
+        } catch { alert("Upload failed. Please try again."); }
+        finally   { e.target.value = ""; }
+      });
+
+    // Wire — Delete file buttons
+    body.querySelectorAll("[data-fpath]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this file? This cannot be undone.")) return;
+        try {
+          await deleteObject(ref(storage, btn.dataset.fpath));
+          await refreshCustomerView(customerId);
+        } catch { alert("Failed to delete file."); }
+      });
+    });
+
+    // Wire — Contact action buttons
+    body.querySelectorAll("[data-caction]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const caction = btn.dataset.caction;
+        const cid     = btn.dataset.cid;
+        if (caction === "view")   await openContactViewModal(customerId, cid);
+        else if (caction === "edit")   await openContactFormModal(customerId, cid);
+        else if (caction === "delete") openContactDeleteModal(cid, btn.dataset.cname, customerId);
+      });
+    });
+
+  } catch {
+    body.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load customer details.</div>`;
+  }
+}
+
+function viewField(label, value) {
+  return `<div class="view-info-item">
+    <label>${label}</label>
+    <span>${escape(value || "—")}</span>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CUSTOMER DELETE MODAL ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+const custDeleteOverlay = document.getElementById("customer-delete-overlay");
+document.getElementById("customer-delete-close").addEventListener("click",  closeCustomerDeleteModal);
+document.getElementById("customer-delete-cancel").addEventListener("click", closeCustomerDeleteModal);
+custDeleteOverlay.addEventListener("click", (e) => {
+  if (e.target === custDeleteOverlay) closeCustomerDeleteModal();
+});
+
+function openCustomerDeleteModal(customerId, name) {
+  pendingDeleteCustomerId = customerId;
+  document.getElementById("customer-delete-text").textContent =
+    `Are you sure you want to permanently delete "${name}"?`;
+  custDeleteOverlay.classList.add("open");
+}
+
+function closeCustomerDeleteModal() {
+  custDeleteOverlay.classList.remove("open");
+  pendingDeleteCustomerId = null;
+}
+
+document.getElementById("btn-confirm-customer-delete").addEventListener("click", async () => {
+  if (!pendingDeleteCustomerId) return;
+  const btn = document.getElementById("btn-confirm-customer-delete");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/customers/${pendingDeleteCustomerId}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) { const d = await res.json(); alert(d.error || "Failed to delete."); return; }
+    try { await deleteCustomerStorageFiles(pendingDeleteCustomerId); } catch { /* best effort */ }
+    closeCustomerDeleteModal();
+    await loadCustomers();
+  } catch { alert("Network error. Could not delete customer."); }
+  finally { btn.disabled = false; btn.textContent = "Delete Customer"; }
+});
+
+async function deleteCustomerStorageFiles(customerId) {
+  try {
+    const items = await listAll(ref(storage, `customers/${customerId}/files`));
+    await Promise.all(items.items.map(item => deleteObject(item)));
+  } catch { /* no files folder */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CONTACT FORM MODAL (Add / Edit) — z-index 200 ─────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+const contactFormOverlay = document.getElementById("contact-form-overlay");
+document.getElementById("contact-form-close").addEventListener("click",  closeContactFormModal);
+document.getElementById("contact-form-cancel").addEventListener("click", closeContactFormModal);
+contactFormOverlay.addEventListener("click", (e) => {
+  if (e.target === contactFormOverlay) closeContactFormModal();
+});
+
+function clearContactForm() {
+  ["ct-firstname","ct-lastname","ct-phone","ct-email","ct-jobtitle","ct-notes"]
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  document.getElementById("ct-primary").checked = false;
+  document.getElementById("ct-form-error").style.display   = "none";
+  document.getElementById("ct-form-success").style.display = "none";
+  editingContactId = null;
+  document.getElementById("contact-form-title").textContent = "Add Contact Person";
+  const btn = document.getElementById("btn-save-contact");
+  btn.textContent = "Save Contact";
+  btn.disabled    = false;
+  delete btn.dataset.customerId;
+}
+
+async function openContactFormModal(customerId, contactId) {
+  clearContactForm();
+  editingContactId = contactId;
+  document.getElementById("btn-save-contact").dataset.customerId = customerId;
+
+  if (contactId) {
+    document.getElementById("contact-form-title").textContent = "Edit Contact";
+    const btn = document.getElementById("btn-save-contact");
+    btn.textContent = "Loading…";
+    btn.disabled    = true;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/customers/${customerId}/contacts/${contactId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+      const ct = await res.json();
+      document.getElementById("ct-firstname").value  = ct.firstName  || "";
+      document.getElementById("ct-lastname").value   = ct.lastName   || "";
+      document.getElementById("ct-phone").value      = ct.phone      || "";
+      document.getElementById("ct-email").value      = ct.email      || "";
+      document.getElementById("ct-jobtitle").value   = ct.jobTitle   || "";
+      document.getElementById("ct-primary").checked  = ct.isPrimary;
+      document.getElementById("ct-notes").value      = ct.notes      || "";
+    } catch {
+      document.getElementById("ct-form-error").textContent = "Failed to load contact data.";
+      document.getElementById("ct-form-error").style.display = "block";
+    } finally {
+      btn.textContent = "Save Changes";
+      btn.disabled    = false;
+    }
+  }
+  contactFormOverlay.classList.add("open");
+}
+
+function closeContactFormModal() {
+  contactFormOverlay.classList.remove("open");
+  clearContactForm();
+}
+
+document.getElementById("btn-save-contact").addEventListener("click", async () => {
+  const customerId = document.getElementById("btn-save-contact").dataset.customerId;
+  const firstName  = document.getElementById("ct-firstname").value.trim();
+  const lastName   = document.getElementById("ct-lastname").value.trim();
+  const phone      = document.getElementById("ct-phone").value.trim();
+  const email      = document.getElementById("ct-email").value.trim();
+  const jobTitle   = document.getElementById("ct-jobtitle").value.trim();
+  const isPrimary  = document.getElementById("ct-primary").checked;
+  const notes      = document.getElementById("ct-notes").value.trim();
+
+  const errorEl   = document.getElementById("ct-form-error");
+  const successEl = document.getElementById("ct-form-success");
+  errorEl.style.display   = "none";
+  successEl.style.display = "none";
+
+  if (!firstName || !lastName) {
+    errorEl.textContent = "First and last name are required.";
+    errorEl.style.display = "block";
+    return;
+  }
+
+  const body = {
+    firstName, lastName,
+    phone:    phone    || null,
+    email:    email    || null,
+    jobTitle: jobTitle || null,
+    isPrimary,
+    notes:    notes    || null
+  };
+
+  const btn = document.getElementById("btn-save-contact");
+  btn.disabled    = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const token  = await getToken();
+    const url    = editingContactId
+      ? `${API_BASE}/customers/${customerId}/contacts/${editingContactId}`
+      : `${API_BASE}/customers/${customerId}/contacts`;
+    const method = editingContactId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || "Failed to save contact.";
+      errorEl.style.display = "block";
+      return;
+    }
+    successEl.textContent = editingContactId
+      ? "Contact updated successfully."
+      : `${firstName} ${lastName} added.`;
+    successEl.style.display = "block";
+    setTimeout(() => {
+      closeContactFormModal();
+      if (viewingCustomerId) refreshCustomerView(viewingCustomerId);
+    }, 1200);
+  } catch {
+    errorEl.textContent = "Network error. Please check your connection.";
+    errorEl.style.display = "block";
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = editingContactId ? "Save Changes" : "Save Contact";
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CONTACT VIEW MODAL — z-index 200 ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+const contactViewOverlay = document.getElementById("contact-view-overlay");
+document.getElementById("contact-view-close").addEventListener("click", closeContactViewModal);
+document.getElementById("contact-view-done").addEventListener("click",  closeContactViewModal);
+contactViewOverlay.addEventListener("click", (e) => {
+  if (e.target === contactViewOverlay) closeContactViewModal();
+});
+
+function closeContactViewModal() {
+  contactViewOverlay.classList.remove("open");
+}
+
+async function openContactViewModal(customerId, contactId) {
+  const body = document.getElementById("contact-view-body");
+  body.innerHTML = `<div class="empty-state">Loading…</div>`;
+  contactViewOverlay.classList.add("open");
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/customers/${customerId}/contacts/${contactId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const ct = await res.json();
+    const initials = (ct.firstName[0] + ct.lastName[0]).toUpperCase();
+    body.innerHTML = `
+      <div class="view-profile-section">
+        <div class="view-profile-initials">${initials}</div>
+        <span class="view-profile-name">${escape(ct.firstName)} ${escape(ct.lastName)}</span>
+        ${ct.isPrimary ? '<span class="badge badge-active">Primary Contact</span>' : ""}
+      </div>
+      <div class="view-info-grid">
+        ${viewField("Job Title", ct.jobTitle)}
+        ${viewField("Phone",     ct.phone)}
+        ${viewField("Email",     ct.email)}
+        ${viewField("Added",     ct.createdAt ? new Date(ct.createdAt).toLocaleDateString() : null)}
+      </div>
+      ${ct.notes ? `<div class="view-info-item">
+        <label>Notes</label>
+        <span style="white-space:pre-wrap;font-size:14px;font-weight:400">${escape(ct.notes)}</span>
+      </div>` : ""}
+    `;
+  } catch {
+    body.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load contact details.</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CONTACT DELETE MODAL — z-index 200 ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+const contactDeleteOverlay = document.getElementById("contact-delete-overlay");
+document.getElementById("contact-delete-close").addEventListener("click",  closeContactDeleteModal);
+document.getElementById("contact-delete-cancel").addEventListener("click", closeContactDeleteModal);
+contactDeleteOverlay.addEventListener("click", (e) => {
+  if (e.target === contactDeleteOverlay) closeContactDeleteModal();
+});
+
+function openContactDeleteModal(contactId, name, customerId) {
+  pendingDeleteContactId     = contactId;
+  pendingDeleteContactCustId = customerId;
+  document.getElementById("contact-delete-text").textContent =
+    `Are you sure you want to delete contact "${name}"?`;
+  contactDeleteOverlay.classList.add("open");
+}
+
+function closeContactDeleteModal() {
+  contactDeleteOverlay.classList.remove("open");
+  pendingDeleteContactId     = null;
+  pendingDeleteContactCustId = null;
+}
+
+document.getElementById("btn-confirm-contact-delete").addEventListener("click", async () => {
+  if (!pendingDeleteContactId) return;
+  const btn = document.getElementById("btn-confirm-contact-delete");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/customers/${pendingDeleteContactCustId}/contacts/${pendingDeleteContactId}`,
+      { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } }
+    );
+    if (!res.ok) { const d = await res.json(); alert(d.error || "Failed to delete contact."); return; }
+    closeContactDeleteModal();
+    if (viewingCustomerId) await refreshCustomerView(viewingCustomerId);
+  } catch { alert("Network error. Could not delete contact."); }
+  finally { btn.disabled = false; btn.textContent = "Delete Contact"; }
+});

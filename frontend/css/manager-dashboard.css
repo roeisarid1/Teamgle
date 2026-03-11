@@ -891,6 +891,75 @@ tbody tr:hover { background: #fafbff; }
   text-overflow: ellipsis;
 }
 
+/* ── Textarea field ──────────────────────────────────────────────────────── */
+.field textarea {
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fafafa;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 72px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.field textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  background: #fff;
+}
+
+/* ── Customer view modal ─────────────────────────────────────────────────── */
+.customer-view-modal { max-width: 740px; }
+
+/* ── Top-layer modals (open above customer view) ─────────────────────────── */
+.modal-overlay-top { z-index: 200; }
+
+/* ── Customer view sections ─────────────────────────────────────────────── */
+.view-section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.cview-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.contacts-table-wrap { overflow-x: auto; }
+
+.contacts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.contacts-table thead th {
+  background: #f9fafb;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.contacts-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.contacts-table tbody tr:last-child td { border-bottom: none; }
+.contacts-table tbody tr:hover { background: #fafbff; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .navbar { padding: 0 16px; }
