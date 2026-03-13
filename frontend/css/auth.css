@@ -369,8 +369,31 @@ body {
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
+
+/* Tablet / small laptop (≤ 640px) */
+@media (max-width: 640px) {
+  .auth-body   { padding: 24px; }
+  .auth-header { padding: 30px 24px 24px; }
+}
+
+/* Mobile (≤ 480px) */
 @media (max-width: 480px) {
+  body          { padding: 16px; }
   .auth-body    { padding: 20px; }
   .auth-header  { padding: 28px 20px 22px; }
   .auth-card    { border-radius: 16px; }
+  /* Prevent iOS zoom on input focus */
+  .field input  { font-size: 16px; }
+  /* Auth tabs text may wrap on small screens */
+  .auth-tabs button { font-size: 13px; padding: 12px 4px; }
+}
+
+/* Very small phones (≤ 380px) */
+@media (max-width: 380px) {
+  body          { padding: 8px; }
+  .logo-wrap img { height: 60px; }
+  .logo-wrap    { padding: 8px 12px; }
+  .auth-body    { padding: 16px; }
+  .auth-header  { padding: 24px 16px 20px; }
+  .auth-tabs button { font-size: 12px; }
 }

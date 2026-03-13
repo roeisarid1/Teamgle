@@ -6,15 +6,29 @@
   <title>Teamgle — Manager Dashboard</title>
   <link rel="stylesheet" href="css/manager-dashboard.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
   <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
   <nav class="navbar">
     <div class="navbar-brand">
-      <img src="../logo/ChatGPT Image Mar 8, 2026, 04_50_09 AM.png" alt="Teamgle" />
-      <span>Teamgle</span>
+      <img src="../logo/Gemini_Generated_Image_x5zncpx5zncpx5zn.png" alt="Teamgle" />
+    </div>
+    <div class="navbar-info">
+      <div class="navbar-chip">
+        <span class="chip-label">Name</span>
+        <span class="chip-value" id="info-name">—</span>
+      </div>
+      <div class="navbar-chip">
+        <span class="chip-label">Role</span>
+        <span class="chip-value" id="info-role">—</span>
+      </div>
+      <div class="navbar-chip">
+        <span class="chip-label">Company</span>
+        <span class="chip-value" id="info-company">—</span>
+      </div>
     </div>
     <div class="navbar-user">
       <span id="nav-username">Loading…</span>
@@ -22,53 +36,59 @@
     </div>
   </nav>
 
+  <!-- ── Sidebar reopen button (visible only when sidebar is collapsed) ── -->
+  <button class="btn-sidebar-reopen" id="btn-sidebar-reopen" aria-label="Open sidebar">
+    <i data-lucide="panel-left-open"></i>
+  </button>
+
+  <!-- ── Sidebar backdrop (mobile only) ───────────────────────────────── -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
   <!-- ── Body layout ───────────────────────────────────────────────────── -->
   <div class="body-layout">
 
   <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
   <aside class="sidebar">
+    <div class="sidebar-header">
+      <p class="sidebar-title">Menu</p>
+      <button class="btn-hamburger" id="btn-hamburger">
+        <i data-lucide="panel-left-close"></i>
+      </button>
+    </div>
     <nav class="sidebar-nav">
+      <a href="#" class="nav-item disabled">
+        <i data-lucide="house"></i>
+        <span>Home</span>
+      </a>
+      <a href="#" class="nav-item disabled">
+        <i data-lucide="folder-kanban"></i>
+        <span>Projects</span>
+      </a>
       <a href="#" class="nav-item active" data-section="employees">
-        <span class="nav-icon">👥</span>
+        <i data-lucide="users"></i>
         <span>Employees</span>
       </a>
       <a href="#" class="nav-item" data-section="customers">
-        <span class="nav-icon">🏢</span>
+        <i data-lucide="building-2"></i>
         <span>Customers</span>
       </a>
       <a href="#" class="nav-item disabled">
-        <span class="nav-icon">📅</span>
-        <span>Shifts</span>
+        <i data-lucide="calendar"></i>
+        <span>Calendar</span>
       </a>
       <a href="#" class="nav-item disabled">
-        <span class="nav-icon">📋</span>
-        <span>Events</span>
-      </a>
-      <a href="#" class="nav-item disabled">
-        <span class="nav-icon">💰</span>
+        <i data-lucide="receipt"></i>
         <span>Invoices</span>
+      </a>
+      <a href="#" class="nav-item disabled">
+        <i data-lucide="radio"></i>
+        <span>Live Mode</span>
       </a>
     </nav>
   </aside>
 
   <!-- ── Page content ───────────────────────────────────────────────────── -->
   <div class="page-content">
-
-    <!-- Info cards -->
-    <div class="info-row">
-      <div class="info-card">
-        <label>Name</label>
-        <p id="info-name">—</p>
-      </div>
-      <div class="info-card green">
-        <label>Role</label>
-        <p id="info-role">—</p>
-      </div>
-      <div class="info-card yellow">
-        <label>Company</label>
-        <p id="info-company">—</p>
-      </div>
-    </div>
 
     <!-- Employee management section -->
     <div class="section-card page-section" id="section-employees" data-section="employees">
@@ -483,5 +503,6 @@
   </div> <!-- end body-layout -->
 
   <script type="module" src="js/manager-dashboard.js"></script>
+  <script>lucide.createIcons();</script>
 </body>
 </html>
