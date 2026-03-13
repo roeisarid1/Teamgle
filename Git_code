@@ -1,0 +1,88 @@
+בדיקת מצב הפרויקט
+git status
+
+בדיקת ענפים
+git branch        # ענפים מקומיים
+git branch -a     # כולל ענפים בשרת
+
+מעבר בין ענפים
+git checkout branch-name
+# או
+git switch branch-name
+
+יצירת ענף חדש
+git checkout -b new-branch
+# או
+git switch -c new-branch
+
+משיכת קוד מהשרת
+git pull
+
+משיכה מענף מסוים:
+git pull origin main
+
+הורדת עדכונים בלבד (בלי merge)
+git fetch
+
+עדכון רשימת הענפים מהשרת ומחיקת ענפים שכבר לא קיימים:
+git fetch --prune
+
+הוספת קבצים ל־commit
+קובץ ספציפי:
+git add file.js
+
+כל הקבצים:
+git add .
+
+git add -A
+יצירת commit
+git commit -m "commit message"
+שליחת קוד לשרת (GitHub)
+git push
+
+פעם ראשונה לענף:
+
+git push -u origin branch-name
+מיזוג ענפים (merge)
+
+לעבור לענף היעד:
+
+git checkout main
+
+לבצע merge:
+
+git merge feature-branch
+מחיקת ענף
+
+מחיקה מקומית:
+
+git branch -d branch-name
+
+מחיקה מהשרת:
+
+git push origin --delete branch-name
+צפייה בהיסטוריית commits
+git log
+
+גרסה קצרה:
+
+git log --oneline
+
+גרסה גרפית (הכי שימושית):
+
+git log --oneline --graph --all
+עבודה ראשונית עם פרויקט קיים
+
+שכפול פרויקט מהשרת:
+
+git clone repository-url
+זרימת עבודה בסיסית בצוות
+git pull
+git checkout -b feature-x
+# עבודה על הקוד
+git add .
+או 
+git add -A
+
+git commit -m "add feature"
+git push -u origin feature-x
