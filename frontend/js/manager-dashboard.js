@@ -21,6 +21,42 @@ const btnSave        = document.getElementById("btn-save-employee");
 const formError      = document.getElementById("form-error");
 const formSuccess    = document.getElementById("form-success");
 const btnLogout      = document.getElementById("btn-logout");
+const btnHamburger     = document.getElementById("btn-hamburger");
+const btnSidebarReopen = document.getElementById("btn-sidebar-reopen");
+const sidebar          = document.querySelector(".sidebar");
+const sidebarBackdrop  = document.getElementById("sidebar-backdrop");
+
+const MOBILE_BREAKPOINT = 768;
+
+function setSidebarOpen(open) {
+  sidebar.classList.toggle("collapsed", !open);
+  btnSidebarReopen.classList.toggle("visible", !open);
+  // Show backdrop only on mobile when sidebar is open
+  if (sidebarBackdrop) {
+    sidebarBackdrop.classList.toggle("visible", open && window.innerWidth <= MOBILE_BREAKPOINT);
+  }
+}
+
+// Auto-collapse on mobile page load
+if (window.innerWidth <= MOBILE_BREAKPOINT) {
+  setSidebarOpen(false);
+}
+
+// Auto-collapse / auto-expand on resize
+window.addEventListener("resize", () => {
+  if (window.innerWidth <= MOBILE_BREAKPOINT) {
+    setSidebarOpen(false);
+  } else {
+    setSidebarOpen(true);
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove("visible");
+  }
+});
+
+btnHamburger.addEventListener("click",     () => setSidebarOpen(false));
+btnSidebarReopen.addEventListener("click", () => setSidebarOpen(true));
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
+}
 
 // Form inputs
 const empFirstname = document.getElementById("emp-firstname");
