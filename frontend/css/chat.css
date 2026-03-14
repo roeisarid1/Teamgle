@@ -65,7 +65,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
-  background: var(--blue);
+  background: var(--green);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -73,12 +73,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(91,123,240,.3);
+  box-shadow: 0 2px 8px rgba(111,191,115,.35);
   white-space: nowrap;
 }
 
 .btn-new-chat:hover {
-  background: var(--blue-dark);
+  background: #5aac5e;
   transform: translateY(-1px);
 }
 
@@ -141,6 +141,8 @@
 
 .conv-item.active {
   background: var(--blue-light);
+  border-left: 3px solid var(--green);
+  padding-left: 9px;
 }
 
 .conv-item.has-unread .conv-name {
@@ -170,8 +172,8 @@
 }
 
 .conv-avatar.manager-avatar {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(111,191,115,.15);
+  color: #2a7d2e;
 }
 
 /* ── Conversation text info ──────────────────────────────────────────────── */
@@ -216,8 +218,8 @@
 }
 
 .conv-badge {
-  background: var(--blue);
-  color: #fff;
+  background: var(--yellow);
+  color: #6b4f00;
   font-size: 11px;
   font-weight: 700;
   min-width: 20px;
@@ -266,7 +268,7 @@
 .btn-start-chat {
   margin-top: 8px;
   padding: 9px 20px;
-  background: var(--blue);
+  background: var(--green);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -274,11 +276,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(91,123,240,.3);
+  box-shadow: 0 2px 8px rgba(111,191,115,.35);
 }
 
 .btn-start-chat:hover {
-  background: var(--blue-dark);
+  background: #5aac5e;
   transform: translateY(-1px);
 }
 
@@ -423,8 +425,8 @@
 }
 
 .picker-avatar.manager-avatar {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(111,191,115,.15);
+  color: #2a7d2e;
 }
 
 .picker-name {
@@ -451,8 +453,8 @@
 }
 
 .picker-role-badge.manager {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(111,191,115,.15);
+  color: #2a7d2e;
 }
 
 .user-picker-empty {
@@ -491,7 +493,7 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: var(--blue-light);
+  background: rgba(246,192,77,.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -501,7 +503,7 @@
 .chat-no-selection-icon svg {
   width: 36px;
   height: 36px;
-  stroke: var(--blue);
+  stroke: var(--yellow);
   fill: none;
   stroke-width: 1.5;
   stroke-linecap: round;
@@ -584,8 +586,8 @@
 }
 
 .chat-header-avatar.manager-avatar {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(111,191,115,.15);
+  color: #2a7d2e;
 }
 
 .chat-header-info {
@@ -645,12 +647,12 @@
 .msg-date-label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: #7a5a00;
   white-space: nowrap;
   padding: 3px 10px;
-  background: var(--bg);
+  background: rgba(246,192,77,.12);
   border-radius: 20px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(246,192,77,.4);
 }
 
 /* ── Message row ─────────────────────────────────────────────────────────── */
@@ -681,8 +683,8 @@
 }
 
 .msg-avatar-sm.manager-avatar {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(111,191,115,.15);
+  color: #2a7d2e;
 }
 
 /* Spacer when avatar is hidden (consecutive messages from same sender) */
