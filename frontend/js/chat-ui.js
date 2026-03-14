@@ -15,11 +15,13 @@ import {
 } from "./chat-service.js";
 
 // ── Module state ──────────────────────────────────────────────────────────────
-let _user              = null;   // { uid, firstName, lastName, email, companyId, role }
-let _conversations     = [];     // cached conversation list
-let _activeConvId      = null;   // currently open conversation ID
-let _companyUsers      = [];     // all users in same company
-let _container         = null;   // root DOM element for the chat
+let _user                     = null;   // { uid, firstName, lastName, email, companyId, role }
+let _conversations            = [];     // cached conversation list
+let _activeConvId             = null;   // currently open conversation ID
+let _activeConvParticipantInfo= null;   // participantInfo of the active conversation
+let _messagesFirstRender      = false;  // true when a conversation is first opened
+let _companyUsers             = [];     // all users in same company
+let _container                = null;  // root DOM element for the chat
 
 // ── Icons (inline SVG to avoid Lucide re-render issues) ────────────────────
 const ICON_SEND = `<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
@@ -58,9 +60,11 @@ export function initChat(container, profile, firebaseUid) {
  */
 export function destroyChat() {
   unsubscribeAll();
-  _activeConvId  = null;
-  _conversations = [];
-  _companyUsers  = [];
+  _activeConvId              = null;
+  _activeConvParticipantInfo = null;
+  _messagesFirstRender       = false;
+  _conversations             = [];
+  _companyUsers              = [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,7 +291,8 @@ function _filterConversations() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _openConversation(convId) {
-  _activeConvId = convId;
+  _activeConvId        = convId;
+  _messagesFirstRender = true;   // first render always scrolls to bottom
 
   // Update active state in list
   _q("#conversation-list").querySelectorAll(".conv-item").forEach(el => {
@@ -302,23 +307,22 @@ function _openConversation(convId) {
   _q("#chat-sidebar").classList.add("hidden-mobile");
   _q("#chat-main").classList.add("visible-mobile");
 
-  // Set header
+  // Set header + store participantInfo for _isManagerUid()
   const conv = _conversations.find(c => c.id === convId);
-  if (conv) _setConvHeader(conv);
+  if (conv) {
+    _setConvHeader(conv);
+    _activeConvParticipantInfo = conv.participantInfo ?? null;
+  }
 
-  // Clear messages + load
+  // Show loading state before subscribing
   _q("#chat-messages").innerHTML = `
     <div class="msgs-loading">
       <div class="chat-spinner"></div>
       Loading messages…
     </div>`;
 
-  subscribeToMessages(convId, msgs => {
-    _renderMessages(msgs);
-    // Scroll to bottom
-    const el = _q("#chat-messages");
-    el.scrollTop = el.scrollHeight;
-  });
+  // _renderMessages handles scroll internally via _messagesFirstRender + wasAtBottom
+  subscribeToMessages(convId, _renderMessages);
 
   // Mark as read
   markConversationRead(convId, _user.uid);
@@ -344,8 +348,17 @@ function _setConvHeader(conv) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _renderMessages(msgs) {
+  if (!_container) return;   // guard: UI may have been destroyed
   const el = _q("#chat-messages");
-  const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  if (!el) return;
+
+  // Capture scroll position BEFORE mutating the DOM.
+  // On first render the element holds a loading spinner (small height), so
+  // wasAtBottom would always be true — that's correct, we want to jump down.
+  // On subsequent real-time updates we respect where the user is scrolled.
+  const wasAtBottom  = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  const shouldScroll = _messagesFirstRender || wasAtBottom;
+  _messagesFirstRender = false;  // only force-scroll once per conversation open
 
   if (!msgs.length) {
     el.innerHTML = `
@@ -368,14 +381,14 @@ function _renderMessages(msgs) {
           <span class="msg-date-label">${_escHtml(dateLabel)}</span>
         </div>`;
       lastDateLabel = dateLabel;
-      lastSenderId  = null; // reset grouping on date change
+      lastSenderId  = null; // reset avatar grouping on date change
     }
 
-    const isOwn         = msg.senderId === _user.uid;
-    const showAvatar    = !isOwn && lastSenderId !== msg.senderId;
-    const showName      = !isOwn && lastSenderId !== msg.senderId;
-    const isManager     = _isManagerUid(msg.senderId);
-    const timeStr       = msg.timestamp ? _formatMsgTime(msg.timestamp) : "";
+    const isOwn      = msg.senderId === _user.uid;
+    const showAvatar = !isOwn && lastSenderId !== msg.senderId;
+    const showName   = !isOwn && lastSenderId !== msg.senderId;
+    const isManager  = _isManagerUid(msg.senderId);
+    const timeStr    = msg.timestamp ? _formatMsgTime(msg.timestamp) : "";
 
     if (!isOwn) {
       html += `
@@ -406,9 +419,10 @@ function _renderMessages(msgs) {
 
   el.innerHTML = html;
 
-  // Auto-scroll if user was near the bottom
-  if (wasAtBottom) {
-    el.scrollTop = el.scrollHeight;
+  // Use requestAnimationFrame so the browser has painted the new DOM before
+  // we read scrollHeight — otherwise the value can be stale.
+  if (shouldScroll) {
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }
 }
 
@@ -417,6 +431,7 @@ function _renderMessages(msgs) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _sendMessage() {
+  if (!_container) return;
   const ta      = _q("#chat-textarea");
   const content = ta.value.trim();
   if (!content || !_activeConvId) return;
@@ -541,37 +556,38 @@ async function _startConversationWith(otherUid) {
     if (existing) {
       _openConversation(convId);
     } else {
-      // It will appear shortly via the subscribeToConversations listener.
-      // Open it optimistically.
-      _activeConvId = convId;
+      // Conversation was just created — it will appear shortly via the
+      // subscribeToConversations listener. Open it optimistically now.
+      _activeConvId              = convId;
+      _messagesFirstRender       = true;
+      _activeConvParticipantInfo = participantInfo; // needed by _isManagerUid()
+
       _q("#chat-no-selection").style.display = "none";
-      _q("#chat-active-view").style.display = "";
+      _q("#chat-active-view").style.display  = "";
       _q("#chat-sidebar").classList.add("hidden-mobile");
       _q("#chat-main").classList.add("visible-mobile");
 
       // Set header from the local user info we already have
       const headerAvatar = _q("#chat-header-avatar");
-      const isManager = other.role === "Manager";
-      headerAvatar.className = `chat-header-avatar ${isManager ? "manager-avatar" : ""}`;
+      const isManager    = other.role === "Manager";
+      headerAvatar.className   = `chat-header-avatar ${isManager ? "manager-avatar" : ""}`;
       headerAvatar.textContent = _initials(other.displayName);
       _q("#chat-header-name").textContent = other.displayName;
       _q("#chat-header-role").textContent = other.role;
 
-      // Load messages
-      subscribeToMessages(convId, msgs => {
-        _renderMessages(msgs);
-        const msgEl = _q("#chat-messages");
-        msgEl.scrollTop = msgEl.scrollHeight;
-      });
-
+      // Set empty state BEFORE subscribing: onSnapshot can fire synchronously
+      // from the local cache, and _renderMessages must win over this placeholder.
       _q("#chat-messages").innerHTML = `
         <div class="msgs-empty">
           <div class="msgs-empty-icon">👋</div>
           <p>No messages yet.<br>Say hello!</p>
         </div>`;
 
+      // _renderMessages handles scroll via _messagesFirstRender
+      subscribeToMessages(convId, _renderMessages);
+
       const ta = _q("#chat-textarea");
-      ta.value = "";
+      ta.value       = "";
       ta.style.height = "";
       _q("#btn-send").disabled = true;
     }
@@ -623,9 +639,9 @@ function _getOtherParticipantInfo(conv) {
 }
 
 function _isManagerUid(uid) {
-  // Check from participantInfo of the active conversation
-  const conv = _conversations.find(c => c.id === _activeConvId);
-  return conv?.participantInfo?.[uid]?.role === "Manager";
+  // _activeConvParticipantInfo is set whenever a conversation is opened,
+  // including the optimistic path — so it's always current.
+  return _activeConvParticipantInfo?.[uid]?.role === "Manager";
 }
 
 function _formatTime(timestamp) {

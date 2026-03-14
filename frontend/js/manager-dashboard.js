@@ -1082,6 +1082,8 @@ function activateSection(name) {
 
 function _initChatSection() {
   if (chatInitialized) return;
+  // Guard: onAuthStateChanged may not have fired yet on a very fast first click
+  if (!profile || !currentFirebaseUid) return;
   chatInitialized = true;
   const container = document.getElementById("section-chats");
   initChat(container, profile, currentFirebaseUid);

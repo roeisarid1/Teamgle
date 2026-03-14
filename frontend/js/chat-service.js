@@ -5,8 +5,9 @@
 
 import { db } from "./firebase-config.js";
 import {
-  collection, doc, addDoc, setDoc, updateDoc, getDoc, getDocs,
-  query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch
+  collection, doc, setDoc, updateDoc, getDoc, getDocs,
+  query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ── Active listener references (for cleanup) ──────────────────────────────────
@@ -66,46 +67,42 @@ export async function getCompanyUsers(companyId, currentUid) {
  * @param {string} currentUid
  * @param {string} otherUid
  * @param {string} companyId
- * @param {{ [uid]: { name, email, role } }} participantInfo
+ * @param {Object} participantInfo - map of uid → { name, email, role }
  * @returns {Promise<string>} conversationId
  */
 export async function getOrCreateConversation(currentUid, otherUid, companyId, participantInfo) {
-  // Query conversations where the current user is a participant
-  const q = query(
-    collection(db, "conversations"),
-    where("participants", "array-contains", currentUid)
-  );
-  const snap = await getDocs(q);
+  // Build a deterministic document ID from the two sorted UIDs.
+  // This guarantees that concurrent calls from both sides always target the
+  // same Firestore document, eliminating any race-condition duplicate risk.
+  // Firebase UIDs are alphanumeric-only, so "_x_" is a safe separator.
+  const [uidA, uidB] = [currentUid, otherUid].sort();
+  const convDocId = `conv_general_${uidA}_x_${uidB}`;
+  const convRef   = doc(db, "conversations", convDocId);
 
-  // Client-side: find one that includes the other user + matches company + is general type
-  const existing = snap.docs.find(d => {
-    const data = d.data();
-    return (
-      data.companyId === companyId &&
-      data.type === "general" &&
-      data.participants.includes(otherUid)
-    );
-  });
-
-  if (existing) return existing.id;
-
-  // Create a new conversation
-  const ref = await addDoc(collection(db, "conversations"), {
-    companyId,
-    type: "general",            // "event" | "shift" for future chat types
-    participants: [currentUid, otherUid],
-    participantInfo,            // snapshot of names/roles for display
-    lastMessage: null,
-    lastMessageAt: serverTimestamp(),
-    lastMessageSenderId: null,
-    createdAt: serverTimestamp(),
-    unreadCounts: {
-      [currentUid]: 0,
-      [otherUid]: 0
+  // Atomic transaction: read → create only if not yet existing.
+  // If two callers race, one transaction commits and the other retries and
+  // finds the document already present, so it skips creation.
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(convRef);
+    if (!snap.exists()) {
+      tx.set(convRef, {
+        companyId,
+        type: "general",            // "event" | "shift" for future chat types
+        participants: [currentUid, otherUid],
+        participantInfo,            // snapshot of names/roles for display
+        lastMessage: null,
+        lastMessageAt: serverTimestamp(),
+        lastMessageSenderId: null,
+        createdAt: serverTimestamp(),
+        unreadCounts: {
+          [currentUid]: 0,
+          [otherUid]: 0
+        }
+      });
     }
   });
 
-  return ref.id;
+  return convDocId;
 }
 
 /**

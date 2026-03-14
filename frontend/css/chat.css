@@ -22,6 +22,7 @@
 /* ── Chat root container ─────────────────────────────────────────────────── */
 .chat-container {
   display: flex;
+  position: relative;   /* required: mobile children use position:absolute inset:0 */
   width: 100%;
   height: 100%;
   background: var(--bg);
