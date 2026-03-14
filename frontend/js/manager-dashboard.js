@@ -1077,6 +1077,7 @@ function activateSection(name) {
   document.querySelector(".page-content").classList.toggle("chat-mode", name === "chats");
 
   if (name === "customers") loadCustomers();
+  if (name === "create-project") loadProjectCustomerDropdown();
   if (name === "chats")     _initChatSection();
 }
 
@@ -1088,6 +1089,14 @@ function _initChatSection() {
   const container = document.getElementById("section-chats");
   initChat(container, profile, currentFirebaseUid);
 }
+
+// ── PROJECTS SECTION ────────────────────────────────────────────────────────
+document.getElementById('search-projects')?.addEventListener('input', () => {});
+
+document.getElementById('btn-create-project').addEventListener('click', () => {
+  activateSection('create-project');
+  initCreateProjectForm();
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ── CUSTOMER STATE ─────────────────────────────────────────────────────────
@@ -1776,3 +1785,457 @@ document.getElementById("btn-confirm-contact-delete").addEventListener("click", 
   } catch { alert("Network error. Could not delete contact."); }
   finally { btn.disabled = false; btn.textContent = "Delete Contact"; }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CREATE PROJECT FORM ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let projectEventCounter = 0;  // monotonic counter for unique event block IDs
+let cachedRoles         = [];  // roles loaded once per session
+
+// ── Back button ────────────────────────────────────────────────────────────
+document.getElementById("btn-back-to-projects").addEventListener("click", () => {
+  activateSection("projects");
+});
+
+// ── Save Draft (stub — navigates back without submitting) ──────────────────
+document.getElementById("btn-save-draft").addEventListener("click", () => {
+  activateSection("projects");
+});
+
+// ── ＋ New Customer inside create-project form ─────────────────────────────
+document.getElementById("btn-proj-new-customer").addEventListener("click", () => {
+  openCustomerFormModal(null);
+});
+
+// ── ＋ Add Event button ────────────────────────────────────────────────────
+document.getElementById("btn-add-event").addEventListener("click", () => {
+  appendEventBlock();
+});
+
+// ── Initialise the form (called when navigating to create-project) ─────────
+function initCreateProjectForm() {
+  // Clear project-level fields
+  document.getElementById("proj-name").value       = "";
+  document.getElementById("proj-start-date").value = "";
+  document.getElementById("proj-end-date").value   = "";
+  document.getElementById("proj-customer").value   = "";
+  ["field-proj-name", "field-proj-start", "field-proj-end"]
+    .forEach(id => document.getElementById(id)?.classList.remove("has-error"));
+
+  // Clear error banner
+  const errBanner = document.getElementById("create-project-error");
+  errBanner.textContent = "";
+  errBanner.classList.remove("visible");
+
+  // Clear events container and render first event block
+  projectEventCounter = 0;
+  document.getElementById("events-container").innerHTML = "";
+  appendEventBlock();
+}
+
+// ── Load customers into the project customer dropdown ──────────────────────
+async function loadProjectCustomerDropdown() {
+  const sel = document.getElementById("proj-customer");
+  const current = sel.value;
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/customers`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const customers = await res.json();
+    sel.innerHTML = `<option value="">— None —</option>` +
+      customers.map(c =>
+        `<option value="${c.customerId}">${escapeHtml(c.customerCompanyName)}</option>`
+      ).join("");
+    if (current) sel.value = current;
+  } catch {
+    // silently ignore — dropdown just stays empty
+  }
+}
+
+// ── Refresh customer dropdown and auto-select the newest entry ─────────────
+// Called after a customer is created from inside the project form.
+async function refreshProjectCustomerDropdownAndSelect(newId) {
+  const sel = document.getElementById("proj-customer");
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/customers`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const customers = await res.json();
+    sel.innerHTML = `<option value="">— None —</option>` +
+      customers.map(c =>
+        `<option value="${c.customerId}">${escapeHtml(c.customerCompanyName)}</option>`
+      ).join("");
+    if (newId) sel.value = newId;
+  } catch { /* ignore */ }
+}
+
+// Intercept customer save to refresh project dropdown if we're on create-project
+const _origSaveCustBtn = document.getElementById("btn-save-customer");
+_origSaveCustBtn.addEventListener("click", async () => {
+  // We re-use the existing handler; hook into the modal close to refresh.
+  // After a short delay (enough for the existing handler's setTimeout to fire),
+  // refresh the dropdown if the create-project section is visible.
+  setTimeout(async () => {
+    const cpSection = document.getElementById("section-create-project");
+    if (cpSection && cpSection.style.display !== "none") {
+      // Find the newest customer (last in list) and auto-select it
+      try {
+        const token = await getToken();
+        const res   = await fetch(`${API_BASE}/customers`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const customers = await res.json();
+        const sel = document.getElementById("proj-customer");
+        sel.innerHTML = `<option value="">— None —</option>` +
+          customers.map(c =>
+            `<option value="${c.customerId}">${escapeHtml(c.customerCompanyName)}</option>`
+          ).join("");
+        // Auto-select the last created customer (highest createdAt)
+        const newest = customers.at(-1);
+        if (newest) sel.value = newest.customerId;
+      } catch { /* ignore */ }
+    }
+  }, 2000);
+});
+
+// ── Load roles once and cache them ────────────────────────────────────────
+async function ensureRolesLoaded() {
+  if (cachedRoles.length > 0) return cachedRoles;
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/roles`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    cachedRoles = await res.json();
+  } catch { /* ignore */ }
+  return cachedRoles;
+}
+
+// ── Append a new event block ───────────────────────────────────────────────
+async function appendEventBlock() {
+  const idx  = ++projectEventCounter;
+  const roles = await ensureRolesLoaded();
+
+  const block = document.createElement("div");
+  block.className   = "event-block";
+  block.dataset.eventIdx = idx;
+
+  block.innerHTML = `
+    <div class="event-block-header">
+      <span class="event-block-label">Event ${idx}</span>
+      <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}">×</button>
+    </div>
+    <div class="event-block-body">
+      <div class="field" data-field="event-name-${idx}">
+        <label>Event Name *</label>
+        <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
+      </div>
+      <div class="form-row">
+        <div class="field" data-field="event-start-${idx}">
+          <label>Start Time *</label>
+          <input type="datetime-local" id="event-start-${idx}" />
+        </div>
+        <div class="field" data-field="event-end-${idx}">
+          <label>End Time *</label>
+          <input type="datetime-local" id="event-end-${idx}" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Date *</label>
+          <input type="date" id="event-date-${idx}" />
+        </div>
+        <div class="field">
+          <label>Location</label>
+          <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Event Type</label>
+          <select id="event-type-${idx}">
+            <option value="">— Select type —</option>
+            <option value="conference">Conference</option>
+            <option value="party">Party</option>
+            <option value="wedding">Wedding</option>
+            <option value="corporate">Corporate</option>
+            <option value="bar_mitzvah">Bar Mitzvah</option>
+            <option value="birthday">Birthday</option>
+            <option value="concert">Concert</option>
+            <option value="exhibition">Exhibition</option>
+            <option value="seminar">Seminar</option>
+            <option value="gala">Gala</option>
+            <option value="trip">Trip</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Attendees Count</label>
+          <input type="number" id="event-attendees-${idx}" placeholder="0" min="0" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Planned Budget</label>
+          <input type="number" id="event-budget-${idx}" placeholder="0.00" min="0" step="0.01" />
+        </div>
+        <div class="field">
+          <label>Expected Revenue</label>
+          <input type="number" id="event-revenue-${idx}" placeholder="0.00" min="0" step="0.01" />
+        </div>
+      </div>
+
+      <!-- Shifts sub-section -->
+      <div class="shifts-subsection">
+        <div class="shifts-subheader">
+          <span class="shifts-subheader-label">Shifts</span>
+          <button class="btn-add-shift" type="button" data-add-shift="${idx}">＋ Add Shift</button>
+        </div>
+        <div class="shifts-list" id="shifts-list-${idx}">
+          <!-- Shift rows injected by JS -->
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("events-container").appendChild(block);
+  lucide.createIcons();   // re-run so any new lucide icons render
+
+  // Remove event listener
+  block.querySelector(`[data-remove-event="${idx}"]`).addEventListener("click", () => {
+    block.remove();
+    renumberEventBlocks();
+  });
+
+  // Add shift listener
+  block.querySelector(`[data-add-shift="${idx}"]`).addEventListener("click", () => {
+    appendShiftRow(idx, roles);
+  });
+
+  // Render first shift row immediately
+  appendShiftRow(idx, roles);
+}
+
+// ── Renumber event block labels after a removal ────────────────────────────
+function renumberEventBlocks() {
+  document.querySelectorAll(".event-block").forEach((block, i) => {
+    const label = block.querySelector(".event-block-label");
+    if (label) label.textContent = `Event ${i + 1}`;
+  });
+}
+
+// ── Append a shift row inside a given event block ─────────────────────────
+function appendShiftRow(eventIdx, roles) {
+  const list = document.getElementById(`shifts-list-${eventIdx}`);
+  if (!list) return;
+
+  const roleOptions = roles.length
+    ? roles.map(r => `<option value="${r.rollId}">${escapeHtml(r.rollName)}</option>`).join("")
+    : `<option value="">No roles available</option>`;
+
+  const row = document.createElement("div");
+  row.className = "shift-row";
+  row.innerHTML = `
+    <div class="field">
+      <label>Role *</label>
+      <select>
+        <option value="">— Select role —</option>
+        ${roleOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>Qty *</label>
+      <input type="number" placeholder="1" min="1" value="1" />
+    </div>
+    <div class="field">
+      <label>Start Time *</label>
+      <input type="time" />
+    </div>
+    <div class="field">
+      <label>End Time *</label>
+      <input type="time" />
+    </div>
+    <button class="btn-remove-shift" type="button" title="Remove shift">×</button>
+  `;
+
+  row.querySelector(".btn-remove-shift").addEventListener("click", () => row.remove());
+  list.appendChild(row);
+}
+
+// ── Collect all form data into a CreateProjectRequest object ──────────────
+function collectProjectFormData() {
+  const events = [];
+  let valid    = true;
+
+  // Clear previous error highlights
+  document.querySelectorAll(".field.has-error").forEach(f => f.classList.remove("has-error"));
+  const errBanner = document.getElementById("create-project-error");
+  errBanner.textContent = "";
+  errBanner.classList.remove("visible");
+
+  // Project-level fields
+  const name      = document.getElementById("proj-name").value.trim();
+  const startDate = document.getElementById("proj-start-date").value;
+  const endDate   = document.getElementById("proj-end-date").value;
+  const customer  = document.getElementById("proj-customer").value || null;
+
+  if (!name) {
+    document.getElementById("field-proj-name").classList.add("has-error");
+    valid = false;
+  }
+  if (!startDate) {
+    document.getElementById("field-proj-start").classList.add("has-error");
+    valid = false;
+  }
+  if (!endDate) {
+    document.getElementById("field-proj-end").classList.add("has-error");
+    valid = false;
+  }
+  if (startDate && endDate && endDate < startDate) {
+    document.getElementById("field-proj-end").classList.add("has-error");
+    errBanner.textContent = "End date cannot be before start date.";
+    errBanner.classList.add("visible");
+    valid = false;
+  }
+
+  // Event blocks
+  document.querySelectorAll(".event-block").forEach(block => {
+    const idx = block.dataset.eventIdx;
+
+    const evtName   = document.getElementById(`event-name-${idx}`)?.value.trim() || "";
+    const evtStart  = document.getElementById(`event-start-${idx}`)?.value || "";
+    const evtEnd    = document.getElementById(`event-end-${idx}`)?.value   || "";
+    const evtDate   = document.getElementById(`event-date-${idx}`)?.value  || "";
+    const location  = document.getElementById(`event-location-${idx}`)?.value.trim() || null;
+    const evtType   = document.getElementById(`event-type-${idx}`)?.value  || null;
+    const attendees = document.getElementById(`event-attendees-${idx}`)?.value;
+    const budget    = document.getElementById(`event-budget-${idx}`)?.value;
+    const revenue   = document.getElementById(`event-revenue-${idx}`)?.value;
+
+    if (!evtName) {
+      block.querySelector(`[data-field="event-name-${idx}"]`)?.classList.add("has-error");
+      valid = false;
+    }
+    if (!evtStart) {
+      block.querySelector(`[data-field="event-start-${idx}"]`)?.classList.add("has-error");
+      valid = false;
+    }
+    if (!evtEnd) {
+      block.querySelector(`[data-field="event-end-${idx}"]`)?.classList.add("has-error");
+      valid = false;
+    }
+
+    // Combine date + time for start/end — guard every branch against empty/invalid values
+    const startDateTime = evtStart        ? new Date(evtStart).toISOString()
+                        : evtDate         ? new Date(`${evtDate}T00:00`).toISOString()
+                        : null;
+    const endDateTime   = evtEnd          ? new Date(evtEnd).toISOString()
+                        : evtDate         ? new Date(`${evtDate}T23:59`).toISOString()
+                        : null;
+
+    // Collect shifts
+    const shifts = [];
+    block.querySelectorAll(".shift-row").forEach(row => {
+      const inputs  = row.querySelectorAll("input, select");
+      const rollId  = inputs[0].value;
+      const qty     = parseInt(inputs[1].value, 10) || 1;
+      const shtStart = inputs[2].value;
+      const shtEnd   = inputs[3].value;
+
+      if (!rollId || !shtStart || !shtEnd) {
+        inputs[0].closest(".field")?.classList.add("has-error");
+        valid = false;
+      }
+
+      // Combine parent event's date with shift time to form a full ISO datetime
+      const shiftDate = evtDate || evtStart?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+      shifts.push({
+        rollId,
+        requiredQuantity: qty,
+        startTime: new Date(`${shiftDate}T${shtStart}`).toISOString(),
+        endTime:   new Date(`${shiftDate}T${shtEnd}`).toISOString()
+      });
+    });
+
+    events.push({
+      name:            evtName,
+      startTime:       startDateTime,
+      endTime:         endDateTime,
+      location:        location || null,
+      attendeesCount:  attendees ? parseInt(attendees, 10) : null,
+      eventType:       evtType  || null,
+      plannedBudget:   budget   ? parseFloat(budget)   : null,
+      expectedRevenue: revenue  ? parseFloat(revenue)  : null,
+      shifts
+    });
+  });
+
+  if (!valid) {
+    if (!errBanner.classList.contains("visible")) {
+      errBanner.textContent = "Please fill in all required fields.";
+      errBanner.classList.add("visible");
+    }
+    return null;
+  }
+
+  return {
+    name:       name,
+    startDate:  startDate,
+    endDate:    endDate,
+    customerId: customer,
+    events
+  };
+}
+
+// ── Submit project ──────────────────────────────────────────────────────────
+document.getElementById("btn-submit-project").addEventListener("click", async () => {
+  const body = collectProjectFormData();
+  if (!body) return;   // validation failed — errors already shown
+
+  const btn = document.getElementById("btn-submit-project");
+  btn.disabled    = true;
+  btn.textContent = "Saving…";
+
+  const errBanner = document.getElementById("create-project-error");
+  errBanner.classList.remove("visible");
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/projects`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body:    JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBanner.textContent = data.error || "Failed to create project.";
+      errBanner.classList.add("visible");
+      return;
+    }
+    // Success — return to projects board
+    activateSection("projects");
+  } catch {
+    errBanner.textContent = "Network error. Please check your connection.";
+    errBanner.classList.add("visible");
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Create Project";
+  }
+});
+
+// ── HTML-escape helper (used in project form templates) ───────────────────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

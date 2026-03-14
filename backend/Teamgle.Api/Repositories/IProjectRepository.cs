@@ -1,0 +1,19 @@
+using Teamgle.Api.Models.DTOs;
+
+namespace Teamgle.Api.Repositories;
+
+public interface IProjectRepository
+{
+    Task<string?> GetManagerCompanyIdAsync(string firebaseUid);
+    Task<string?> GetManagerUserIdAsync(string firebaseUid);
+
+    // ── Project ────────────────────────────────────────────────────────────
+    Task<string> CreateProjectAsync(string companyId, CreateProjectRequest request);
+    Task CreateManagerProjectAsync(string projId, string userId);
+
+    // ── Event ──────────────────────────────────────────────────────────────
+    Task<string> CreateEventAsync(string projId, CreateEventRequest request);
+
+    // ── Shift ──────────────────────────────────────────────────────────────
+    Task CreateShiftAsync(string eventId, CreateShiftRequest request);
+}

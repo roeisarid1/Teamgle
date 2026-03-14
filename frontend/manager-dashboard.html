@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 </head>
 <body>
 
@@ -61,7 +62,7 @@
         <i data-lucide="house"></i>
         <span>Home</span>
       </a>
-      <a href="#" class="nav-item disabled">
+      <a href="#" class="nav-item" data-section="projects">
         <i data-lucide="folder-kanban"></i>
         <span>Projects</span>
       </a>
@@ -158,6 +159,145 @@
       </div>
     </div>
 
+    <!-- Projects section -->
+    <div class="section-card page-section" id="section-projects" data-section="projects" style="display:none">
+
+      <!-- Page Header -->
+      <div class="section-header">
+        <h2>Projects</h2>
+        <div class="events-header-actions">
+          <input type="search" class="search-input events-search" id="search-projects"
+            placeholder="Search projects…" autocomplete="off" />
+          <button class="btn-primary" id="btn-create-project">+ Create Project</button>
+        </div>
+      </div>
+
+      <!-- Filter Row -->
+      <div class="events-filter-row">
+        <button class="btn-filter">
+          <span class="material-symbols-outlined">calendar_month</span>
+          Date
+        </button>
+        <button class="btn-filter">
+          <span class="material-symbols-outlined">tune</span>
+          Status
+        </button>
+        <button class="btn-filter">
+          <span class="material-symbols-outlined">label</span>
+          Category
+        </button>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="events-stats-grid">
+        <div class="events-stat-card events-stat-blue">
+          <span class="events-stat-bg-icon material-symbols-outlined">task_alt</span>
+          <div class="events-stat-title">Project Readiness</div>
+          <div class="events-stat-info"></div>
+        </div>
+        <div class="events-stat-card events-stat-orange">
+          <span class="events-stat-bg-icon material-symbols-outlined">group</span>
+          <div class="events-stat-title">Staffing Status</div>
+          <div class="events-stat-info"></div>
+        </div>
+        <div class="events-stat-card events-stat-grey">
+          <span class="events-stat-bg-icon material-symbols-outlined">trending_up</span>
+          <div class="events-stat-title">Weekly Project Load</div>
+          <div class="events-stat-info"></div>
+        </div>
+      </div>
+
+      <!-- Kanban Board -->
+      <div class="events-kanban">
+        <div class="kanban-column">
+          <div class="kanban-col-header kanban-blue">Today's Projects</div>
+          <div class="kanban-col-body" id="kanban-today"></div>
+        </div>
+        <div class="kanban-column">
+          <div class="kanban-col-header kanban-amber">Upcoming Projects</div>
+          <div class="kanban-col-body" id="kanban-upcoming"></div>
+        </div>
+        <div class="kanban-column">
+          <div class="kanban-col-header kanban-green">Completed Projects</div>
+          <div class="kanban-col-body" id="kanban-completed"></div>
+        </div>
+        <div class="kanban-column">
+          <div class="kanban-col-header kanban-grey">Draft Projects</div>
+          <div class="kanban-col-body" id="kanban-draft"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Create Project full-page form -->
+    <div class="page-section" id="section-create-project" data-section="create-project" style="display:none">
+
+      <!-- Header bar -->
+      <div class="cp-header">
+        <div class="cp-header-left">
+          <button class="cp-back-btn" id="btn-back-to-projects" type="button">
+            <i data-lucide="arrow-left"></i>
+            Back
+          </button>
+          <div>
+            <div class="cp-title">Create New Project</div>
+            <div class="cp-subtitle">Fill in the project details below</div>
+          </div>
+        </div>
+        <div class="cp-header-right">
+          <button class="btn-cancel" id="btn-save-draft" type="button">Save Draft</button>
+          <button class="btn-primary" id="btn-submit-project" type="button">Create Project</button>
+        </div>
+      </div>
+
+      <div id="create-project-error" class="create-project-error"></div>
+
+      <div class="cp-body">
+
+        <!-- Section 1: Project Details -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="form-section-title">Project Details</span>
+          </div>
+          <div class="form-section-body">
+            <div class="field" id="field-proj-name">
+              <label for="proj-name">Project Name *</label>
+              <input type="text" id="proj-name" placeholder="e.g. Annual Gala 2025" autocomplete="off" />
+            </div>
+            <div class="form-row">
+              <div class="field" id="field-proj-start">
+                <label for="proj-start-date">Start Date *</label>
+                <input type="date" id="proj-start-date" />
+              </div>
+              <div class="field" id="field-proj-end">
+                <label for="proj-end-date">End Date *</label>
+                <input type="date" id="proj-end-date" />
+              </div>
+            </div>
+            <div class="customer-field-row">
+              <div class="field">
+                <label for="proj-customer">Customer</label>
+                <select id="proj-customer">
+                  <option value="">— None —</option>
+                </select>
+              </div>
+              <button class="btn-add-inline" id="btn-proj-new-customer" type="button">＋ New Customer</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Events -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="form-section-title">Events</span>
+            <button class="btn-add-shift" id="btn-add-event" type="button">＋ Add Event</button>
+          </div>
+          <div class="form-section-body" id="events-container">
+            <!-- Event blocks injected by JS -->
+          </div>
+        </div>
+
+      </div>
     <!-- Chat section — injected by chat-ui.js, fills content area in chat-mode -->
     <div class="page-section" id="section-chats" data-section="chats" style="display:none">
     </div>
