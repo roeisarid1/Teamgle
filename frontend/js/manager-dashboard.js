@@ -3,6 +3,8 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 import {
   ref, uploadBytes, getDownloadURL, listAll, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { writeUserProfile }       from "./chat-service.js";
+import { initChat, destroyChat }  from "./chat-ui.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -75,10 +77,12 @@ const documentsList      = document.getElementById("documents-list");
 const btnAddDoc          = document.getElementById("btn-add-doc");
 
 // ── State ──────────────────────────────────────────────────────────────────
-let currentIdToken = null;
-let profile        = null;
-let allEmployees   = [];
-let allCustomers   = [];
+let currentIdToken    = null;
+let currentFirebaseUid = null;
+let profile           = null;
+let allEmployees      = [];
+let allCustomers      = [];
+let chatInitialized   = false;
 
 // Add mode
 let profileFile    = null;        // File | null — new file chosen for profile
@@ -102,7 +106,8 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  currentIdToken = await user.getIdToken();
+  currentIdToken     = await user.getIdToken();
+  currentFirebaseUid = user.uid;
 
   profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
 
@@ -118,6 +123,19 @@ onAuthStateChanged(auth, async (user) => {
   infoName.textContent    = fullName;
   infoRole.textContent    = profile.role;
   infoCompany.textContent = profile.companyId || "—";
+
+  // Write Firestore user profile so this manager appears in other users' chat user list
+  try {
+    await writeUserProfile(user.uid, {
+      firstName: profile.firstName,
+      lastName:  profile.lastName,
+      email:     profile.email || "",
+      companyId: profile.companyId,
+      role:      profile.role
+    });
+  } catch (e) {
+    console.warn("Chat profile write failed:", e);
+  }
 
   await Promise.all([loadRoles(), loadEmployees()]);
 });
@@ -1002,6 +1020,7 @@ async function uploadDocuments(employeeId, docs) {
 
 // ── Logout ─────────────────────────────────────────────────────────────────
 btnLogout.addEventListener("click", async () => {
+  destroyChat();
   await signOut(auth);
   sessionStorage.removeItem("userProfile");
   window.location.href = "/frontend/auth.html";
@@ -1053,7 +1072,19 @@ function activateSection(name) {
   document.querySelectorAll(".page-section").forEach(el => {
     el.style.display = el.dataset.section === name ? "" : "none";
   });
+
+  // Toggle chat-mode class on page-content to remove padding and set fixed height
+  document.querySelector(".page-content").classList.toggle("chat-mode", name === "chats");
+
   if (name === "customers") loadCustomers();
+  if (name === "chats")     _initChatSection();
+}
+
+function _initChatSection() {
+  if (chatInitialized) return;
+  chatInitialized = true;
+  const container = document.getElementById("section-chats");
+  initChat(container, profile, currentFirebaseUid);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
