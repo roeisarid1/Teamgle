@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Teamgle — Manager Dashboard</title>
   <link rel="stylesheet" href="css/manager-dashboard.css" />
+  <link rel="stylesheet" href="css/chat.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -84,6 +85,10 @@
       <a href="#" class="nav-item disabled">
         <i data-lucide="radio"></i>
         <span>Live Mode</span>
+      </a>
+      <a href="#" class="nav-item" data-section="chats">
+        <i data-lucide="message-square"></i>
+        <span>Chats</span>
       </a>
     </nav>
   </aside>
@@ -293,6 +298,8 @@
         </div>
 
       </div>
+    <!-- Chat section — injected by chat-ui.js, fills content area in chat-mode -->
+    <div class="page-section" id="section-chats" data-section="chats" style="display:none">
     </div>
 
   </div>
