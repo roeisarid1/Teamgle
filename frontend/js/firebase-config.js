@@ -3,8 +3,9 @@
 // They only allow access to Firebase services gated by Firebase Security Rules.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getAuth }      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getStorage }   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAvyTB636tDSYNK3sUYlWTnMrqsRjGhf_0",
@@ -18,5 +19,6 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth    = getAuth(app);
-export const storage = getStorage(app);
+export const auth      = getAuth(app);
+export const storage   = getStorage(app);
+export const db        = getFirestore(app);
