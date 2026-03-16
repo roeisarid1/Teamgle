@@ -242,10 +242,10 @@ function renderEmployees(employees) {
       </td>
       <td>
         <div class="actions-cell">
-          <button class="btn-action btn-action-view"
-            data-action="view"
+          <button class="btn-chevron"
+            data-action="toggle"
             data-id="${e.userId}"
-            title="Open to view details, roles & documents">View</button>
+            title="Toggle details">▾</button>
           <button class="btn-action btn-action-edit"
             data-action="edit"
             data-id="${e.userId}">Edit</button>
@@ -267,8 +267,8 @@ employeeTbody.addEventListener("click", async (e) => {
   const action = btn.dataset.action;
   const id     = btn.dataset.id;
 
-  if (action === "view") {
-    await openViewModal(id);
+  if (action === "toggle") {
+    await toggleEmployeeRow(e.target.closest("tr"), id, btn);
   } else if (action === "edit") {
     await openEditModal(id);
   } else if (action === "delete") {
@@ -391,6 +391,103 @@ async function openViewModal(employeeId) {
     });
   } catch {
     body.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load employee details.</div>`;
+  }
+}
+
+// ── Employee expandable row ────────────────────────────────────────────────
+async function toggleEmployeeRow(dataRow, employeeId, chevronBtn) {
+  const isCurrentlyExpanded = chevronBtn.classList.contains("expanded");
+
+  // Collapse any open employee expanded row
+  document.querySelectorAll("#employee-tbody tr.expanded-row").forEach(r => {
+    r.previousElementSibling?.querySelector(".btn-chevron")?.classList.remove("expanded");
+    r.remove();
+  });
+
+  if (isCurrentlyExpanded) return; // was open → now collapsed, done
+
+  chevronBtn.classList.add("expanded");
+  const expRow = document.createElement("tr");
+  expRow.className = "expanded-row";
+  expRow.innerHTML = `<td colspan="7"><div class="expanded-row-inner"><div class="empty-state">Loading…</div></div></td>`;
+  dataRow.after(expRow);
+
+  await renderEmployeeExpanded(expRow.querySelector(".expanded-row-inner"), employeeId);
+}
+
+async function renderEmployeeExpanded(container, employeeId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const emp = await res.json();
+
+    let profileUrl = null;
+    try {
+      const profileDir   = ref(storage, `employees/${employeeId}/profile`);
+      const profileItems = await listAll(profileDir);
+      if (profileItems.items.length > 0) profileUrl = await getDownloadURL(profileItems.items[0]);
+    } catch { /* no profile image */ }
+
+    let docs = [];
+    try {
+      const docsDir   = ref(storage, `employees/${employeeId}/documents`);
+      const docsItems = await listAll(docsDir);
+      for (const item of docsItems.items) {
+        docs.push({ name: item.name, url: await getDownloadURL(item) });
+      }
+    } catch { /* no documents */ }
+
+    const initials    = (emp.firstName[0] + emp.lastName[0]).toUpperCase();
+    const statusClass = emp.registrationStatus === "Active" ? "badge-active" : "badge-pending";
+
+    const profileHtml = profileUrl
+      ? `<img class="view-profile-img" src="${profileUrl}" alt="Profile" />`
+      : `<div class="view-profile-initials">${initials}</div>`;
+
+    const rolesHtml = emp.roles && emp.roles.length
+      ? `<div class="roles-list">${emp.roles.map(r => `<span class="role-chip">${capitalize(escape(r.rollName || r))}</span>`).join("")}</div>`
+      : `<span style="color:#6b7280;font-size:13px">No roles assigned.</span>`;
+
+    const docsHtml = docs.length
+      ? `<div class="view-docs-list">${docs.map(d => `
+          <div class="view-doc-item">
+            <span class="view-doc-name" title="${escape(d.name)}">${escape(d.name)}</span>
+            <a href="${d.url}" target="_blank" rel="noopener" class="btn-open-doc">Open</a>
+          </div>`).join("")}</div>`
+      : `<span style="color:#6b7280;font-size:13px">No documents uploaded.</span>`;
+
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        ${profileHtml}
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${escape(emp.firstName)} ${escape(emp.lastName)}</div>
+          <span class="badge ${statusClass}" style="margin-top:4px;display:inline-block">${escape(emp.registrationStatus)}</span>
+        </div>
+      </div>
+      <div class="view-info-grid" style="margin-bottom:16px">
+        ${viewField("Email",        emp.email)}
+        ${viewField("Phone",        emp.phoneNum)}
+        ${viewField("Cost per Hour", emp.costPerHour != null ? "₪" + Number(emp.costPerHour).toFixed(2) : null)}
+      </div>
+      <div style="margin-bottom:16px">
+        <p class="view-section-title">Roles</p>
+        ${rolesHtml}
+      </div>
+      <div>
+        <p class="view-section-title">Documents</p>
+        ${docsHtml}
+      </div>
+    `;
+
+    // Wire empty-state edit buttons if any
+    container.querySelectorAll("[data-edit-emp]").forEach(btn => {
+      btn.addEventListener("click", () => openEditModal(btn.dataset.editEmp));
+    });
+  } catch {
+    container.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load employee details.</div>`;
   }
 }
 
@@ -1001,6 +1098,65 @@ function validateDocument(file) {
   return true;
 }
 
+// ── Customer document rows (add-customer modal) ─────────────────────────────
+document.getElementById("btn-cust-add-doc").addEventListener("click", () => {
+  addCustomerDocumentRow();
+});
+
+function addCustomerDocumentRow() {
+  const custDocsList = document.getElementById("cust-docs-list");
+  const idx = custDocumentFiles.length;
+  custDocumentFiles.push({ file: null, title: "" });
+
+  const item = document.createElement("div");
+  item.className = "doc-item";
+
+  const titleOptions = DOC_TITLES.map(t =>
+    `<option value="${t}">${t}</option>`
+  ).join("");
+
+  item.innerHTML = `
+    <select class="doc-title-select">
+      <option value="">— Select title —</option>
+      ${titleOptions}
+    </select>
+    <div class="doc-file-area">
+      <span class="doc-file-name">No file chosen</span>
+      <button type="button" class="btn-pick-file">Choose File</button>
+      <input type="file" accept=".pdf,.doc,.docx" hidden />
+    </div>
+    <button type="button" class="btn-remove-doc" title="Remove">✕</button>
+  `;
+
+  const select       = item.querySelector(".doc-title-select");
+  const fileInput    = item.querySelector("input[type='file']");
+  const fileNameSpan = item.querySelector(".doc-file-name");
+  const pickBtn      = item.querySelector(".btn-pick-file");
+  const removeBtn    = item.querySelector(".btn-remove-doc");
+
+  select.addEventListener("change", () => {
+    if (custDocumentFiles[idx]) custDocumentFiles[idx].title = select.value;
+  });
+
+  pickBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (!validateDocument(file)) { fileInput.value = ""; return; }
+    if (custDocumentFiles[idx]) custDocumentFiles[idx].file = file;
+    fileNameSpan.textContent = file.name;
+    fileNameSpan.title       = file.name;
+  });
+
+  removeBtn.addEventListener("click", () => {
+    custDocumentFiles[idx] = null;
+    item.remove();
+  });
+
+  custDocsList.appendChild(item);
+}
+
 // ── Firebase Storage uploads ────────────────────────────────────────────────
 async function uploadProfileImage(employeeId, file) {
   const ext        = file.name.split(".").pop().toLowerCase();
@@ -1014,6 +1170,16 @@ async function uploadDocuments(employeeId, docs) {
     const safeTitle  = doc.title.replace(/\s+/g, "-").toLowerCase();
     const safeName   = `${safeTitle}-${doc.file.name}`;
     const storageRef = ref(storage, `employees/${employeeId}/documents/${safeName}`);
+    await uploadBytes(storageRef, doc.file);
+  }
+}
+
+async function uploadCustomerDocuments(customerId, docs) {
+  for (const doc of docs) {
+    if (!doc || !doc.file || !doc.title) continue;
+    const safeTitle  = doc.title.replace(/\s+/g, "-").toLowerCase();
+    const safeName   = `${safeTitle}-${doc.file.name}`;
+    const storageRef = ref(storage, `customers/${customerId}/documents/${safeName}`);
     await uploadBytes(storageRef, doc.file);
   }
 }
@@ -1105,6 +1271,8 @@ document.getElementById('btn-create-project').addEventListener('click', () => {
 let editingCustomerId         = null;
 let viewingCustomerId         = null;
 let editingContactId          = null;
+let custDocumentFiles         = [];
+let inlineViewContainer       = null; // active inline expanded customer cell
 let pendingDeleteCustomerId   = null;
 let pendingDeleteContactId    = null;
 let pendingDeleteContactCustId = null;
@@ -1130,6 +1298,9 @@ async function loadCustomers() {
 }
 
 function renderCustomers(customers) {
+  // Clear inline view state — tbody is being replaced
+  viewingCustomerId   = null;
+  inlineViewContainer = null;
   const tbody = document.getElementById("customer-tbody");
   if (!customers.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No customers yet. Click "+ Add Customer" to get started.</td></tr>`;
@@ -1145,9 +1316,9 @@ function renderCustomers(customers) {
       <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</td>
       <td>
         <div class="actions-cell">
-          <button class="btn-action btn-action-view"
-            data-cust-action="view" data-id="${c.customerId}"
-            title="Open to manage contacts, files & details">View</button>
+          <button class="btn-chevron"
+            data-cust-action="toggle" data-id="${c.customerId}"
+            title="Toggle details">▾</button>
           <button class="btn-action btn-action-edit"
             data-cust-action="edit" data-id="${c.customerId}">Edit</button>
           <button class="btn-action btn-action-delete"
@@ -1164,10 +1335,37 @@ document.getElementById("customer-tbody").addEventListener("click", async (e) =>
   if (!btn) return;
   const action = btn.dataset.custAction;
   const id     = btn.dataset.id;
-  if (action === "view")   await openCustomerViewModal(id);
+  if (action === "toggle") await toggleCustomerRow(e.target.closest("tr"), id, btn);
   else if (action === "edit")   await openCustomerFormModal(id);
   else if (action === "delete") openCustomerDeleteModal(id, btn.dataset.name);
 });
+
+// ── Customer expandable row ────────────────────────────────────────────────
+async function toggleCustomerRow(dataRow, customerId, chevronBtn) {
+  const isCurrentlyExpanded = chevronBtn.classList.contains("expanded");
+
+  // Collapse any open customer expanded row and clear inline state
+  document.querySelectorAll("#customer-tbody tr.expanded-row").forEach(r => {
+    r.previousElementSibling?.querySelector(".btn-chevron")?.classList.remove("expanded");
+    r.remove();
+  });
+  viewingCustomerId   = null;
+  inlineViewContainer = null;
+
+  if (isCurrentlyExpanded) return; // was open → now collapsed, done
+
+  chevronBtn.classList.add("expanded");
+  const expRow = document.createElement("tr");
+  expRow.className = "expanded-row";
+  expRow.innerHTML = `<td colspan="7"><div class="expanded-row-inner"><div class="empty-state">Loading…</div></div></td>`;
+  dataRow.after(expRow);
+
+  const container     = expRow.querySelector(".expanded-row-inner");
+  viewingCustomerId   = customerId;
+  inlineViewContainer = container;
+
+  await refreshCustomerView(customerId);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ── CUSTOMER FORM MODAL (Add / Edit) ───────────────────────────────────────
@@ -1184,6 +1382,15 @@ function clearCustomerForm() {
   ["cust-name","cust-phone","cust-email","cust-city","cust-address",
    "cust-billing-email","cust-business-number","cust-payment-terms","cust-notes"]
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  // Reset optional contact fields
+  ["cust-ct-firstname","cust-ct-lastname","cust-ct-jobtitle","cust-ct-phone","cust-ct-email"]
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  const ctPrimary = document.getElementById("cust-ct-primary");
+  if (ctPrimary) ctPrimary.checked = false;
+  // Reset optional docs
+  custDocumentFiles = [];
+  const custDocsList = document.getElementById("cust-docs-list");
+  if (custDocsList) custDocsList.innerHTML = "";
   document.getElementById("cust-form-error").style.display   = "none";
   document.getElementById("cust-form-success").style.display = "none";
   editingCustomerId = null;
@@ -1198,6 +1405,11 @@ async function openCustomerFormModal(customerId) {
   document.getElementById("customer-view-overlay").classList.remove("open");
   clearCustomerForm();
   document.getElementById("customer-form-overlay").classList.add("open");
+
+  // Show optional contact + docs sections only in add mode
+  const isAdd = !customerId;
+  document.getElementById("cust-contact-section").style.display = isAdd ? "block" : "none";
+  document.getElementById("cust-docs-section").style.display    = isAdd ? "block" : "none";
 
   if (customerId) {
     editingCustomerId = customerId;
@@ -1289,9 +1501,59 @@ document.getElementById("btn-save-customer").addEventListener("click", async () 
       errorEl.style.display = "block";
       return;
     }
-    successEl.textContent = editingCustomerId
-      ? "Customer updated successfully."
-      : `${name} added successfully.`;
+
+    const postSaveWarnings = [];
+
+    // ── If adding a new customer, optionally create contact + upload docs ──
+    if (!editingCustomerId) {
+      const newCustomerId = data.customerId;
+
+      // 1. Create contact if first or last name is filled
+      const ctFirst   = document.getElementById("cust-ct-firstname").value.trim();
+      const ctLast    = document.getElementById("cust-ct-lastname").value.trim();
+      if (ctFirst || ctLast) {
+        if (!ctFirst || !ctLast) {
+          postSaveWarnings.push("Contact skipped: both first and last name are required.");
+        } else {
+          btn.textContent = "Creating contact…";
+          const ctBody = {
+            firstName: ctFirst,
+            lastName:  ctLast,
+            phone:     document.getElementById("cust-ct-phone").value.trim()    || null,
+            email:     document.getElementById("cust-ct-email").value.trim()    || null,
+            jobTitle:  document.getElementById("cust-ct-jobtitle").value.trim() || null,
+            isPrimary: document.getElementById("cust-ct-primary").checked,
+            notes:     null
+          };
+          const ctRes = await fetch(`${API_BASE}/customers/${newCustomerId}/contacts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify(ctBody)
+          });
+          if (!ctRes.ok) {
+            const ctData = await ctRes.json();
+            postSaveWarnings.push(ctData.error || "Failed to create contact.");
+          }
+        }
+      }
+
+      // 2. Upload documents if any were added
+      const validCustDocs = custDocumentFiles.filter(d => d && d.file && d.title);
+      if (validCustDocs.length > 0) {
+        btn.textContent = "Uploading documents…";
+        try { await uploadCustomerDocuments(newCustomerId, validCustDocs); }
+        catch { postSaveWarnings.push("Some documents failed to upload."); }
+      }
+    }
+
+    if (postSaveWarnings.length > 0) {
+      successEl.textContent = (editingCustomerId ? "Customer updated." : `${name} added.`) +
+        " Note: " + postSaveWarnings.join(" ");
+    } else {
+      successEl.textContent = editingCustomerId
+        ? "Customer updated successfully."
+        : `${name} added successfully.`;
+    }
     successEl.style.display = "block";
     await loadCustomers();
     setTimeout(closeCustomerFormModal, 1800);
@@ -1329,7 +1591,7 @@ async function openCustomerViewModal(customerId) {
 }
 
 async function refreshCustomerView(customerId) {
-  const body = document.getElementById("customer-view-body");
+  const body = inlineViewContainer ?? document.getElementById("customer-view-body");
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/customers/${customerId}`, {
@@ -1338,7 +1600,9 @@ async function refreshCustomerView(customerId) {
     if (!res.ok) throw new Error();
     const c = await res.json();
 
-    document.getElementById("customer-view-title").textContent = c.customerCompanyName;
+    if (!inlineViewContainer) {
+      document.getElementById("customer-view-title").textContent = c.customerCompanyName;
+    }
 
     // Load Firebase files
     let files = [];
@@ -1370,8 +1634,6 @@ async function refreshCustomerView(customerId) {
                     : '<span style="color:#9ca3af;font-size:12px">—</span>'}</td>
                   <td>
                     <div class="actions-cell">
-                      <button class="btn-action btn-action-view"
-                        data-caction="view" data-cid="${ct.contactId}">View</button>
                       <button class="btn-action btn-action-edit"
                         data-caction="edit" data-cid="${ct.contactId}">Edit</button>
                       <button class="btn-action btn-action-delete"

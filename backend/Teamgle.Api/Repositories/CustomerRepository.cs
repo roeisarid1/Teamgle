@@ -433,13 +433,14 @@ public class CustomerRepository : ICustomerRepository
                     throw new KeyNotFoundException("Customer not found.");
             }
 
-            // If this contact is primary, clear existing primary flag
+            // If this contact is primary, block if one already exists
             if (request.IsPrimary)
             {
-                await using var clearCmd = new SqlCommand(
-                    "UPDATE ContactPerson SET is_primary = 0 WHERE customer_company_ID = @customerId", conn, tx);
-                clearCmd.Parameters.AddWithValue("@customerId", customerId);
-                await clearCmd.ExecuteNonQueryAsync();
+                await using var checkPrimaryCmd = new SqlCommand(
+                    "SELECT COUNT(*) FROM ContactPerson WHERE customer_company_ID = @customerId AND is_primary = 1", conn, tx);
+                checkPrimaryCmd.Parameters.AddWithValue("@customerId", customerId);
+                if ((int)await checkPrimaryCmd.ExecuteScalarAsync()! > 0)
+                    throw new InvalidOperationException("This customer already has a primary contact. Remove or unset the existing primary first.");
             }
 
             const string insertSql = """
