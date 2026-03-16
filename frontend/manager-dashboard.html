@@ -499,6 +499,52 @@
           <textarea id="cust-notes" rows="3" placeholder="Additional notes…"></textarea>
         </div>
 
+        <!-- ── Optional Contact Person (add mode only) ──────────────── -->
+        <div id="cust-contact-section" style="display:none">
+          <hr style="margin:16px 0;border-color:var(--border)" />
+          <p style="font-weight:600;margin:0 0 12px">Contact Person <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></p>
+          <div class="form-row">
+            <div class="field">
+              <label for="cust-ct-firstname">First Name</label>
+              <input type="text" id="cust-ct-firstname" placeholder="Jane" />
+            </div>
+            <div class="field">
+              <label for="cust-ct-lastname">Last Name</label>
+              <input type="text" id="cust-ct-lastname" placeholder="Doe" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="cust-ct-jobtitle">Job Title</label>
+              <input type="text" id="cust-ct-jobtitle" placeholder="e.g. CEO" />
+            </div>
+            <div class="field">
+              <label for="cust-ct-phone">Contact Phone</label>
+              <input type="tel" id="cust-ct-phone" placeholder="+1 234 567 8900" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="cust-ct-email">Contact Email</label>
+            <input type="email" id="cust-ct-email" placeholder="jane@company.com" />
+          </div>
+          <div class="field" style="margin-top:4px">
+            <label class="role-check" style="border:none;padding:0;gap:10px;font-size:13px;font-weight:600">
+              <input type="checkbox" id="cust-ct-primary" style="accent-color:var(--green);width:16px;height:16px" />
+              Primary Contact
+            </label>
+          </div>
+        </div>
+
+        <!-- ── Optional Company Documents (add mode only) ────────────── -->
+        <div id="cust-docs-section" style="display:none">
+          <hr style="margin:16px 0;border-color:var(--border)" />
+          <div class="roles-label-row">
+            <p style="font-weight:600;margin:0">Company Documents <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></p>
+            <button type="button" id="btn-cust-add-doc" class="btn-add-role">+ Add Document</button>
+          </div>
+          <div id="cust-docs-list" class="documents-list" style="margin-top:8px"></div>
+        </div>
+
         <div id="cust-form-error"   class="msg-error"   role="alert"></div>
         <div id="cust-form-success" class="msg-success" role="status"></div>
       </div>

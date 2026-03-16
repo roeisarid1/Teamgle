@@ -1293,6 +1293,41 @@ tbody tr:hover { background: #fafbff; }
   .customer-view-modal { max-width: calc(100% - 48px); }
 }
 
+/* ── Expandable row ──────────────────────────────────────────────────────── */
+.btn-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--blue);
+  padding: 5px 9px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 6px;
+  font-weight: 700;
+  transition: background var(--transition), color var(--transition), transform 0.2s ease;
+}
+.btn-chevron:hover { background: var(--blue-light); border-color: var(--blue); }
+.btn-chevron.expanded { color: #16a34a; transform: rotate(180deg); }
+
+tr.expanded-row > td {
+  padding: 0 !important;
+  background: #f8faff;
+  border-bottom: 2px solid var(--blue) !important;
+}
+
+.expanded-row-inner {
+  padding: 18px 20px 22px;
+  animation: expandIn 0.15s ease;
+}
+
+@keyframes expandIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Events Section ──────────────────────────────────────────────────────── */
 
 /* Header actions (search + button) */
