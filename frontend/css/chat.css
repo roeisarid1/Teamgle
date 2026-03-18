@@ -65,7 +65,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
-  background: var(--green);
+  background: var(--blue);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -73,12 +73,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(111,191,115,.35);
+  box-shadow: 0 2px 8px rgba(91,123,240,.35);
   white-space: nowrap;
 }
 
 .btn-new-chat:hover {
-  background: #5aac5e;
+  background: var(--blue-dark);
   transform: translateY(-1px);
 }
 
@@ -268,7 +268,7 @@
 .btn-start-chat {
   margin-top: 8px;
   padding: 9px 20px;
-  background: var(--green);
+  background: var(--blue);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -276,11 +276,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(111,191,115,.35);
+  box-shadow: 0 2px 8px rgba(91,123,240,.35);
 }
 
 .btn-start-chat:hover {
-  background: #5aac5e;
+  background: var(--blue-dark);
   transform: translateY(-1px);
 }
 

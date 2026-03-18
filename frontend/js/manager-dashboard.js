@@ -2201,23 +2201,23 @@ async function appendEventBlock() {
         <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
       </div>
       <div class="form-row">
-        <div class="field" data-field="event-start-${idx}">
-          <label>Start Time *</label>
-          <input type="datetime-local" id="event-start-${idx}" />
-        </div>
-        <div class="field" data-field="event-end-${idx}">
-          <label>End Time *</label>
-          <input type="datetime-local" id="event-end-${idx}" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
+        <div class="field" data-field="event-date-${idx}">
           <label>Date *</label>
           <input type="date" id="event-date-${idx}" />
         </div>
         <div class="field">
           <label>Location</label>
           <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field" data-field="event-start-${idx}">
+          <label>Start Time *</label>
+          <input type="time" id="event-start-${idx}" />
+        </div>
+        <div class="field" data-field="event-end-${idx}">
+          <label>End Time *</label>
+          <input type="time" id="event-end-${idx}" />
         </div>
       </div>
       <div class="form-row">
@@ -2386,6 +2386,10 @@ function collectProjectFormData() {
       block.querySelector(`[data-field="event-name-${idx}"]`)?.classList.add("has-error");
       valid = false;
     }
+    if (!evtDate) {
+      block.querySelector(`[data-field="event-date-${idx}"]`)?.classList.add("has-error");
+      valid = false;
+    }
     if (!evtStart) {
       block.querySelector(`[data-field="event-start-${idx}"]`)?.classList.add("has-error");
       valid = false;
@@ -2395,13 +2399,9 @@ function collectProjectFormData() {
       valid = false;
     }
 
-    // Combine date + time for start/end — guard every branch against empty/invalid values
-    const startDateTime = evtStart        ? new Date(evtStart).toISOString()
-                        : evtDate         ? new Date(`${evtDate}T00:00`).toISOString()
-                        : null;
-    const endDateTime   = evtEnd          ? new Date(evtEnd).toISOString()
-                        : evtDate         ? new Date(`${evtDate}T23:59`).toISOString()
-                        : null;
+    // Combine date + time into ISO datetime
+    const startDateTime = evtDate && evtStart ? new Date(`${evtDate}T${evtStart}`).toISOString() : null;
+    const endDateTime   = evtDate && evtEnd   ? new Date(`${evtDate}T${evtEnd}`).toISOString()   : null;
 
     // Collect shifts
     const shifts = [];
@@ -2418,7 +2418,7 @@ function collectProjectFormData() {
       }
 
       // Combine parent event's date with shift time to form a full ISO datetime
-      const shiftDate = evtDate || evtStart?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+      const shiftDate = evtDate || new Date().toISOString().slice(0, 10);
       shifts.push({
         rollId,
         requiredQuantity: qty,

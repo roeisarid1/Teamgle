@@ -104,11 +104,12 @@ body {
 .btn-sidebar-reopen.visible { display: flex; }
 
 .navbar-brand img {
-  height: 52px;
+  height: 56px;
   background: #fff;
-  border-radius: 10px;
-  padding: 4px 10px;
-  image-rendering: -webkit-optimize-contrast;
+  border-radius: 12px;
+  padding: 5px 12px;
+  image-rendering: auto;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   image-rendering: crisp-edges;
 }
 
@@ -327,6 +328,7 @@ body {
 
 table {
   width: 100%;
+  min-width: 700px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -764,6 +766,17 @@ tbody tr:hover { background: #fafbff; }
 .btn-remove-doc:hover { color: var(--red); background: #fef2f2; }
 
 /* ── Actions column ──────────────────────────────────────────────────────── */
+thead th:last-child,
+tbody td:last-child {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  box-shadow: -2px 0 6px rgba(0,0,0,0.06);
+}
+thead th:last-child {
+  background: #f9fafb;
+}
+
 .actions-cell {
   display: flex;
   gap: 6px;
@@ -795,10 +808,10 @@ tbody tr:hover { background: #fafbff; }
 .btn-action-edit:hover { background: var(--blue-light); }
 
 .btn-action-delete {
-  color: #854d0e;
-  border-color: var(--yellow);
+  color: var(--red);
+  border-color: var(--red);
 }
-.btn-action-delete:hover { background: #fef9c3; }
+.btn-action-delete:hover { background: #fef2f2; }
 
 /* ── Danger button ───────────────────────────────────────────────────────── */
 .btn-danger {
@@ -1077,6 +1090,36 @@ tbody tr:hover { background: #fafbff; }
   background: #fafbff;
   text-align: center;
   margin-top: 8px;
+}
+
+/* Compact variant inside expanded table rows */
+.expanded-row-inner .empty-state-cta {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-top: 6px;
+  border-width: 1.5px;
+}
+.expanded-row-inner .empty-state-icon {
+  font-size: 18px;
+}
+.expanded-row-inner .empty-state-title {
+  font-size: 13px;
+}
+.expanded-row-inner .empty-state-hint {
+  font-size: 12px;
+  max-width: none;
+  flex: 1;
+  text-align: left;
+}
+.expanded-row-inner .btn-empty-cta {
+  margin-top: 0;
+  padding: 5px 14px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .empty-state-icon {
   font-size: 28px;
@@ -1773,9 +1816,11 @@ tr.expanded-row > td {
 
 /* Shifts sub-section */
 .shifts-subsection {
-  border: 1px solid var(--border);
+  border: 1px solid var(--blue-light);
+  border-left: 3px solid var(--blue);
   border-radius: 8px;
   overflow: hidden;
+  background: #fafbff;
 }
 
 .shifts-subheader {
@@ -1783,14 +1828,14 @@ tr.expanded-row > td {
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px;
-  background: #f3f4f6;
-  border-bottom: 1px solid var(--border);
+  background: var(--blue-light);
+  border-bottom: 1px solid #dde3fd;
 }
 
 .shifts-subheader-label {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--blue);
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
