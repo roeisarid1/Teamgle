@@ -26,8 +26,15 @@ public class ProjectService : IProjectService
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new ArgumentException("Project name is required.");
-        if (request.EndDate < request.StartDate)
-            throw new ArgumentException("End date cannot be before start date.");
+        if (request.Status != "draft")
+        {
+            if (request.StartDate == null)
+                throw new ArgumentException("Start date is required.");
+            if (request.EndDate == null)
+                throw new ArgumentException("End date is required.");
+            if (request.EndDate < request.StartDate)
+                throw new ArgumentException("End date cannot be before start date.");
+        }
 
         var companyId = await ResolveCompanyIdAsync(firebaseUid);
 
@@ -40,7 +47,10 @@ public class ProjectService : IProjectService
         // 2. Link manager as owner
         await _projectRepo.CreateManagerProjectAsync(projId, userId);
 
-        // 3. Create each event and its shifts
+        // 3. Create each event and its shifts (skipped entirely for drafts)
+        if (request.Status == "draft" || request.Events == null || !request.Events.Any())
+            goto done;
+
         foreach (var eventRequest in request.Events)
         {
             if (string.IsNullOrWhiteSpace(eventRequest.Name))
@@ -59,14 +69,25 @@ public class ProjectService : IProjectService
             }
         }
 
+        done:
         return new ProjectResponse
         {
             ProjId     = projId,
             Name       = request.Name.Trim(),
             StartDate  = request.StartDate,
             EndDate    = request.EndDate,
-            Status     = "Draft",
+            Status     = request.Status,
             CustomerId = request.CustomerId
         };
+    }
+
+    // ── Get all projects for the authenticated manager ─────────────────────
+    public async Task<IEnumerable<ProjectListItemResponse>> GetProjectsAsync(string firebaseUid)
+    {
+        var companyId = await _projectRepo.GetManagerCompanyIdAsync(firebaseUid);
+        if (companyId == null)
+            throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        return await _projectRepo.GetProjectsByManagerAsync(firebaseUid);
     }
 }

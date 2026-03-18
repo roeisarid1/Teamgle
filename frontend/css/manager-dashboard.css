@@ -362,8 +362,11 @@ tbody tr:hover { background: #fafbff; }
   font-weight: 600;
 }
 
-.badge-active  { background: #dcfce7; color: #16a34a; }
-.badge-pending { background: #fef9c3; color: #854d0e; }
+.badge-active   { background: #dcfce7; color: #16a34a; }
+.badge-pending  { background: #fef9c3; color: #854d0e; }
+.badge-success  { background: #d1fae5; color: #065f46; }
+.badge-error    { background: #fee2e2; color: #991b1b; }
+.badge-info     { background: #dbeafe; color: #1d4ed8; }
 
 .roles-list {
   display: flex;
@@ -1609,6 +1612,25 @@ tr.expanded-row > td {
   border-radius: 2px;
   background: var(--blue);
   transition: width .3s ease;
+}
+
+.staffing-bar {
+  height: 4px;
+  background: var(--border, #e5e7eb);
+  border-radius: 2px;
+  margin: 8px 0 4px;
+}
+.staffing-bar-fill {
+  height: 100%;
+  background: var(--primary, #6366f1);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.empty-col {
+  color: var(--text-muted, #9ca3af);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 24px 0;
 }
 
 /* Events responsive */

@@ -1242,9 +1242,10 @@ function activateSection(name) {
   // Toggle chat-mode class on page-content to remove padding and set fixed height
   document.querySelector(".page-content").classList.toggle("chat-mode", name === "chats");
 
-  if (name === "customers") loadCustomers();
+  if (name === "customers")      loadCustomers();
+  if (name === "projects")       loadProjects();
   if (name === "create-project") loadProjectCustomerDropdown();
-  if (name === "chats")     _initChatSection();
+  if (name === "chats")          _initChatSection();
 }
 
 function _initChatSection() {
@@ -1257,6 +1258,99 @@ function _initChatSection() {
 }
 
 // ── PROJECTS SECTION ────────────────────────────────────────────────────────
+
+async function loadProjects() {
+  const cols = {
+    today:     document.getElementById("kanban-today"),
+    upcoming:  document.getElementById("kanban-upcoming"),
+    completed: document.getElementById("kanban-completed"),
+    draft:     document.getElementById("kanban-draft"),
+  };
+
+  Object.values(cols).forEach(col => {
+    col.innerHTML = `<div class="empty-col">Loading…</div>`;
+  });
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("Failed to load projects.");
+    const projects = await res.json();
+
+    const buckets = { today: [], upcoming: [], completed: [], draft: [] };
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    for (const p of projects) {
+      const start = new Date(p.startDate); start.setHours(0, 0, 0, 0);
+      const end   = new Date(p.endDate);   end.setHours(0, 0, 0, 0);
+
+      if (p.status === "draft") {
+        buckets.draft.push(p);
+      } else if (p.status === "completed" || p.status === "canceled" || (p.endDate && end < todayDate)) {
+        buckets.completed.push(p);
+      } else if (p.startDate && p.endDate && start <= todayDate && end >= todayDate) {
+        buckets.today.push(p);
+      } else {
+        buckets.upcoming.push(p);
+      }
+    }
+
+    for (const [key, col] of Object.entries(cols)) {
+      const items = buckets[key];
+      col.innerHTML = items.length
+        ? items.map(p => renderProjectCard(p)).join("")
+        : `<div class="empty-col">No projects</div>`;
+    }
+  } catch {
+    Object.values(cols).forEach(col => {
+      col.innerHTML = `<div class="empty-col" style="color:#ef4444">Failed to load.</div>`;
+    });
+  }
+}
+
+function renderProjectCard(project) {
+  const statusMap = {
+    draft:     { label: "Draft",    cls: "badge-pending" },
+    planning:  { label: "Planning", cls: "badge-info"    },
+    active:    { label: "Active",   cls: "badge-active"  },
+    completed: { label: "Done",     cls: "badge-success" },
+    canceled:  { label: "Canceled", cls: "badge-error"   },
+  };
+  const badge  = statusMap[project.status] ?? { label: project.status, cls: "badge-pending" };
+  const fmt    = d => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  const pct    = project.requiredCount > 0
+    ? Math.min(100, Math.round(project.staffedCount / project.requiredCount * 100))
+    : 0;
+  const customer = project.customerName ? escapeHtml(project.customerName) : "No customer";
+
+  return `
+    <div class="event-card" data-proj-id="${escapeHtml(project.projId)}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span class="event-status-badge ${badge.cls}">${badge.label}</span>
+      </div>
+      <div class="event-title">${escapeHtml(project.name)}</div>
+      <div class="event-meta">
+        <span class="material-symbols-outlined" style="font-size:13px">calendar_month</span>
+        ${fmt(project.startDate)} – ${fmt(project.endDate)}
+      </div>
+      <div class="event-meta">
+        <span class="material-symbols-outlined" style="font-size:13px">business</span>
+        ${customer}
+      </div>
+      <div class="staffing-bar">
+        <div class="staffing-bar-fill" style="width:${pct}%"></div>
+      </div>
+      <div class="event-meta">
+        <span class="material-symbols-outlined" style="font-size:13px">group</span>
+        ${project.staffedCount} / ${project.requiredCount} workers staffed
+      </div>
+    </div>
+  `;
+}
+
 document.getElementById('search-projects')?.addEventListener('input', () => {});
 
 document.getElementById('btn-create-project').addEventListener('click', () => {
@@ -2060,9 +2154,50 @@ document.getElementById("btn-back-to-projects").addEventListener("click", () => 
   activateSection("projects");
 });
 
-// ── Save Draft (stub — navigates back without submitting) ──────────────────
-document.getElementById("btn-save-draft").addEventListener("click", () => {
-  activateSection("projects");
+// ── Save Draft ──────────────────────────────────────────────────────────────
+document.getElementById("btn-save-draft").addEventListener("click", async () => {
+  document.querySelectorAll(".field.has-error").forEach(f => f.classList.remove("has-error"));
+  const errBanner = document.getElementById("create-project-error");
+  errBanner.textContent = "";
+  errBanner.classList.remove("visible");
+
+  const name = document.getElementById("proj-name").value.trim();
+  if (!name) {
+    document.getElementById("field-proj-name").classList.add("has-error");
+    errBanner.textContent = "Project name is required.";
+    errBanner.classList.add("visible");
+    return;
+  }
+
+  const startDate  = document.getElementById("proj-start-date").value || null;
+  const endDate    = document.getElementById("proj-end-date").value   || null;
+  const customerId = document.getElementById("proj-customer").value   || null;
+
+  const btn = document.getElementById("btn-save-draft");
+  btn.disabled    = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/projects`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body:    JSON.stringify({ name, startDate, endDate, customerId, status: "draft", events: [] })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBanner.textContent = data.error || "Failed to save draft.";
+      errBanner.classList.add("visible");
+      return;
+    }
+    activateSection("projects");
+  } catch {
+    errBanner.textContent = "Network error. Please check your connection.";
+    errBanner.classList.add("visible");
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Save Draft";
+  }
 });
 
 // ── ＋ New Customer inside create-project form ─────────────────────────────
@@ -2474,7 +2609,7 @@ document.getElementById("btn-submit-project").addEventListener("click", async ()
     const res   = await fetch(`${API_BASE}/projects`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body:    JSON.stringify(body)
+      body:    JSON.stringify({ ...body, status: "planning" })
     });
     const data = await res.json();
     if (!res.ok) {

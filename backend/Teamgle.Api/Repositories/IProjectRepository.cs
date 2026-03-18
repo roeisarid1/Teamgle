@@ -16,4 +16,7 @@ public interface IProjectRepository
 
     // ── Shift ──────────────────────────────────────────────────────────────
     Task CreateShiftAsync(string eventId, CreateShiftRequest request);
+
+    // ── Query ──────────────────────────────────────────────────────────────
+    Task<IEnumerable<ProjectListItemResponse>> GetProjectsByManagerAsync(string firebaseUid);
 }

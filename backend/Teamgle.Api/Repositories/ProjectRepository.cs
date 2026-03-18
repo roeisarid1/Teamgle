@@ -56,11 +56,14 @@ public class ProjectRepository : IProjectRepository
     {
         var projId = Guid.NewGuid().ToString();
 
+        var validStatuses = new HashSet<string> { "draft", "planning", "active", "completed", "canceled" };
+        var status = validStatuses.Contains(request.Status) ? request.Status : "draft";
+
         const string sql = """
             INSERT INTO Project
                 (Proj_ID, name, start_date, end_date, status, customer_ID)
             VALUES
-                (@projId, @name, @startDate, @endDate, 'planning', @customerId)
+                (@projId, @name, @startDate, @endDate, @status, @customerId)
             """;
 
         await using var conn = new SqlConnection(_connectionString);
@@ -68,8 +71,9 @@ public class ProjectRepository : IProjectRepository
 
         cmd.Parameters.AddWithValue("@projId",     projId);
         cmd.Parameters.AddWithValue("@name",       request.Name.Trim());
-        cmd.Parameters.AddWithValue("@startDate",  request.StartDate);
-        cmd.Parameters.AddWithValue("@endDate",    request.EndDate);
+        cmd.Parameters.AddWithValue("@startDate",  (object?)request.StartDate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@endDate",    (object?)request.EndDate   ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@status",     status);
         cmd.Parameters.AddWithValue("@customerId", (object?)request.CustomerId ?? DBNull.Value);
 
         await conn.OpenAsync();
@@ -132,6 +136,66 @@ public class ProjectRepository : IProjectRepository
         await cmd.ExecuteNonQueryAsync();
 
         return eventId;
+    }
+
+    // ── Get all projects for a manager with aggregates ────────────────────
+    public async Task<IEnumerable<ProjectListItemResponse>> GetProjectsByManagerAsync(string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                p.Proj_ID                                     AS ProjId,
+                p.name                                        AS Name,
+                p.start_date                                  AS StartDate,
+                p.end_date                                    AS EndDate,
+                p.status                                      AS Status,
+                c.customer_company_name                       AS CustomerName,
+                COUNT(DISTINCT e.event_ID)                    AS EventCount,
+                ISNULL(SUM(s.required_quantity), 0)           AS RequiredCount,
+                COUNT(DISTINCT CASE
+                    WHEN es.status IN ('approved', 'manager_approved')
+                     AND (es.canceled IS NULL OR es.canceled = 0)
+                    THEN es.employee_user_ID
+                END)                                          AS StaffedCount
+            FROM Manager_Project mp
+            INNER JOIN [User] u  ON mp.manager_user_ID = u.user_ID
+            INNER JOIN Project p ON mp.project_ID       = p.Proj_ID
+            LEFT  JOIN Customer c        ON p.customer_ID  = c.customer_ID
+            LEFT  JOIN Event e           ON e.project_ID   = p.Proj_ID
+            LEFT  JOIN Shift s           ON s.event_ID     = e.event_ID
+            LEFT  JOIN Employee_Shift es ON es.shift_ID    = s.Shift_ID
+            WHERE u.FBUID = @firebaseUid
+            GROUP BY
+                p.Proj_ID, p.name, p.start_date, p.end_date,
+                p.status, c.customer_company_name
+            ORDER BY p.start_date DESC
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var results = new List<ProjectListItemResponse>();
+        while (await reader.ReadAsync())
+        {
+            results.Add(new ProjectListItemResponse
+            {
+                ProjId        = reader.GetString(reader.GetOrdinal("ProjId")),
+                Name          = reader.GetString(reader.GetOrdinal("Name")),
+                StartDate     = reader.IsDBNull(reader.GetOrdinal("StartDate")) ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
+                EndDate       = reader.IsDBNull(reader.GetOrdinal("EndDate"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
+                Status        = reader.GetString(reader.GetOrdinal("Status")),
+                CustomerName  = reader.IsDBNull(reader.GetOrdinal("CustomerName"))
+                                    ? null
+                                    : reader.GetString(reader.GetOrdinal("CustomerName")),
+                EventCount    = reader.GetInt32(reader.GetOrdinal("EventCount")),
+                RequiredCount = reader.GetInt32(reader.GetOrdinal("RequiredCount")),
+                StaffedCount  = reader.GetInt32(reader.GetOrdinal("StaffedCount")),
+            });
+        }
+        return results;
     }
 
     // ── Insert into Shift ──────────────────────────────────────────────────
