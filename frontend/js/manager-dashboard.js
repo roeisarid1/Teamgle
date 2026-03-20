@@ -1487,6 +1487,9 @@ function clearCustomerForm() {
   if (custDocsList) custDocsList.innerHTML = "";
   document.getElementById("cust-form-error").style.display   = "none";
   document.getElementById("cust-form-success").style.display = "none";
+  // Reset optional sections to collapsed state
+  document.querySelectorAll("#cust-contact-section .optional-section, #cust-docs-section .optional-section")
+    .forEach(s => s.classList.add("collapsed"));
   editingCustomerId = null;
   document.getElementById("customer-form-title").textContent = "Add New Customer";
   const btn = document.getElementById("btn-save-customer");
@@ -2210,6 +2213,14 @@ document.getElementById("btn-add-event").addEventListener("click", () => {
   appendEventBlock();
 });
 
+// ── Collapse All / Expand All events ──────────────────────────────────────
+document.getElementById("btn-collapse-events").addEventListener("click", () => {
+  const blocks = document.querySelectorAll(".event-block");
+  const anyExpanded = [...blocks].some(b => !b.classList.contains("collapsed"));
+  blocks.forEach(b => b.classList.toggle("collapsed", anyExpanded));
+  updateCollapseAllBtn();
+});
+
 // ── Initialise the form (called when navigating to create-project) ─────────
 function initCreateProjectForm() {
   // Clear project-level fields
@@ -2326,18 +2337,22 @@ async function appendEventBlock() {
   block.dataset.eventIdx = idx;
 
   block.innerHTML = `
-    <div class="event-block-header">
-      <span class="event-block-label">Event ${idx}</span>
+    <div class="event-block-header" data-toggle-event="${idx}">
+      <div class="event-block-header-inner">
+        <span class="event-block-chevron">▾</span>
+        <span class="event-block-label">Event ${idx}</span>
+        <span class="event-block-summary" id="event-summary-${idx}"></span>
+      </div>
       <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}">×</button>
     </div>
     <div class="event-block-body">
       <div class="field" data-field="event-name-${idx}">
-        <label>Event Name *</label>
+        <label>Event Name <span class="req">*</span></label>
         <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
       </div>
       <div class="form-row">
         <div class="field" data-field="event-date-${idx}">
-          <label>Date *</label>
+          <label>Date <span class="req">*</span></label>
           <input type="date" id="event-date-${idx}" />
         </div>
         <div class="field">
@@ -2347,11 +2362,11 @@ async function appendEventBlock() {
       </div>
       <div class="form-row">
         <div class="field" data-field="event-start-${idx}">
-          <label>Start Time *</label>
+          <label>Start Time <span class="req">*</span></label>
           <input type="time" id="event-start-${idx}" />
         </div>
         <div class="field" data-field="event-end-${idx}">
-          <label>End Time *</label>
+          <label>End Time <span class="req">*</span></label>
           <input type="time" id="event-end-${idx}" />
         </div>
       </div>
@@ -2396,6 +2411,13 @@ async function appendEventBlock() {
           <span class="shifts-subheader-label">Shifts</span>
           <button class="btn-add-shift" type="button" data-add-shift="${idx}">＋ Add Shift</button>
         </div>
+        <div class="shifts-col-headers">
+          <span>Role</span>
+          <span>Qty</span>
+          <span>Start</span>
+          <span>End</span>
+          <span></span>
+        </div>
         <div class="shifts-list" id="shifts-list-${idx}">
           <!-- Shift rows injected by JS -->
         </div>
@@ -2406,10 +2428,27 @@ async function appendEventBlock() {
   document.getElementById("events-container").appendChild(block);
   lucide.createIcons();   // re-run so any new lucide icons render
 
+  // Collapse all previous event blocks when a new one is added
+  const allBlocks = document.querySelectorAll(".event-block");
+  if (allBlocks.length > 1) {
+    allBlocks.forEach((b, i) => {
+      if (i < allBlocks.length - 1) b.classList.add("collapsed");
+    });
+    updateCollapseAllBtn();
+  }
+
+  // Toggle collapse on header click (excluding remove button)
+  block.querySelector(`[data-toggle-event="${idx}"]`).addEventListener("click", (e) => {
+    if (e.target.closest(".btn-remove-block")) return;
+    block.classList.toggle("collapsed");
+    updateCollapseAllBtn();
+  });
+
   // Remove event listener
   block.querySelector(`[data-remove-event="${idx}"]`).addEventListener("click", () => {
     block.remove();
     renumberEventBlocks();
+    updateCollapseAllBtn();
   });
 
   // Add shift listener
@@ -2417,8 +2456,31 @@ async function appendEventBlock() {
     appendShiftRow(idx, roles);
   });
 
+  // Live summary: update header summary from name + date inputs
+  const updateSummary = () => {
+    const nameVal = document.getElementById(`event-name-${idx}`)?.value.trim() || "";
+    const dateVal = document.getElementById(`event-date-${idx}`)?.value || "";
+    const summaryEl = document.getElementById(`event-summary-${idx}`);
+    if (!summaryEl) return;
+    const parts = [];
+    if (nameVal) parts.push(nameVal);
+    if (dateVal) parts.push(dateVal);
+    summaryEl.textContent = parts.length ? ` · ${parts.join(" · ")}` : "";
+  };
+  block.querySelector(`#event-name-${idx}`).addEventListener("input", updateSummary);
+  block.querySelector(`#event-date-${idx}`).addEventListener("change", updateSummary);
+
   // Render first shift row immediately
   appendShiftRow(idx, roles);
+}
+
+// ── Update the Collapse All / Expand All button label ─────────────────────
+function updateCollapseAllBtn() {
+  const btn = document.getElementById("btn-collapse-events");
+  if (!btn) return;
+  const blocks = document.querySelectorAll(".event-block");
+  const anyExpanded = [...blocks].some(b => !b.classList.contains("collapsed"));
+  btn.textContent = anyExpanded ? "Collapse all" : "Expand all";
 }
 
 // ── Renumber event block labels after a removal ────────────────────────────

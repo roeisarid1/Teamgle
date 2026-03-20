@@ -1923,3 +1923,219 @@ tr.expanded-row > td {
   .customer-field-row { flex-direction: column; align-items: stretch; }
   .btn-add-inline { height: auto; padding: 10px 14px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI/UX IMPROVEMENTS — form groups, collapsible events, shifts table, etc.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Required field asterisk ─────────────────────────────────────────────── */
+.req {
+  color: var(--red);
+  margin-left: 2px;
+  font-weight: 700;
+}
+
+/* ── Form group sections within modals ───────────────────────────────────── */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group + .form-group {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.form-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding-bottom: 2px;
+}
+
+/* Modal body using form groups: gap between direct children, border separates groups */
+.modal-body.grouped { gap: 16px; }
+
+/* Border-top separates adjacent form groups (visual section divider) */
+.modal-body.grouped .form-group + .form-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  margin-top: 0;
+}
+
+/* ── Wider modal for complex forms ───────────────────────────────────────── */
+.modal-wide { max-width: 640px; }
+
+/* ── Optional expandable section within modals ───────────────────────────── */
+.optional-section {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafbff;
+}
+
+.optional-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f4f6ff;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+}
+
+.optional-section-header:hover { background: #eef1fe; }
+
+.optional-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.optional-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--border);
+  border-radius: 10px;
+  padding: 2px 7px;
+  letter-spacing: 0.02em;
+}
+
+.optional-chevron {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: inline-block;
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+
+.optional-section.collapsed .optional-chevron { transform: rotate(-90deg); }
+.optional-section.collapsed .optional-section-body { display: none; }
+
+.optional-section-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: expandIn 0.15s ease;
+}
+
+/* ── Event block collapse ─────────────────────────────────────────────────── */
+.event-block-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.event-block-header:hover { background: #eef1fe; }
+
+.event-block-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.event-block-chevron {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.event-block.collapsed .event-block-chevron { transform: rotate(-90deg); }
+
+.event-block-summary {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.event-block.collapsed .event-block-body {
+  display: none;
+}
+
+.event-block:not(.collapsed) .event-block-body {
+  animation: expandIn 0.18s ease;
+}
+
+/* ── Form section header with multiple actions ───────────────────────────── */
+.form-section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+
+.btn-link:hover { background: var(--blue-light); }
+
+/* ── Shifts as compact table ─────────────────────────────────────────────── */
+.shifts-col-headers {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr 1fr 34px;
+  gap: 10px;
+  padding: 6px 14px 4px;
+  border-bottom: 1px solid #e8ecfd;
+}
+
+.shifts-col-headers span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue);
+}
+
+/* Hide per-row labels on desktop when col-headers are shown */
+.shifts-list .shift-row .field > label { display: none; }
+
+/* ── Empty events placeholder ────────────────────────────────────────────── */
+.events-empty-hint {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  margin: 16px 20px;
+  background: #fafbff;
+}
+
+/* ── Responsive overrides ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Restore labels on mobile since col-headers are hidden */
+  .shifts-list .shift-row .field > label { display: block; }
+  .shifts-col-headers { display: none; }
+  .modal-wide { max-width: calc(100% - 48px); }
+}
+
+@media (max-width: 640px) {
+  .modal-wide { max-width: 100%; }
+}
