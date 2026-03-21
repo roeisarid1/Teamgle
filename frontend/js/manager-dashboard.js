@@ -137,7 +137,9 @@ onAuthStateChanged(auth, async (user) => {
     console.warn("Chat profile write failed:", e);
   }
 
+  populateHomeWelcome();
   await Promise.all([loadRoles(), loadEmployees()]);
+  loadHomeStats();
 });
 
 // ── Token helper (auto-refresh) ────────────────────────────────────────────
@@ -1242,6 +1244,7 @@ function activateSection(name) {
   // Toggle chat-mode class on page-content to remove padding and set fixed height
   document.querySelector(".page-content").classList.toggle("chat-mode", name === "chats");
 
+  if (name === "home")           loadHomeStats();
   if (name === "customers")      loadCustomers();
   if (name === "projects")       loadProjects();
   if (name === "create-project") loadProjectCustomerDropdown();
@@ -1256,6 +1259,245 @@ function _initChatSection() {
   const container = document.getElementById("section-chats");
   initChat(container, profile, currentFirebaseUid);
 }
+
+// ── HOME SECTION ─────────────────────────────────────────────────────────────
+
+function populateHomeWelcome() {
+  const now = new Date();
+  document.getElementById("home-date-day").textContent  = now.getDate();
+  document.getElementById("home-date-full").textContent = now.toLocaleDateString("en-US", {
+    weekday: "long", month: "long", year: "numeric"
+  });
+}
+
+async function loadHomeStats() {
+  document.getElementById("stat-employees").textContent = allEmployees.length;
+
+  try {
+    const token = await getToken();
+    const [custRes, projRes, taskRes] = await Promise.all([
+      fetch(`${API_BASE}/customers`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/projects`,  { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/tasks`,     { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    if (custRes.ok) {
+      const custs = await custRes.json();
+      document.getElementById("stat-customers").textContent = custs.length;
+    }
+    if (projRes.ok) {
+      const projects = await projRes.json();
+      const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
+      const active = projects.filter(p => {
+        if (p.status === "draft" || p.status === "completed" || p.status === "canceled") return false;
+        const end = new Date(p.endDate); end.setHours(0, 0, 0, 0);
+        return end >= todayDate;
+      });
+      document.getElementById("stat-projects").textContent = projects.length;
+      document.getElementById("stat-active").textContent   = active.length;
+
+      renderHomeTimeline(projects);
+    }
+    if (taskRes.ok) {
+      const tasks = await taskRes.json();
+      renderHomeTasks(tasks);
+    } else {
+      renderHomeTasks([]);
+    }
+  } catch {
+    renderHomeTasks([]);
+    renderHomeTimeline([]);
+  }
+}
+
+function renderHomeRecentProjects(projects, todayDate) {
+  const el = document.getElementById("home-recent-projects");
+  if (!el) return;
+
+  const sorted = [...projects].sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+  const recent = sorted.slice(0, 4);
+
+  if (!recent.length) {
+    el.innerHTML = '<div class="home-widget-empty">No projects yet.</div>';
+    return;
+  }
+
+  el.innerHTML = recent.map(p => {
+    const start = p.startDate ? new Date(p.startDate) : null;
+    const end   = p.endDate   ? new Date(p.endDate)   : null;
+    const dateStr = (start && end)
+      ? `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+      : start ? start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+
+    let badgeClass = "home-proj-upcoming";
+    let badgeLabel = "Upcoming";
+    if (p.status === "draft") { badgeClass = "home-proj-draft"; badgeLabel = "Draft"; }
+    else if (p.status === "completed" || p.status === "canceled") { badgeClass = "home-proj-completed"; badgeLabel = "Done"; }
+    else if (start && end) {
+      const s = new Date(p.startDate); s.setHours(0,0,0,0);
+      const e = new Date(p.endDate);   e.setHours(0,0,0,0);
+      if (s <= todayDate && e >= todayDate) { badgeClass = "home-proj-today"; badgeLabel = "Today"; }
+    }
+
+    return `
+      <div class="home-proj-row">
+        <div class="home-proj-info">
+          <span class="home-proj-name">${p.name || "Untitled"}</span>
+          <span class="home-proj-date">${dateStr}</span>
+        </div>
+        <span class="home-proj-badge ${badgeClass}">${badgeLabel}</span>
+      </div>`;
+  }).join("");
+}
+
+function renderHomeTasks(tasks) {
+  const el = document.getElementById("home-tasks-list");
+  if (!el) return;
+
+  if (!tasks.length) {
+    el.innerHTML = '<div class="home-widget-empty">No tasks yet.</div>';
+    return;
+  }
+
+  // Only show active tasks
+  const activeTasks = tasks.filter(t => t.status !== "done" && t.status !== "canceled");
+
+  if (!activeTasks.length) {
+    el.innerHTML = '<div class="home-widget-empty">No open tasks.</div>';
+    return;
+  }
+
+  // Sort by priority high → low, then by status open → in_progress
+  const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const statusOrder   = { open: 0, in_progress: 1, done: 2, canceled: 3 };
+  const visible = [...activeTasks].sort((a, b) => {
+    const pd = (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
+    if (pd !== 0) return pd;
+    return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+  });
+
+  const priorityClass = { urgent: "home-priority-urgent", high: "home-priority-high", medium: "home-priority-medium", low: "home-priority-low" };
+  const priorityLabel = { urgent: "Urgent", high: "High", medium: "Medium", low: "Low" };
+  const statusClass   = { open: "home-status-open", in_progress: "home-status-inprogress", done: "home-status-done", canceled: "home-status-canceled" };
+  const statusLabel   = { open: "Open", in_progress: "In Progress", done: "Done", canceled: "Canceled" };
+
+  el.innerHTML = visible.map(t => {
+    const pClass = priorityClass[t.priority] || "home-priority-low";
+    const pLabel = priorityLabel[t.priority] || t.priority;
+    const sClass = statusClass[t.status]     || "home-status-open";
+    const sLabel = statusLabel[t.status]     || t.status;
+
+    let meta = "";
+    if (t.projectName && t.eventName) meta = `Project · ${t.projectName} / Event · ${t.eventName}`;
+    else if (t.projectName)           meta = `Project · ${t.projectName}`;
+    else if (t.eventName)             meta = `Event · ${t.eventName}`;
+    else if (t.shiftId)               meta = `Shift`;
+
+    return `
+      <div class="home-task-row">
+        <span class="home-task-priority ${pClass}">${pLabel}</span>
+        <div class="home-task-content">
+          <span class="home-task-text">${t.content}</span>
+          ${meta ? `<span class="home-task-meta">${meta}</span>` : ""}
+        </div>
+        <span class="home-task-status ${sClass}">${sLabel}</span>
+      </div>`;
+  }).join("");
+}
+
+function renderHomeTimeline(projects) {
+  const el = document.getElementById("home-timeline");
+  if (!el) return;
+
+  if (!projects || !projects.length) {
+    el.innerHTML = '<div class="home-widget-empty">No projects yet.</div>';
+    return;
+  }
+
+  // Sort by start date ascending; undated projects go to end
+  const sorted = [...projects].sort((a, b) => {
+    if (!a.startDate && !b.startDate) return 0;
+    if (!a.startDate) return 1;
+    if (!b.startDate) return -1;
+    return new Date(a.startDate) - new Date(b.startDate);
+  });
+  const shown = sorted.slice(0, 8);
+
+  const dotClass = {
+    planning: "tl-planning", active: "tl-active",
+    completed: "tl-done", canceled: "tl-canceled", draft: "tl-draft"
+  };
+  const badgeClass = {
+    planning: "tl-badge-planning", active: "tl-badge-active",
+    completed: "tl-badge-completed", canceled: "tl-badge-canceled", draft: "tl-badge-draft"
+  };
+  const badgeLabel = {
+    planning: "Planning", active: "Active",
+    completed: "Done", canceled: "Canceled", draft: "Draft"
+  };
+
+  // Build item HTML strings
+  const itemHtmls = shown.map(p => {
+    const start = p.startDate ? new Date(p.startDate) : null;
+    const end   = p.endDate   ? new Date(p.endDate)   : null;
+    const dateLabel  = start
+      ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "—";
+    const rangeLabel = (start && end)
+      ? `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} → ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+      : start
+        ? start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+        : "No date set";
+
+    const dc = dotClass[p.status]   || "tl-planning";
+    const bc = badgeClass[p.status] || "tl-badge-draft";
+    const bl = badgeLabel[p.status] || p.status;
+
+    return `
+      <div class="home-timeline-item">
+        <div class="home-tl-left"><span class="home-tl-date">${dateLabel}</span></div>
+        <div class="home-tl-spine">
+          <div class="home-tl-dot ${dc}"></div>
+          <div class="home-tl-line"></div>
+        </div>
+        <div class="home-tl-body">
+          <div class="home-tl-row">
+            <span class="home-tl-name">${p.name || "Untitled"}</span>
+            <span class="home-tl-badge ${bc}">${bl}</span>
+          </div>
+          <span class="home-tl-range">${rangeLabel}</span>
+        </div>
+      </div>`;
+  });
+
+  // Inject "Today" indicator between past and future items
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+  const todayLabel = todayMidnight.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const todayHtml = `
+    <div class="home-timeline-item home-tl-today-item">
+      <div class="home-tl-left"><span class="home-tl-date home-tl-today-date">${todayLabel}</span></div>
+      <div class="home-tl-spine">
+        <div class="home-tl-dot home-tl-today-dot"></div>
+        <div class="home-tl-line"></div>
+      </div>
+      <div class="home-tl-body home-tl-today-body">
+        <span class="home-tl-today-label">Today</span>
+      </div>
+    </div>`;
+
+  let insertIdx = shown.findIndex(p => {
+    if (!p.startDate) return false;
+    const d = new Date(p.startDate); d.setHours(0, 0, 0, 0);
+    return d >= todayMidnight;
+  });
+  if (insertIdx === -1) insertIdx = shown.length;
+  itemHtmls.splice(insertIdx, 0, todayHtml);
+
+  el.innerHTML = `<div class="home-timeline-track">${itemHtmls.join("")}</div>`;
+}
+
+document.querySelectorAll(".home-widget-link[data-goto]").forEach(card => {
+  card.addEventListener("click", () => activateSection(card.dataset.goto));
+});
 
 // ── PROJECTS SECTION ────────────────────────────────────────────────────────
 
