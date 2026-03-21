@@ -1358,6 +1358,59 @@ document.getElementById('btn-create-project').addEventListener('click', () => {
   initCreateProjectForm();
 });
 
+// ── Double-click on kanban card → open project detail ───────────────────────
+document.querySelector('.events-kanban').addEventListener('dblclick', e => {
+  const card = e.target.closest('.event-card[data-proj-id]');
+  if (!card) return;
+  openProjectDetail(card.dataset.projId);
+});
+
+// ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
+
+document.getElementById('btn-back-from-project-detail').addEventListener('click', () => {
+  activateSection('projects');
+});
+
+// Tab switching inside project detail
+document.querySelectorAll('.pd-tab').forEach(tab => {
+  tab.addEventListener('click', () => activateProjectTab(tab.dataset.tab));
+});
+
+function activateProjectTab(name) {
+  document.querySelectorAll('.pd-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.pd-panel').forEach(p => {
+    p.style.display = p.dataset.tabPanel === name ? '' : 'none';
+  });
+}
+
+async function openProjectDetail(projId) {
+  // Reset to dashboard tab and show the section
+  activateProjectTab('dashboard');
+  activateSection('project-detail');
+
+  const titleEl    = document.getElementById('project-detail-title');
+  const subtitleEl = document.getElementById('project-detail-subtitle');
+  titleEl.textContent    = 'Loading…';
+  subtitleEl.textContent = '';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projId)}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load project.');
+    const project = await res.json();
+
+    titleEl.textContent    = escapeHtml(project.name);
+    subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? 's' : ''}`;
+  } catch {
+    titleEl.textContent    = 'Error loading project';
+    subtitleEl.textContent = '';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ── CUSTOMER STATE ─────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════

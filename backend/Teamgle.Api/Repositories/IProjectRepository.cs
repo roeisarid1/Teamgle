@@ -19,4 +19,5 @@ public interface IProjectRepository
 
     // ── Query ──────────────────────────────────────────────────────────────
     Task<IEnumerable<ProjectListItemResponse>> GetProjectsByManagerAsync(string firebaseUid);
+    Task<ProjectDetailResponse?> GetProjectDetailAsync(string projId, string firebaseUid);
 }

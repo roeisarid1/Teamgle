@@ -198,6 +198,92 @@ public class ProjectRepository : IProjectRepository
         return results;
     }
 
+    // ── Get a single project detail (auth-checked) with its events ────────
+    public async Task<ProjectDetailResponse?> GetProjectDetailAsync(string projId, string firebaseUid)
+    {
+        // Query 1: project info + access check
+        const string projSql = """
+            SELECT
+                p.Proj_ID                 AS ProjId,
+                p.name                    AS Name,
+                p.start_date              AS StartDate,
+                p.end_date                AS EndDate,
+                p.status                  AS Status,
+                c.customer_company_name   AS CustomerName
+            FROM Project p
+            INNER JOIN Manager_Project mp ON mp.project_ID      = p.Proj_ID
+            INNER JOIN [User]          u  ON u.user_ID           = mp.manager_user_ID
+            LEFT  JOIN Customer        c  ON c.customer_ID       = p.customer_ID
+            WHERE p.Proj_ID = @projId
+              AND u.FBUID   = @firebaseUid
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        ProjectDetailResponse? detail = null;
+
+        await using (var cmd = new SqlCommand(projSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId",      projId);
+            cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                detail = new ProjectDetailResponse
+                {
+                    ProjId       = reader.GetString(reader.GetOrdinal("ProjId")),
+                    Name         = reader.GetString(reader.GetOrdinal("Name")),
+                    StartDate    = reader.IsDBNull(reader.GetOrdinal("StartDate"))    ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
+                    EndDate      = reader.IsDBNull(reader.GetOrdinal("EndDate"))      ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
+                    Status       = reader.GetString(reader.GetOrdinal("Status")),
+                    CustomerName = reader.IsDBNull(reader.GetOrdinal("CustomerName")) ? null : reader.GetString(reader.GetOrdinal("CustomerName")),
+                };
+            }
+        }
+
+        if (detail == null) return null;
+
+        // Query 2: events for this project
+        const string eventSql = """
+            SELECT
+                e.event_ID    AS EventId,
+                e.name        AS Name,
+                e.location    AS Location,
+                e.start_time  AS StartTime,
+                e.end_time    AS EndTime,
+                e.status      AS Status,
+                e.event_type  AS EventType
+            FROM Event e
+            WHERE e.project_ID = @projId
+            ORDER BY e.start_time
+            """;
+
+        await using (var cmd = new SqlCommand(eventSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId", projId);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                detail.Events.Add(new EventDetailItem
+                {
+                    EventId   = reader.GetString(reader.GetOrdinal("EventId")),
+                    Name      = reader.GetString(reader.GetOrdinal("Name")),
+                    Location  = reader.IsDBNull(reader.GetOrdinal("Location"))  ? null : reader.GetString(reader.GetOrdinal("Location")),
+                    StartTime = reader.IsDBNull(reader.GetOrdinal("StartTime")) ? null : reader.GetDateTime(reader.GetOrdinal("StartTime")),
+                    EndTime   = reader.IsDBNull(reader.GetOrdinal("EndTime"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndTime")),
+                    Status    = reader.GetString(reader.GetOrdinal("Status")),
+                    EventType = reader.IsDBNull(reader.GetOrdinal("EventType")) ? null : reader.GetString(reader.GetOrdinal("EventType")),
+                });
+            }
+        }
+
+        detail.EventCount = detail.Events.Count;
+        return detail;
+    }
+
     // ── Insert into Shift ──────────────────────────────────────────────────
     public async Task CreateShiftAsync(string eventId, CreateShiftRequest request)
     {

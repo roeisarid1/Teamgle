@@ -90,4 +90,11 @@ public class ProjectService : IProjectService
 
         return await _projectRepo.GetProjectsByManagerAsync(firebaseUid);
     }
+
+    // ── Get a single project by ID (access-checked) ────────────────────────
+    public async Task<ProjectDetailResponse?> GetProjectByIdAsync(string firebaseUid, string projId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetProjectDetailAsync(projId, firebaseUid);
+    }
 }
