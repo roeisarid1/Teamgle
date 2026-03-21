@@ -1367,6 +1367,9 @@ document.querySelector('.events-kanban').addEventListener('dblclick', e => {
 
 // ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
 
+let currentProjectDetail = null; // holds last fetched ProjectDetailResponse
+let _pdCalendar          = null; // FullCalendar instance
+
 document.getElementById('btn-back-from-project-detail').addEventListener('click', () => {
   activateSection('projects');
 });
@@ -1383,10 +1386,12 @@ function activateProjectTab(name) {
   document.querySelectorAll('.pd-panel').forEach(p => {
     p.style.display = p.dataset.tabPanel === name ? '' : 'none';
   });
+  if (name === 'schedule') renderScheduleCalendar();
 }
 
 async function openProjectDetail(projId) {
   // Reset to dashboard tab and show the section
+  currentProjectDetail = null;
   activateProjectTab('dashboard');
   activateSection('project-detail');
 
@@ -1403,12 +1408,67 @@ async function openProjectDetail(projId) {
     if (!res.ok) throw new Error('Failed to load project.');
     const project = await res.json();
 
+    currentProjectDetail = project;
     titleEl.textContent    = escapeHtml(project.name);
     subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? 's' : ''}`;
   } catch {
     titleEl.textContent    = 'Error loading project';
     subtitleEl.textContent = '';
   }
+}
+
+// ── SCHEDULE / GANTT TAB ───────────────────────────────────────────────────
+
+// View-switcher buttons (delegated on the static toolbar element)
+document.querySelector('.pd-view-btns').addEventListener('click', e => {
+  const btn = e.target.closest('.pd-view-btn[data-view]');
+  if (!btn || !_pdCalendar) return;
+  _pdCalendar.changeView(btn.dataset.view);
+  document.querySelectorAll('.pd-view-btn').forEach(b =>
+    b.classList.toggle('active', b === btn)
+  );
+});
+
+function renderScheduleCalendar() {
+  // Destroy previous instance (project may have changed)
+  if (_pdCalendar) { _pdCalendar.destroy(); _pdCalendar = null; }
+
+  const el = document.getElementById('pd-calendar');
+  if (!el) return;
+
+  // Map backend EventDetailItem → FullCalendar event objects
+  const fcEvents = (currentProjectDetail?.events ?? []).map(ev => ({
+    id:    ev.eventId,
+    title: ev.name,
+    start: ev.startTime,
+    end:   ev.endTime,
+    extendedProps: { location: ev.location, status: ev.status, eventType: ev.eventType },
+  }));
+
+  _pdCalendar = new FullCalendar.Calendar(el, {
+    initialView:  'dayGridMonth',
+    direction:    'rtl',
+    locale:       'he',
+    headerToolbar: {
+      start:  'prev,next today',
+      center: 'title',
+      end:    '',
+    },
+    editable:         false,
+    eventStartEditable: false,
+    eventDurationEditable: false,
+    selectable:       false,
+    eventColor:       '#5B7BF0',
+    events:           fcEvents,
+    eventDidMount(info) {
+      // Show location as tooltip if available
+      if (info.event.extendedProps.location) {
+        info.el.title = info.event.extendedProps.location;
+      }
+    },
+  });
+
+  _pdCalendar.render();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
