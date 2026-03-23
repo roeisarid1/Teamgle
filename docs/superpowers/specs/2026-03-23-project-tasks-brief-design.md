@@ -71,10 +71,10 @@ public class TaskItem
 ```csharp
 public class ProjectBriefResponse
 {
-    public string    BriefId   { get; set; }
-    public string    Title     { get; set; }
-    public string    Content   { get; set; }
-    public DateTime? CreatedAt { get; set; }
+    public string   BriefId   { get; set; }
+    public string   Title     { get; set; }
+    public string   Content   { get; set; }
+    public DateTime CreatedAt { get; set; }  // always present; Brief.created_at is non-nullable in DB
 }
 ```
 
@@ -83,9 +83,9 @@ public class ProjectBriefResponse
 Two new methods added to `IProjectRepository` and implemented in `ProjectRepository.cs`:
 
 **`GetTasksByProjectIdAsync(projId, managerUserId)`**
-- First verifies manager has access via `Manager_Project`
-- `SELECT task_ID, content, status, priority FROM Task WHERE project_ID = @projId`
-- Returns `IEnumerable<TaskItem>`
+- First verifies manager has access via `Manager_Project` (throws `UnauthorizedAccessException` if not; returns null if project doesn't exist)
+- `SELECT task_ID, content, status, priority FROM Task WHERE project_ID = @projId ORDER BY task_ID ASC` — deterministic ordering by ID
+- Returns `IEnumerable<TaskItem>` (empty if no tasks)
 
 **`GetBriefByProjectIdAsync(projId, managerUserId)`**
 - Same access check
@@ -105,16 +105,19 @@ Two new actions:
 
 ```
 GET /api/projects/{id}/tasks
-  → 200 TaskItem[]  (empty array if no tasks)
+  → 200 TaskItem[]            (tasks is a collection — returns empty array when none exist, never 404 for empty)
   → 401 if no valid token
-  → 403 if manager doesn't have access to project
+  → 403 if manager doesn't have access to the project
+  → 404 if the project itself doesn't exist
 
 GET /api/projects/{id}/brief
-  → 200 ProjectBriefResponse  (most recent brief)
-  → 404 if no brief exists
+  → 200 ProjectBriefResponse  (a brief is a single entity — 404 when absent, never 200 with null)
   → 401 if no valid token
-  → 403 if manager doesn't have access to project
+  → 403 if manager doesn't have access to the project
+  → 404 if no brief exists for this project, or if the project itself doesn't exist
 ```
+
+The asymmetry between tasks (200 + empty array) and brief (404 when absent) is intentional: tasks is a collection resource, brief is a singular resource. Both endpoints follow the same auth-check order: resolve manager user ID → verify project exists (404 if not) → verify manager has access (403 if not) → return data.
 
 Both follow the existing try/catch pattern in `ProjectsController`.
 
@@ -131,7 +134,7 @@ let _pdTasksLoaded = false;
 let _pdBriefLoaded = false;
 ```
 
-Both reset to `false` inside `openProjectDetail()`.
+Both reset to `false` at the start of `openProjectDetail()`, regardless of which project was previously open.
 
 ### Tab activation (`activateProjectTab`)
 
@@ -146,22 +149,25 @@ Mirrors the existing `if (name === 'schedule') renderScheduleCalendar()` pattern
 
 ### `renderTasksTab()`
 
-1. Check `_pdTasksLoaded` — if true, return early (already rendered)
-2. Fetch `GET /api/projects/{currentProjectDetail.projId}/tasks` with Firebase token
-3. On success:
-   - If empty array → render "No tasks found for this project."
-   - Otherwise → render a list; each row shows `content`, `status` badge, `priority` badge
-4. On error → render inline error message
-5. Set `_pdTasksLoaded = true`
+1. If `_pdTasksLoaded === true` → return immediately (panel already rendered; do not re-fetch or re-render)
+2. Set `_pdTasksLoaded = true` (prevents double-fire on rapid tab clicks)
+3. Get Firebase ID token via the existing `auth.currentUser.getIdToken()` pattern used throughout `manager-dashboard.js`
+4. Fetch `GET /api/projects/{currentProjectDetail.projId}/tasks`
+5. Clear the panel's existing HTML content, then render:
+   - If empty array → "No tasks found for this project."
+   - Otherwise → a `.pd-task-list`; each `.pd-task-row` shows `content` on the left, `status` and `priority` as `.pd-badge` spans on the right
+6. On fetch/network error → clear panel and render "Failed to load — please try again"
 
 ### `renderBriefTab()`
 
-1. Check `_pdBriefLoaded` — if true, return early
-2. Fetch `GET /api/projects/{currentProjectDetail.projId}/brief` with Firebase token
-3. On 200 → render `title` as heading, `content` as body, `created_at` as small muted date
-4. On 404 → render "No brief available for this project."
-5. On error → render inline error message
-6. Set `_pdBriefLoaded = true`
+1. If `_pdBriefLoaded === true` → return immediately (do not re-fetch or re-render)
+2. Set `_pdBriefLoaded = true`
+3. Get Firebase ID token via the same existing pattern
+4. Fetch `GET /api/projects/{currentProjectDetail.projId}/brief`
+5. Clear the panel's existing HTML content, then render:
+   - On HTTP 200 → `title` as `<h3>`, `content` as `<p>`, `created_at` as `.pd-brief-meta` below content
+   - On HTTP 404 → "No brief available for this project."
+6. On fetch/network error → clear panel and render "Failed to load — please try again"
 
 ### Styling (`manager-dashboard.css`)
 
@@ -179,19 +185,19 @@ Minimal additions only — no redesign:
 
 ```
 openProjectDetail(projId)
-  └─ resets _pdTasksLoaded = false, _pdBriefLoaded = false
+  └─ _pdTasksLoaded = false, _pdBriefLoaded = false  ← always reset on project open
 
 user clicks Tasks tab
   └─ activateProjectTab('tasks')
        └─ renderTasksTab()
-            ├─ if _pdTasksLoaded → return (cached)
-            └─ fetch GET /api/projects/{id}/tasks → render → _pdTasksLoaded = true
+            ├─ if _pdTasksLoaded → return immediately (already rendered)
+            └─ _pdTasksLoaded = true → fetch tasks → clear panel → render
 
 user clicks Brief tab
   └─ activateProjectTab('brief')
        └─ renderBriefTab()
-            ├─ if _pdBriefLoaded → return (cached)
-            └─ fetch GET /api/projects/{id}/brief → render → _pdBriefLoaded = true
+            ├─ if _pdBriefLoaded → return immediately (already rendered)
+            └─ _pdBriefLoaded = true → fetch brief → clear panel → render
 ```
 
 ---
