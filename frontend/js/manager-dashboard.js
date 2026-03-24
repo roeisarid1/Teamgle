@@ -1372,6 +1372,8 @@ let _pdCalendar          = null; // FullCalendar instance
 let _pdTasksData         = null; // cached tasks array for current project
 let _pdBriefsData        = null; // cached briefs array for current project
 let _expandedRow         = null; // currently expanded task/brief DOM row
+let _taskFilterStatus    = 'all'; // active status filter pill value
+let _taskFilterPriority  = 'all'; // active priority filter pill value
 
 document.getElementById('btn-back-from-project-detail').addEventListener('click', () => {
   activateSection('projects');
@@ -1400,6 +1402,9 @@ async function openProjectDetail(projId) {
   _pdTasksData  = null;
   _pdBriefsData = null;
   _expandedRow  = null;
+  _taskFilterStatus   = 'all';
+  _taskFilterPriority = 'all';
+  resetTaskFilterPills();
   const taskList  = document.getElementById('pd-task-list');
   const briefList = document.getElementById('pd-brief-list');
   if (taskList)  taskList.innerHTML  = '';
@@ -1488,16 +1493,38 @@ function renderScheduleCalendar() {
 document.getElementById('btn-add-task').addEventListener('click', () => addNewTaskRow());
 document.getElementById('btn-add-brief').addEventListener('click', () => addNewBriefRow());
 
+document.getElementById('pd-task-filter-bar').addEventListener('click', e => {
+  const clearBtn = e.target.closest('#btn-clear-task-filters');
+  if (clearBtn) {
+    _taskFilterStatus   = 'all';
+    _taskFilterPriority = 'all';
+    resetTaskFilterPills();
+    applyTaskFilters();
+    return;
+  }
+  const pill = e.target.closest('.pd-filter-pill');
+  if (!pill) return;
+  const { filter, value } = pill.dataset;
+  if (filter === 'status')   _taskFilterStatus   = value;
+  if (filter === 'priority') _taskFilterPriority = value;
+  // Update active pill within the group
+  document.querySelectorAll(`#pd-task-filter-bar .pd-filter-pill[data-filter="${filter}"]`)
+    .forEach(p => p.classList.toggle('active', p.dataset.value === value));
+  // Show/hide clear button
+  const showClear = _taskFilterStatus !== 'all' || _taskFilterPriority !== 'all';
+  document.getElementById('btn-clear-task-filters').style.display = showClear ? '' : 'none';
+  applyTaskFilters();
+});
+
 // ── TASKS TAB ───────────────────────────────────────────────────────────────
 
 async function renderTasksTab() {
   const list = document.getElementById('pd-task-list');
   if (!list || !currentProjectDetail) return;
 
-  // Already loaded — just re-render from cache
+  // Already loaded — just re-apply filters from cache
   if (_pdTasksData !== null) {
-    list.innerHTML = _pdTasksData.length === 0 ? taskEmptyStateHtml() : '';
-    _pdTasksData.forEach(t => list.appendChild(buildTaskRow(t)));
+    applyTaskFilters();
     return;
   }
 
@@ -1510,11 +1537,46 @@ async function renderTasksTab() {
     );
     if (!res.ok) throw new Error();
     _pdTasksData = await res.json();
-    list.innerHTML = _pdTasksData.length === 0 ? taskEmptyStateHtml() : '';
-    _pdTasksData.forEach(t => list.appendChild(buildTaskRow(t)));
+    applyTaskFilters();
   } catch {
     list.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
   }
+}
+
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+function applyTaskFilters() {
+  const list = document.getElementById('pd-task-list');
+  if (!list || _pdTasksData === null) return;
+  // Don't re-render while an unsaved new row is open
+  if (list.querySelector('[data-new="true"]')) return;
+  // Detach stale _expandedRow reference (DOM will be replaced)
+  if (_expandedRow && list.contains(_expandedRow)) _expandedRow = null;
+
+  const filtered = _pdTasksData.filter(t => {
+    const statusOk   = _taskFilterStatus   === 'all' || t.status   === _taskFilterStatus;
+    const priorityOk = _taskFilterPriority === 'all' || t.priority === _taskFilterPriority;
+    return statusOk && priorityOk;
+  });
+  filtered.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99));
+
+  const isFiltered = _taskFilterStatus !== 'all' || _taskFilterPriority !== 'all';
+  if (filtered.length === 0) {
+    list.innerHTML = isFiltered
+      ? '<div class="pd-filter-no-match">No tasks match the current filters.</div>'
+      : taskEmptyStateHtml();
+    return;
+  }
+  list.innerHTML = '';
+  filtered.forEach(t => list.appendChild(buildTaskRow(t)));
+}
+
+function resetTaskFilterPills() {
+  document.querySelectorAll('#pd-task-filter-bar .pd-filter-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.value === 'all');
+  });
+  const clearBtn = document.getElementById('btn-clear-task-filters');
+  if (clearBtn) clearBtn.style.display = 'none';
 }
 
 function buildTaskRow(task) {
@@ -1609,19 +1671,8 @@ function wireTaskRow(row, task) {
       // Update cache
       const idx = _pdTasksData.findIndex(t => t.taskId === task.taskId);
       if (idx !== -1) _pdTasksData[idx] = updated;
-      // Update local task ref so dirty detection stays accurate
-      task.content  = updated.content;
-      task.status   = updated.status;
-      task.priority = updated.priority;
-      // Update summary badges/text in-place
-      const badgeStatus   = row.querySelector('[class*="pd-badge--status"]');
-      const badgePriority = row.querySelector('[class*="pd-badge--priority"]');
-      badgeStatus.className   = `pd-badge pd-badge--status-${updated.status}`;
-      badgeStatus.textContent = updated.status.replace('_', ' ');
-      badgePriority.className   = `pd-badge pd-badge--priority-${updated.priority}`;
-      badgePriority.textContent = updated.priority;
-      row.querySelector('.pd-task-content').textContent = updated.content;
-      collapseRow(row);
+      // Re-apply filters (re-renders list, respects sort/filter changes)
+      applyTaskFilters();
     } catch {
       saveBtn.textContent = 'Save';
       saveBtn.disabled    = false;
@@ -1666,9 +1717,7 @@ function wireTaskDeleteBtn(row, deleteBtn, task) {
         if (!res.ok) throw new Error();
         _pdTasksData = _pdTasksData.filter(t => t.taskId !== task.taskId);
         if (_expandedRow === row) _expandedRow = null;
-        row.remove();
-        const list = document.getElementById('pd-task-list');
-        if (list && _pdTasksData.length === 0) list.innerHTML = taskEmptyStateHtml();
+        applyTaskFilters();
       } catch {
         row.classList.remove('pd-row--deleting');
         confirm.remove();
@@ -1708,9 +1757,8 @@ function addNewTaskRow() {
   cancelBtn.addEventListener('click', () => {
     if (_expandedRow === row) _expandedRow = null;
     row.remove();
-    if (_pdTasksData !== null && _pdTasksData.length === 0) {
-      list.innerHTML = taskEmptyStateHtml();
-    }
+    if (_pdTasksData !== null) applyTaskFilters();
+    else list.innerHTML = taskEmptyStateHtml();
   });
 
   // Replace the wired save from buildTaskRow with a fresh CREATE handler
@@ -1743,16 +1791,9 @@ function addNewTaskRow() {
       const created = await res.json();
       if (_pdTasksData === null) _pdTasksData = [];
       _pdTasksData.push(created);
-
-      // Remove empty state if present
-      const emptyEl = list.querySelector('.pd-empty-state');
-      if (emptyEl) emptyEl.remove();
-
-      // Replace new row with real row
       if (_expandedRow === row) _expandedRow = null;
       row.remove();
-      const realRow = buildTaskRow(created);
-      list.appendChild(realRow);
+      applyTaskFilters();
     } catch {
       newSaveBtn.textContent = 'Save';
       newSaveBtn.disabled    = false;
