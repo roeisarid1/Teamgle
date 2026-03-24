@@ -363,20 +363,25 @@
             <button class="pd-add-btn" id="btn-add-task">+ Add Task</button>
           </div>
           <div class="pd-filter-bar" id="pd-task-filter-bar">
-            <div class="pd-filter-group" data-filter-type="status">
-              <button class="pd-filter-pill active" data-filter="status" data-value="all">All</button>
-              <button class="pd-filter-pill" data-filter="status" data-value="open">open</button>
-              <button class="pd-filter-pill" data-filter="status" data-value="in_progress">in progress</button>
-              <button class="pd-filter-pill" data-filter="status" data-value="done">done</button>
-              <button class="pd-filter-pill" data-filter="status" data-value="canceled">canceled</button>
+            <div class="pd-filter-section">
+              <span class="pd-field-label">Status</span>
+              <div class="pd-filter-group" data-filter-type="status">
+                <button class="pd-filter-pill active" data-filter="status" data-value="all">All</button>
+                <button class="pd-filter-pill" data-filter="status" data-value="open">open</button>
+                <button class="pd-filter-pill" data-filter="status" data-value="in_progress">in progress</button>
+                <button class="pd-filter-pill" data-filter="status" data-value="done">done</button>
+                <button class="pd-filter-pill" data-filter="status" data-value="canceled">canceled</button>
+              </div>
             </div>
-            <div class="pd-filter-sep"></div>
-            <div class="pd-filter-group" data-filter-type="priority">
-              <button class="pd-filter-pill active" data-filter="priority" data-value="all">All</button>
-              <button class="pd-filter-pill" data-filter="priority" data-value="urgent">urgent</button>
-              <button class="pd-filter-pill" data-filter="priority" data-value="high">high</button>
-              <button class="pd-filter-pill" data-filter="priority" data-value="medium">medium</button>
-              <button class="pd-filter-pill" data-filter="priority" data-value="low">low</button>
+            <div class="pd-filter-section">
+              <span class="pd-field-label">Priority</span>
+              <div class="pd-filter-group" data-filter-type="priority">
+                <button class="pd-filter-pill active" data-filter="priority" data-value="all">All</button>
+                <button class="pd-filter-pill" data-filter="priority" data-value="urgent">urgent</button>
+                <button class="pd-filter-pill" data-filter="priority" data-value="high">high</button>
+                <button class="pd-filter-pill" data-filter="priority" data-value="medium">medium</button>
+                <button class="pd-filter-pill" data-filter="priority" data-value="low">low</button>
+              </div>
             </div>
             <button class="pd-filter-clear" id="btn-clear-task-filters" style="display:none">Clear filters</button>
           </div>

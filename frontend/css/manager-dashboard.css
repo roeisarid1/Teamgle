@@ -2581,12 +2581,18 @@ tr.expanded-row > td {
 
 .pd-filter-bar {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 24px;
   flex-wrap: wrap;
-  padding: 10px 0 12px;
+  padding: 10px 0 14px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
+}
+
+.pd-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pd-filter-group {
@@ -2594,15 +2600,6 @@ tr.expanded-row > td {
   gap: 4px;
   flex-wrap: wrap;
   align-items: center;
-}
-
-.pd-filter-sep {
-  width: 1px;
-  height: 18px;
-  background: var(--border);
-  align-self: center;
-  flex-shrink: 0;
-  margin: 0 2px;
 }
 
 .pd-filter-pill {
@@ -2655,8 +2652,7 @@ tr.expanded-row > td {
 }
 
 @media (max-width: 640px) {
-  .pd-filter-sep { display: none; }
-  .pd-filter-bar { gap: 8px; }
+  .pd-filter-bar  { gap: 14px; }
   .pd-filter-clear { margin-left: 0; }
   .pd-filter-pill { min-height: 36px; padding: 4px 12px; }
 }
