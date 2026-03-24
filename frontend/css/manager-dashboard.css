@@ -2305,6 +2305,8 @@ tr.expanded-row > td {
   font-weight: 500;
   white-space: nowrap;
   letter-spacing: 0.01em;
+  width: 68px;
+  flex-shrink: 0;
 }
 .pd-task-row--open        .pd-task-status-text { color: #9ca3af; }
 .pd-task-row--in_progress .pd-task-status-text { color: var(--blue); }
@@ -2547,14 +2549,15 @@ tr.expanded-row > td {
 }
 
 @media (max-width: 640px) {
-  .pd-row-summary   { flex-wrap: wrap; }
-  .pd-task-content  { width: 100%; flex: none; }
-  .pd-row-meta      { width: 100%; justify-content: flex-end; }
-  .pd-brief-summary { width: 100%; }
-  .pd-form-selects  { flex-direction: column; }
+  .pd-row-summary        { flex-wrap: wrap; }
+  .pd-task-status-text   { width: auto; }
+  .pd-task-content       { flex: 1; min-width: 0; }
+  .pd-row-meta           { width: 100%; justify-content: flex-end; }
+  .pd-brief-summary      { width: 100%; }
+  .pd-form-selects       { flex-direction: column; }
   .pd-form-save-btn,
-  .pd-form-cancel-btn { min-height: 44px; }
-  .pd-add-btn { min-height: 40px; }
+  .pd-form-cancel-btn    { min-height: 44px; }
+  .pd-add-btn            { min-height: 40px; }
 }
 
 /* ── TASK FILTER BAR ─────────────────────────────────────────────────────── */
