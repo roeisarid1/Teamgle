@@ -1587,6 +1587,7 @@ function buildTaskRow(task) {
     <div class="pd-row-summary">
       <span class="pd-task-content">${escapeHtml(task.content)}</span>
       <div class="pd-row-meta">
+        <span class="pd-task-status-text">${task.status.replace('_', ' ')}</span>
         <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
         <button class="pd-row-delete-btn" title="Delete task" aria-label="Delete task">&#10005;</button>
       </div>

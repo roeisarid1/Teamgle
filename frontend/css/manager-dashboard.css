@@ -2300,6 +2300,17 @@ tr.expanded-row > td {
 .pd-task-row--done::before        { background: #22c55e; }
 .pd-task-row--canceled::before    { background: #fca5a5; }
 
+.pd-task-status-text {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.pd-task-row--open        .pd-task-status-text { color: #9ca3af; }
+.pd-task-row--in_progress .pd-task-status-text { color: var(--blue); }
+.pd-task-row--done        .pd-task-status-text { color: #16a34a; }
+.pd-task-row--canceled    .pd-task-status-text { color: #f87171; }
+
 /* Indent task rows to clear the accent line */
 .pd-task-row > .pd-row-summary          { padding-left: 22px; }
 .pd-task-row > .pd-row-form             { padding-left: 22px; }
