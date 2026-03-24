@@ -1593,19 +1593,25 @@ function buildTaskRow(task) {
       </div>
     </div>
     <div class="pd-row-form">
-      <label>Content</label>
+      <label class="pd-field-label">Content</label>
       <input type="text" class="pd-form-input" name="content" value="${escapeHtml(task.content)}" placeholder="Task description…" maxlength="500">
       <div class="pd-form-selects">
-        <select class="pd-form-select" name="status">
-          ${['open','in_progress','done','canceled'].map(s =>
-            `<option value="${s}"${task.status === s ? ' selected' : ''}>${s.replace('_',' ')}</option>`
-          ).join('')}
-        </select>
-        <select class="pd-form-select" name="priority">
-          ${['low','medium','high','urgent'].map(p =>
-            `<option value="${p}"${task.priority === p ? ' selected' : ''}>${p}</option>`
-          ).join('')}
-        </select>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Status</label>
+          <select class="pd-form-select" name="status">
+            ${['open','in_progress','done','canceled'].map(s =>
+              `<option value="${s}"${task.status === s ? ' selected' : ''}>${s.replace('_',' ')}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Priority</label>
+          <select class="pd-form-select" name="priority">
+            ${['low','medium','high','urgent'].map(p =>
+              `<option value="${p}"${task.priority === p ? ' selected' : ''}>${p}</option>`
+            ).join('')}
+          </select>
+        </div>
       </div>
       <div class="pd-form-actions">
         <button class="pd-form-save-btn" disabled>Save</button>
@@ -1866,9 +1872,9 @@ function buildBriefRow(brief) {
       <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
     </div>
     <div class="pd-row-form">
-      <label>Title</label>
+      <label class="pd-field-label">Title</label>
       <input type="text" class="pd-form-input" name="title" value="${escapeHtml(brief.title)}" placeholder="Brief title…" maxlength="200">
-      <label>Content</label>
+      <label class="pd-field-label">Content</label>
       <textarea class="pd-form-textarea pd-form-textarea--large" name="content" rows="5" placeholder="Brief content…" maxlength="5000">${escapeHtml(brief.content)}</textarea>
       <div class="pd-form-actions">
         <button class="pd-form-save-btn" disabled>Save</button>
