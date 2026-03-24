@@ -1581,14 +1581,15 @@ function resetTaskFilterPills() {
 
 function buildTaskRow(task) {
   const row = document.createElement('div');
-  row.className = 'pd-task-row';
+  row.className = `pd-task-row pd-task-row--${task.status}`;
   row.dataset.taskId = task.taskId;
   row.innerHTML = `
     <div class="pd-row-summary">
-      <span class="pd-badge pd-badge--status-${task.status}">${task.status.replace('_', ' ')}</span>
-      <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
       <span class="pd-task-content">${escapeHtml(task.content)}</span>
-      <button class="pd-row-delete-btn" title="Delete task" aria-label="Delete task">&#10005;</button>
+      <div class="pd-row-meta">
+        <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
+        <button class="pd-row-delete-btn" title="Delete task" aria-label="Delete task">&#10005;</button>
+      </div>
     </div>
     <div class="pd-row-form">
       <label>Content</label>

@@ -2280,6 +2280,30 @@ tr.expanded-row > td {
   background: var(--blue-light);
   border-color: #c7d3fa;
 }
+
+/* ── Task row status accent line ─────────────────────────────────────────── */
+.pd-task-row {
+  position: relative;
+}
+.pd-task-row::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 5px;
+  bottom: 5px;
+  width: 4px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.pd-task-row--open::before        { background: #d1d5db; }
+.pd-task-row--in_progress::before { background: var(--blue); }
+.pd-task-row--done::before        { background: #22c55e; }
+.pd-task-row--canceled::before    { background: #fca5a5; }
+
+/* Indent task rows to clear the accent line */
+.pd-task-row > .pd-row-summary          { padding-left: 22px; }
+.pd-task-row > .pd-row-form             { padding-left: 22px; }
+.pd-task-row > .pd-row-form.expanded    { padding: 0 16px 14px 22px; }
 .pd-row--deleting {
   background: #fef2f2 !important;
   border-color: #fecaca !important;
