@@ -1753,6 +1753,8 @@ function addNewTaskRow() {
   const tempTask = { taskId: '', content: '', status: 'open', priority: 'medium' };
   const row = buildTaskRow(tempTask);
   row.dataset.new = 'true';
+  // Hide delete on unsaved rows — taskId is empty so DELETE would hit the collection endpoint (405)
+  row.querySelector('.pd-row-delete-btn').style.display = 'none';
 
   // Re-wire save for CREATE instead of UPDATE
   const form       = row.querySelector('.pd-row-form');
