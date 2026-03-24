@@ -20,4 +20,16 @@ public interface IProjectRepository
     // ── Query ──────────────────────────────────────────────────────────────
     Task<IEnumerable<ProjectListItemResponse>> GetProjectsByManagerAsync(string firebaseUid);
     Task<ProjectDetailResponse?> GetProjectDetailAsync(string projId, string firebaseUid);
+
+    // ── Tasks ──────────────────────────────────────────────────────────────
+    Task<IEnumerable<TaskItem>?> GetTasksByProjectIdAsync(string projId, string firebaseUid);
+    Task<TaskItem?> CreateTaskAsync(string projId, CreateTaskRequest request, string firebaseUid);
+    Task<TaskItem?> UpdateTaskAsync(string taskId, string projId, UpdateTaskRequest request, string firebaseUid);
+    Task<bool?> DeleteTaskAsync(string taskId, string projId, string firebaseUid);
+
+    // ── Briefs ─────────────────────────────────────────────────────────────
+    Task<IEnumerable<BriefItem>?> GetBriefsByProjectIdAsync(string projId, string firebaseUid);
+    Task<BriefItem?> CreateBriefAsync(string projId, CreateBriefRequest request, string firebaseUid);
+    Task<BriefItem?> UpdateBriefAsync(string briefId, string projId, UpdateBriefRequest request, string firebaseUid);
+    Task<bool?> DeleteBriefAsync(string briefId, string projId, string firebaseUid);
 }

@@ -307,4 +307,266 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         await cmd.ExecuteNonQueryAsync();
     }
+
+    // ── Shared: two-step access check ─────────────────────────────────────
+    private async Task<bool?> CheckProjectAccessAsync(SqlConnection conn, string projId, string firebaseUid)
+    {
+        const string existsSql = "SELECT 1 FROM Project WHERE Proj_ID = @projId";
+        await using (var cmd = new SqlCommand(existsSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId", projId);
+            if (await cmd.ExecuteScalarAsync() == null) return null;
+        }
+
+        const string accessSql = """
+            SELECT 1
+            FROM   Manager_Project mp
+            INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+            WHERE  mp.project_ID = @projId
+              AND  u.FBUID       = @fbUid
+            """;
+        await using (var cmd = new SqlCommand(accessSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId", projId);
+            cmd.Parameters.AddWithValue("@fbUid",  firebaseUid);
+            if (await cmd.ExecuteScalarAsync() == null)
+                throw new UnauthorizedAccessException("You do not have access to this project.");
+        }
+        return true;
+    }
+
+    // ── GET tasks for a project ────────────────────────────────────────────
+    public async Task<IEnumerable<TaskItem>?> GetTasksByProjectIdAsync(string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        const string sql = """
+            SELECT task_ID, content, status, priority
+            FROM   Task
+            WHERE  project_ID = @projId
+            ORDER  BY task_ID ASC
+            """;
+
+        var tasks = new List<TaskItem>();
+        await using var cmd    = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@projId", projId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            tasks.Add(new TaskItem
+            {
+                TaskId   = reader.GetString(reader.GetOrdinal("task_ID")),
+                Content  = reader.IsDBNull(reader.GetOrdinal("content"))  ? string.Empty : reader.GetString(reader.GetOrdinal("content")),
+                Status   = reader.GetString(reader.GetOrdinal("status")),
+                Priority = reader.GetString(reader.GetOrdinal("priority")),
+            });
+        }
+        return tasks;
+    }
+
+    // ── CREATE task ────────────────────────────────────────────────────────
+    public async Task<TaskItem?> CreateTaskAsync(string projId, CreateTaskRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        var newId = Guid.NewGuid().ToString();
+        const string sql = """
+            INSERT INTO Task (task_ID, content, status, priority, project_ID, event_ID, shift_ID)
+            VALUES (@taskId, @content, @status, @priority, @projId, NULL, NULL)
+            """;
+
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@taskId",   newId);
+        cmd.Parameters.AddWithValue("@content",  request.Content);
+        cmd.Parameters.AddWithValue("@status",   request.Status);
+        cmd.Parameters.AddWithValue("@priority", request.Priority);
+        cmd.Parameters.AddWithValue("@projId",   projId);
+        await cmd.ExecuteNonQueryAsync();
+
+        return new TaskItem
+        {
+            TaskId   = newId,
+            Content  = request.Content,
+            Status   = request.Status,
+            Priority = request.Priority,
+        };
+    }
+
+    // ── UPDATE task ────────────────────────────────────────────────────────
+    public async Task<TaskItem?> UpdateTaskAsync(string taskId, string projId, UpdateTaskRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        const string sql = """
+            UPDATE Task
+            SET    content  = @content,
+                   status   = @status,
+                   priority = @priority
+            WHERE  task_ID    = @taskId
+              AND  project_ID = @projId
+            """;
+
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@content",  request.Content);
+        cmd.Parameters.AddWithValue("@status",   request.Status);
+        cmd.Parameters.AddWithValue("@priority", request.Priority);
+        cmd.Parameters.AddWithValue("@taskId",   taskId);
+        cmd.Parameters.AddWithValue("@projId",   projId);
+        var rows = await cmd.ExecuteNonQueryAsync();
+        if (rows == 0) return null;
+
+        return new TaskItem
+        {
+            TaskId   = taskId,
+            Content  = request.Content,
+            Status   = request.Status,
+            Priority = request.Priority,
+        };
+    }
+
+    // ── DELETE task ────────────────────────────────────────────────────────
+    public async Task<bool?> DeleteTaskAsync(string taskId, string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        const string sql = "DELETE FROM Task WHERE task_ID = @taskId AND project_ID = @projId";
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@taskId", taskId);
+        cmd.Parameters.AddWithValue("@projId", projId);
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    // ── Helper: read BriefItem from open SqlDataReader ─────────────────────
+    private static BriefItem ReadBriefItem(SqlDataReader r) => new()
+    {
+        BriefId              = r.GetString(r.GetOrdinal("brief_ID")),
+        Title                = r.IsDBNull(r.GetOrdinal("title"))        ? string.Empty : r.GetString(r.GetOrdinal("title")),
+        Content              = r.IsDBNull(r.GetOrdinal("content"))      ? string.Empty : r.GetString(r.GetOrdinal("content")),
+        CreatedAt            = r.IsDBNull(r.GetOrdinal("created_at"))   ? (DateTime?)null : r.GetDateTime(r.GetOrdinal("created_at")),
+        CreatedByManagerId   = r.IsDBNull(r.GetOrdinal("created_by_manager_user_ID")) ? string.Empty : r.GetString(r.GetOrdinal("created_by_manager_user_ID")),
+        CreatedByManagerName = r.IsDBNull(r.GetOrdinal("manager_name")) ? null : r.GetString(r.GetOrdinal("manager_name")),
+    };
+
+    private const string BriefSelectSql = """
+        SELECT b.brief_ID, b.title, b.content, b.created_at,
+               b.created_by_manager_user_ID,
+               u.firstName + ' ' + u.lastName AS manager_name
+        FROM   Brief b
+        LEFT JOIN [User] u ON u.user_ID = b.created_by_manager_user_ID
+        """;
+
+    // ── GET briefs for a project ───────────────────────────────────────────
+    public async Task<IEnumerable<BriefItem>?> GetBriefsByProjectIdAsync(string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        var sql = BriefSelectSql + " WHERE b.project_ID = @projId ORDER BY b.created_at DESC";
+        var briefs = new List<BriefItem>();
+        await using var cmd    = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@projId", projId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) briefs.Add(ReadBriefItem(reader));
+        return briefs;
+    }
+
+    // ── CREATE brief ───────────────────────────────────────────────────────
+    public async Task<BriefItem?> CreateBriefAsync(string projId, CreateBriefRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        string? managerUserId;
+        await using (var resolveCmd = new SqlCommand("SELECT user_ID FROM [User] WHERE FBUID = @fbUid", conn))
+        {
+            resolveCmd.Parameters.AddWithValue("@fbUid", firebaseUid);
+            managerUserId = (string?)await resolveCmd.ExecuteScalarAsync();
+        }
+
+        var newId = Guid.NewGuid().ToString();
+        var now   = DateTime.UtcNow;
+        const string insertSql = """
+            INSERT INTO Brief (brief_ID, title, content, created_at, created_by_manager_user_ID, project_ID, event_ID, shift_ID)
+            VALUES (@briefId, @title, @content, @createdAt, @managerId, @projId, NULL, NULL)
+            """;
+
+        await using var cmd = new SqlCommand(insertSql, conn);
+        cmd.Parameters.AddWithValue("@briefId",   newId);
+        cmd.Parameters.AddWithValue("@title",     request.Title);
+        cmd.Parameters.AddWithValue("@content",   request.Content);
+        cmd.Parameters.AddWithValue("@createdAt", now);
+        cmd.Parameters.AddWithValue("@managerId", (object?)managerUserId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@projId",    projId);
+        await cmd.ExecuteNonQueryAsync();
+
+        var selectSql = BriefSelectSql + " WHERE b.brief_ID = @briefId";
+        await using var selCmd = new SqlCommand(selectSql, conn);
+        selCmd.Parameters.AddWithValue("@briefId", newId);
+        await using var reader = await selCmd.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return ReadBriefItem(reader);
+    }
+
+    // ── UPDATE brief ───────────────────────────────────────────────────────
+    public async Task<BriefItem?> UpdateBriefAsync(string briefId, string projId, UpdateBriefRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        const string updateSql = """
+            UPDATE Brief
+            SET    title   = @title,
+                   content = @content
+            WHERE  brief_ID   = @briefId
+              AND  project_ID = @projId
+            """;
+
+        await using var cmd = new SqlCommand(updateSql, conn);
+        cmd.Parameters.AddWithValue("@title",   request.Title);
+        cmd.Parameters.AddWithValue("@content", request.Content);
+        cmd.Parameters.AddWithValue("@briefId", briefId);
+        cmd.Parameters.AddWithValue("@projId",  projId);
+        var rows = await cmd.ExecuteNonQueryAsync();
+        if (rows == 0) return null;
+
+        var selectSql = BriefSelectSql + " WHERE b.brief_ID = @briefId";
+        await using var selCmd = new SqlCommand(selectSql, conn);
+        selCmd.Parameters.AddWithValue("@briefId", briefId);
+        await using var reader = await selCmd.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return ReadBriefItem(reader);
+    }
+
+    // ── DELETE brief ───────────────────────────────────────────────────────
+    public async Task<bool?> DeleteBriefAsync(string briefId, string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null) return null;
+
+        const string sql = "DELETE FROM Brief WHERE brief_ID = @briefId AND project_ID = @projId";
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@briefId", briefId);
+        cmd.Parameters.AddWithValue("@projId",  projId);
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
 }

@@ -115,4 +115,170 @@ public class ProjectsController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
+    // ── GET /api/projects/{id}/tasks ──────────────────────────────────────
+    [HttpGet("{id}/tasks")]
+    public async Task<IActionResult> GetProjectTasks(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var tasks = await _projectService.GetProjectTasksAsync(uid, id);
+            if (tasks == null) return NotFound(new { error = "Project not found." });
+            return Ok(tasks);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching tasks for project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── POST /api/projects/{id}/tasks ─────────────────────────────────────
+    [HttpPost("{id}/tasks")]
+    public async Task<IActionResult> CreateProjectTask(string id, [FromBody] CreateTaskRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var task = await _projectService.CreateProjectTaskAsync(uid, id, request);
+            if (task == null) return NotFound(new { error = "Project not found." });
+            return StatusCode(201, task);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating task for project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── PUT /api/projects/{id}/tasks/{taskId} ─────────────────────────────
+    [HttpPut("{id}/tasks/{taskId}")]
+    public async Task<IActionResult> UpdateProjectTask(string id, string taskId, [FromBody] UpdateTaskRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var task = await _projectService.UpdateProjectTaskAsync(uid, id, taskId, request);
+            if (task == null) return NotFound(new { error = "Task not found." });
+            return Ok(task);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating task {TaskId}", taskId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── DELETE /api/projects/{id}/tasks/{taskId} ──────────────────────────
+    [HttpDelete("{id}/tasks/{taskId}")]
+    public async Task<IActionResult> DeleteProjectTask(string id, string taskId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var result = await _projectService.DeleteProjectTaskAsync(uid, id, taskId);
+            if (result == null)  return NotFound(new { error = "Project not found." });
+            if (result == false) return NotFound(new { error = "Task not found." });
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting task {TaskId}", taskId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── GET /api/projects/{id}/briefs ─────────────────────────────────────
+    [HttpGet("{id}/briefs")]
+    public async Task<IActionResult> GetProjectBriefs(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var briefs = await _projectService.GetProjectBriefsAsync(uid, id);
+            if (briefs == null) return NotFound(new { error = "Project not found." });
+            return Ok(briefs);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching briefs for project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── POST /api/projects/{id}/briefs ────────────────────────────────────
+    [HttpPost("{id}/briefs")]
+    public async Task<IActionResult> CreateProjectBrief(string id, [FromBody] CreateBriefRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var brief = await _projectService.CreateProjectBriefAsync(uid, id, request);
+            if (brief == null) return NotFound(new { error = "Project not found." });
+            return StatusCode(201, brief);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating brief for project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── PUT /api/projects/{id}/briefs/{briefId} ───────────────────────────
+    [HttpPut("{id}/briefs/{briefId}")]
+    public async Task<IActionResult> UpdateProjectBrief(string id, string briefId, [FromBody] UpdateBriefRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var brief = await _projectService.UpdateProjectBriefAsync(uid, id, briefId, request);
+            if (brief == null) return NotFound(new { error = "Brief not found." });
+            return Ok(brief);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── DELETE /api/projects/{id}/briefs/{briefId} ────────────────────────
+    [HttpDelete("{id}/briefs/{briefId}")]
+    public async Task<IActionResult> DeleteProjectBrief(string id, string briefId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var result = await _projectService.DeleteProjectBriefAsync(uid, id, briefId);
+            if (result == null)  return NotFound(new { error = "Project not found." });
+            if (result == false) return NotFound(new { error = "Brief not found." });
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }
