@@ -124,6 +124,7 @@ public class ProjectService : IProjectService
     {
         await ResolveCompanyIdAsync(firebaseUid);
         await _projectRepo.DeleteShiftAsync(shiftId, firebaseUid);
+    }
     // ── Tasks ──────────────────────────────────────────────────────────────
     private static readonly HashSet<string> ValidTaskStatuses   = ["open", "in_progress", "done", "canceled"];
     private static readonly HashSet<string> ValidTaskPriorities = ["low", "medium", "high", "urgent"];
