@@ -1369,6 +1369,13 @@ document.querySelector('.events-kanban').addEventListener('dblclick', e => {
 // ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
 
 let currentProjectId = null; // tracks which project is open in the detail view
+let currentProjectDetail = null; // holds last fetched ProjectDetailResponse
+let _pdCalendar          = null; // FullCalendar instance
+let _pdTasksData         = null; // cached tasks array for current project
+let _pdBriefsData        = null; // cached briefs array for current project
+let _expandedRow         = null; // currently expanded task/brief DOM row
+let _taskFilterStatus    = 'all'; // active status filter pill value
+let _taskFilterPriority  = 'all'; // active priority filter pill value
 
 document.getElementById('btn-back-from-project-detail').addEventListener('click', () => {
   activateSection('projects');
@@ -1386,6 +1393,9 @@ function activateProjectTab(name) {
   document.querySelectorAll('.pd-panel').forEach(p => {
     p.style.display = p.dataset.tabPanel === name ? '' : 'none';
   });
+  if (name === 'schedule') renderScheduleCalendar();
+  if (name === 'tasks')    renderTasksTab();
+  if (name === 'brief')    renderBriefTab();
   if (name === 'schedule' && currentProjectId) {
     loadProjectSchedule(currentProjectId);
   }
@@ -1394,6 +1404,17 @@ function activateProjectTab(name) {
 async function openProjectDetail(projId) {
   currentProjectId = projId;
   // Reset to dashboard tab and show the section
+  currentProjectDetail = null;
+  _pdTasksData  = null;
+  _pdBriefsData = null;
+  _expandedRow  = null;
+  _taskFilterStatus   = 'all';
+  _taskFilterPriority = 'all';
+  resetTaskFilterPills();
+  const taskList  = document.getElementById('pd-task-list');
+  const briefList = document.getElementById('pd-brief-list');
+  if (taskList)  taskList.innerHTML  = '';
+  if (briefList) briefList.innerHTML = '';
   activateProjectTab('dashboard');
   activateSection('project-detail');
 
@@ -1410,6 +1431,7 @@ async function openProjectDetail(projId) {
     if (!res.ok) throw new Error('Failed to load project.');
     const project = await res.json();
 
+    currentProjectDetail = project;
     titleEl.textContent    = escapeHtml(project.name);
     subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? 's' : ''}`;
   } catch {
@@ -1567,6 +1589,670 @@ function renderGantt(schedule) {
 
   // Re-initialize Lucide icons for newly rendered elements
   if (window.lucide) lucide.createIcons();
+// ── SCHEDULE / GANTT TAB ───────────────────────────────────────────────────
+
+// View-switcher buttons (delegated on the static toolbar element)
+document.querySelector('.pd-view-btns').addEventListener('click', e => {
+  const btn = e.target.closest('.pd-view-btn[data-view]');
+  if (!btn || !_pdCalendar) return;
+  _pdCalendar.changeView(btn.dataset.view);
+  document.querySelectorAll('.pd-view-btn').forEach(b =>
+    b.classList.toggle('active', b === btn)
+  );
+});
+
+function renderScheduleCalendar() {
+  // Destroy previous instance (project may have changed)
+  if (_pdCalendar) { _pdCalendar.destroy(); _pdCalendar = null; }
+
+  const el = document.getElementById('pd-calendar');
+  if (!el) return;
+
+  // Map backend EventDetailItem → FullCalendar event objects
+  const fcEvents = (currentProjectDetail?.events ?? []).map(ev => ({
+    id:    ev.eventId,
+    title: ev.name,
+    start: ev.startTime,
+    end:   ev.endTime,
+    extendedProps: { location: ev.location, status: ev.status, eventType: ev.eventType },
+  }));
+
+  _pdCalendar = new FullCalendar.Calendar(el, {
+    initialView:  'dayGridMonth',
+    direction:    'rtl',
+    locale:       'he',
+    headerToolbar: {
+      start:  'prev,next today',
+      center: 'title',
+      end:    '',
+    },
+    editable:         false,
+    eventStartEditable: false,
+    eventDurationEditable: false,
+    selectable:       false,
+    eventColor:       '#5B7BF0',
+    events:           fcEvents,
+    eventDidMount(info) {
+      // Show location as tooltip if available
+      if (info.event.extendedProps.location) {
+        info.el.title = info.event.extendedProps.location;
+      }
+    },
+  });
+
+  _pdCalendar.render();
+}
+
+// ── ADD TASK / ADD BRIEF buttons ────────────────────────────────────────────
+
+document.getElementById('btn-add-task').addEventListener('click', () => addNewTaskRow());
+document.getElementById('btn-add-brief').addEventListener('click', () => addNewBriefRow());
+
+document.getElementById('pd-task-filter-bar').addEventListener('click', e => {
+  const clearBtn = e.target.closest('#btn-clear-task-filters');
+  if (clearBtn) {
+    _taskFilterStatus   = 'all';
+    _taskFilterPriority = 'all';
+    resetTaskFilterPills();
+    applyTaskFilters();
+    return;
+  }
+  const pill = e.target.closest('.pd-filter-pill');
+  if (!pill) return;
+  const { filter, value } = pill.dataset;
+  if (filter === 'status')   _taskFilterStatus   = value;
+  if (filter === 'priority') _taskFilterPriority = value;
+  // Update active pill within the group
+  document.querySelectorAll(`#pd-task-filter-bar .pd-filter-pill[data-filter="${filter}"]`)
+    .forEach(p => p.classList.toggle('active', p.dataset.value === value));
+  // Show/hide clear button
+  const showClear = _taskFilterStatus !== 'all' || _taskFilterPriority !== 'all';
+  document.getElementById('btn-clear-task-filters').style.display = showClear ? '' : 'none';
+  applyTaskFilters();
+});
+
+// ── TASKS TAB ───────────────────────────────────────────────────────────────
+
+async function renderTasksTab() {
+  const list = document.getElementById('pd-task-list');
+  if (!list || !currentProjectDetail) return;
+
+  // Already loaded — just re-apply filters from cache
+  if (_pdTasksData !== null) {
+    applyTaskFilters();
+    return;
+  }
+
+  list.innerHTML = '<div class="pd-loading">Loading tasks…</div>';
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/tasks`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error();
+    _pdTasksData = await res.json();
+    applyTaskFilters();
+  } catch {
+    list.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
+  }
+}
+
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+function applyTaskFilters() {
+  const list = document.getElementById('pd-task-list');
+  if (!list || _pdTasksData === null) return;
+  // Don't re-render while an unsaved new row is open
+  if (list.querySelector('[data-new="true"]')) return;
+  // Detach stale _expandedRow reference (DOM will be replaced)
+  if (_expandedRow && list.contains(_expandedRow)) _expandedRow = null;
+
+  const filtered = _pdTasksData.filter(t => {
+    const statusOk   = _taskFilterStatus   === 'all' || t.status   === _taskFilterStatus;
+    const priorityOk = _taskFilterPriority === 'all' || t.priority === _taskFilterPriority;
+    return statusOk && priorityOk;
+  });
+  filtered.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99));
+
+  const isFiltered = _taskFilterStatus !== 'all' || _taskFilterPriority !== 'all';
+  if (filtered.length === 0) {
+    list.innerHTML = isFiltered
+      ? '<div class="pd-filter-no-match">No tasks match the current filters.</div>'
+      : taskEmptyStateHtml();
+    return;
+  }
+  list.innerHTML = '';
+  filtered.forEach(t => list.appendChild(buildTaskRow(t)));
+}
+
+function resetTaskFilterPills() {
+  document.querySelectorAll('#pd-task-filter-bar .pd-filter-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.value === 'all');
+  });
+  const clearBtn = document.getElementById('btn-clear-task-filters');
+  if (clearBtn) clearBtn.style.display = 'none';
+}
+
+function buildTaskRow(task) {
+  const row = document.createElement('div');
+  row.className = `pd-task-row pd-task-row--${task.status}`;
+  row.dataset.taskId = task.taskId;
+  row.innerHTML = `
+    <div class="pd-row-summary">
+      <span class="pd-task-status-text">${task.status.replace('_', ' ')}</span>
+      <span class="pd-task-content">${escapeHtml(task.content)}</span>
+      <div class="pd-row-meta">
+        <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
+        <button class="pd-row-delete-btn" title="Delete task" aria-label="Delete task">&#10005;</button>
+      </div>
+    </div>
+    <div class="pd-row-form">
+      <label class="pd-field-label">Content</label>
+      <input type="text" class="pd-form-input" name="content" value="${escapeHtml(task.content)}" placeholder="Task description…" maxlength="500">
+      <div class="pd-form-selects">
+        <div class="pd-select-field">
+          <label class="pd-field-label">Status</label>
+          <select class="pd-form-select" name="status">
+            ${['open','in_progress','done','canceled'].map(s =>
+              `<option value="${s}"${task.status === s ? ' selected' : ''}>${s.replace('_',' ')}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Priority</label>
+          <select class="pd-form-select" name="priority">
+            ${['low','medium','high','urgent'].map(p =>
+              `<option value="${p}"${task.priority === p ? ' selected' : ''}>${p}</option>`
+            ).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>Save</button>
+        <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+  wireTaskRow(row, task);
+  return row;
+}
+
+function wireTaskRow(row, task) {
+  const summary    = row.querySelector('.pd-row-summary');
+  const form       = row.querySelector('.pd-row-form');
+  const contentIn  = row.querySelector('input[name="content"]');
+  const statusSel  = row.querySelector('select[name="status"]');
+  const prioritySel= row.querySelector('select[name="priority"]');
+  const saveBtn    = row.querySelector('.pd-form-save-btn');
+  const cancelBtn  = row.querySelector('.pd-form-cancel-btn');
+  const deleteBtn  = row.querySelector('.pd-row-delete-btn');
+
+  // Toggle expand on summary click
+  summary.addEventListener('click', e => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains('pd-row--deleting')) return;
+    if (_expandedRow === row) { collapseRow(row); return; }
+    if (_expandedRow) collapseRow(_expandedRow);
+    _expandedRow = row;
+    form.classList.add('expanded');
+    row.classList.add('pd-row--expanded');
+  });
+
+  // Dirty detection
+  const isDirty = () =>
+    contentIn.value.trim()  !== task.content  ||
+    statusSel.value         !== task.status   ||
+    prioritySel.value       !== task.priority;
+
+  [contentIn, statusSel, prioritySel].forEach(el =>
+    el.addEventListener('input', () => { saveBtn.disabled = !isDirty(); })
+  );
+
+  cancelBtn.addEventListener('click', () => collapseRow(row));
+
+  saveBtn.addEventListener('click', async () => {
+    if (!isDirty()) return;
+    const content  = contentIn.value.trim();
+    const status   = statusSel.value;
+    const priority = prioritySel.value;
+    if (!content) { contentIn.focus(); return; }
+
+    saveBtn.disabled   = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/tasks/${encodeURIComponent(task.taskId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, status, priority }),
+        }
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      // Update cache
+      const idx = _pdTasksData.findIndex(t => t.taskId === task.taskId);
+      if (idx !== -1) _pdTasksData[idx] = updated;
+      // Re-apply filters (re-renders list, respects sort/filter changes)
+      applyTaskFilters();
+    } catch {
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled    = false;
+    }
+  });
+
+  wireTaskDeleteBtn(row, deleteBtn, task);
+}
+
+function wireTaskDeleteBtn(row, deleteBtn, task) {
+  deleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (row.classList.contains('pd-row--deleting')) return;
+
+    // Collapse any expanded row first
+    if (_expandedRow && _expandedRow !== row) collapseRow(_expandedRow);
+    if (_expandedRow === row) collapseRow(row);
+
+    row.classList.add('pd-row--deleting');
+
+    const confirm = document.createElement('div');
+    confirm.className = 'pd-delete-confirm';
+    confirm.innerHTML = `<span>Delete this task?</span>
+      <button class="btn-confirm-yes">Delete</button>
+      <button class="btn-confirm-no">Cancel</button>`;
+    row.querySelector('.pd-row-summary').appendChild(confirm);
+
+    confirm.querySelector('.btn-confirm-no').addEventListener('click', e => {
+      e.stopPropagation();
+      row.classList.remove('pd-row--deleting');
+      confirm.remove();
+    });
+
+    confirm.querySelector('.btn-confirm-yes').addEventListener('click', async e => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/tasks/${encodeURIComponent(task.taskId)}`,
+          { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (!res.ok) throw new Error();
+        _pdTasksData = _pdTasksData.filter(t => t.taskId !== task.taskId);
+        if (_expandedRow === row) _expandedRow = null;
+        applyTaskFilters();
+      } catch {
+        row.classList.remove('pd-row--deleting');
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function collapseRow(row) {
+  row.querySelector('.pd-row-form')?.classList.remove('expanded');
+  row.classList.remove('pd-row--expanded');
+  if (_expandedRow === row) _expandedRow = null;
+}
+
+function taskEmptyStateHtml() {
+  return '<div class="pd-empty-state">No tasks yet. Start by adding your first task.</div>';
+}
+
+function addNewTaskRow() {
+  const list = document.getElementById('pd-task-list');
+  if (!list) return;
+  // Prevent double-add
+  if (list.querySelector('[data-new="true"]')) return;
+
+  const tempTask = { taskId: '', content: '', status: 'open', priority: 'medium' };
+  const row = buildTaskRow(tempTask);
+  row.dataset.new = 'true';
+  // Hide delete on unsaved rows — taskId is empty so DELETE would hit the collection endpoint (405)
+  row.querySelector('.pd-row-delete-btn').style.display = 'none';
+
+  // Re-wire save for CREATE instead of UPDATE
+  const form       = row.querySelector('.pd-row-form');
+  const contentIn  = row.querySelector('input[name="content"]');
+  const statusSel  = row.querySelector('select[name="status"]');
+  const prioritySel= row.querySelector('select[name="priority"]');
+  const saveBtn    = row.querySelector('.pd-form-save-btn');
+  const cancelBtn  = row.querySelector('.pd-form-cancel-btn');
+
+  cancelBtn.addEventListener('click', () => {
+    if (_expandedRow === row) _expandedRow = null;
+    row.remove();
+    if (_pdTasksData !== null) applyTaskFilters();
+    else list.innerHTML = taskEmptyStateHtml();
+  });
+
+  // Replace the wired save from buildTaskRow with a fresh CREATE handler
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = true;
+  contentIn.addEventListener('input', () => {
+    newSaveBtn.disabled = contentIn.value.trim() === '';
+  });
+
+  newSaveBtn.addEventListener('click', async () => {
+    const content  = contentIn.value.trim();
+    const status   = statusSel.value;
+    const priority = prioritySel.value;
+    if (!content) { contentIn.focus(); return; }
+
+    newSaveBtn.disabled    = true;
+    newSaveBtn.textContent = 'Saving…';
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/tasks`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, status, priority }),
+        }
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (_pdTasksData === null) _pdTasksData = [];
+      _pdTasksData.push(created);
+      if (_expandedRow === row) _expandedRow = null;
+      row.remove();
+      applyTaskFilters();
+    } catch {
+      newSaveBtn.textContent = 'Save';
+      newSaveBtn.disabled    = false;
+    }
+  });
+
+  // Collapse any currently expanded row
+  if (_expandedRow) collapseRow(_expandedRow);
+
+  // Remove empty state placeholder
+  const emptyEl = list.querySelector('.pd-empty-state');
+  if (emptyEl) emptyEl.remove();
+
+  list.prepend(row);
+  // Expand immediately
+  _expandedRow = row;
+  requestAnimationFrame(() => {
+    form.classList.add('expanded');
+    row.classList.add('pd-row--expanded');
+    contentIn.focus();
+  });
+}
+
+// ── BRIEFS TAB ───────────────────────────────────────────────────────────────
+
+async function renderBriefTab() {
+  const list = document.getElementById('pd-brief-list');
+  if (!list || !currentProjectDetail) return;
+
+  if (_pdBriefsData !== null) {
+    list.innerHTML = _pdBriefsData.length === 0 ? briefEmptyStateHtml() : '';
+    _pdBriefsData.forEach(b => list.appendChild(buildBriefRow(b)));
+    return;
+  }
+
+  list.innerHTML = '<div class="pd-loading">Loading briefs…</div>';
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error();
+    _pdBriefsData = await res.json();
+    list.innerHTML = _pdBriefsData.length === 0 ? briefEmptyStateHtml() : '';
+    _pdBriefsData.forEach(b => list.appendChild(buildBriefRow(b)));
+  } catch {
+    list.innerHTML = '<div class="pd-loading">Failed to load briefs.</div>';
+  }
+}
+
+function buildBriefRow(brief) {
+  const row = document.createElement('div');
+  row.className = 'pd-brief-row';
+  row.dataset.briefId = brief.briefId;
+
+  const authorName = brief.createdByManagerName ?? 'Unknown';
+  const dateStr    = brief.createdAt ? formatBriefDate(brief.createdAt) : '';
+  const preview    = brief.content.length > 120 ? brief.content.slice(0, 120) + '…' : brief.content;
+
+  row.innerHTML = `
+    <div class="pd-row-summary">
+      <div class="pd-brief-summary">
+        <span class="pd-brief-title-text">${escapeHtml(brief.title)}</span>
+        <span class="pd-brief-preview-text">${escapeHtml(preview)}</span>
+        <span class="pd-brief-author-text">Created by: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ''}</span>
+      </div>
+      <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
+    </div>
+    <div class="pd-row-form">
+      <label class="pd-field-label">Title</label>
+      <input type="text" class="pd-form-input" name="title" value="${escapeHtml(brief.title)}" placeholder="Brief title…" maxlength="200">
+      <label class="pd-field-label">Content</label>
+      <textarea class="pd-form-textarea pd-form-textarea--large" name="content" rows="5" placeholder="Brief content…" maxlength="5000">${escapeHtml(brief.content)}</textarea>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>Save</button>
+        <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+  wireBriefRow(row, brief);
+  return row;
+}
+
+function wireBriefRow(row, brief) {
+  const summary   = row.querySelector('.pd-row-summary');
+  const form      = row.querySelector('.pd-row-form');
+  const titleIn   = row.querySelector('input[name="title"]');
+  const contentIn = row.querySelector('textarea[name="content"]');
+  const saveBtn   = row.querySelector('.pd-form-save-btn');
+  const cancelBtn = row.querySelector('.pd-form-cancel-btn');
+  const deleteBtn = row.querySelector('.pd-row-delete-btn');
+
+  summary.addEventListener('click', e => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains('pd-row--deleting')) return;
+    if (_expandedRow === row) { collapseRow(row); return; }
+    if (_expandedRow) collapseRow(_expandedRow);
+    _expandedRow = row;
+    form.classList.add('expanded');
+    row.classList.add('pd-row--expanded');
+  });
+
+  const isDirty = () =>
+    titleIn.value.trim()   !== brief.title   ||
+    contentIn.value.trim() !== brief.content;
+
+  [titleIn, contentIn].forEach(el =>
+    el.addEventListener('input', () => { saveBtn.disabled = !isDirty(); })
+  );
+
+  cancelBtn.addEventListener('click', () => collapseRow(row));
+
+  saveBtn.addEventListener('click', async () => {
+    if (!isDirty()) return;
+    const title   = titleIn.value.trim();
+    const content = contentIn.value.trim();
+    if (!title || !content) {
+      if (!title) titleIn.focus();
+      else contentIn.focus();
+      return;
+    }
+
+    saveBtn.disabled    = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs/${encodeURIComponent(brief.briefId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content }),
+        }
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      const idx = _pdBriefsData.findIndex(b => b.briefId === brief.briefId);
+      if (idx !== -1) _pdBriefsData[idx] = updated;
+      brief.title   = updated.title;
+      brief.content = updated.content;
+
+      // Update summary in-place
+      row.querySelector('.pd-brief-title-text').textContent = updated.title;
+      const preview = updated.content.length > 120 ? updated.content.slice(0, 120) + '…' : updated.content;
+      row.querySelector('.pd-brief-preview-text').textContent = preview;
+
+      collapseRow(row);
+    } catch {
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled    = false;
+    }
+  });
+
+  wireBriefDeleteBtn(row, deleteBtn, brief);
+}
+
+function wireBriefDeleteBtn(row, deleteBtn, brief) {
+  deleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (row.classList.contains('pd-row--deleting')) return;
+
+    if (_expandedRow && _expandedRow !== row) collapseRow(_expandedRow);
+    if (_expandedRow === row) collapseRow(row);
+
+    row.classList.add('pd-row--deleting');
+
+    const confirm = document.createElement('div');
+    confirm.className = 'pd-delete-confirm';
+    confirm.innerHTML = `<span>Delete this brief?</span>
+      <button class="btn-confirm-yes">Delete</button>
+      <button class="btn-confirm-no">Cancel</button>`;
+    row.querySelector('.pd-row-summary').appendChild(confirm);
+
+    confirm.querySelector('.btn-confirm-no').addEventListener('click', e => {
+      e.stopPropagation();
+      row.classList.remove('pd-row--deleting');
+      confirm.remove();
+    });
+
+    confirm.querySelector('.btn-confirm-yes').addEventListener('click', async e => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs/${encodeURIComponent(brief.briefId)}`,
+          { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (!res.ok) throw new Error();
+        _pdBriefsData = _pdBriefsData.filter(b => b.briefId !== brief.briefId);
+        if (_expandedRow === row) _expandedRow = null;
+        row.remove();
+        const list = document.getElementById('pd-brief-list');
+        if (list && _pdBriefsData.length === 0) list.innerHTML = briefEmptyStateHtml();
+      } catch {
+        row.classList.remove('pd-row--deleting');
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function briefEmptyStateHtml() {
+  return '<div class="pd-empty-state">No briefs yet. Start by adding your first brief.</div>';
+}
+
+function formatBriefDate(isoString) {
+  if (!isoString) return '';
+  try {
+    return new Date(isoString).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return ''; }
+}
+
+function addNewBriefRow() {
+  const list = document.getElementById('pd-brief-list');
+  if (!list) return;
+  if (list.querySelector('[data-new="true"]')) return;
+
+  const tempBrief = { briefId: '', title: '', content: '', createdAt: null, createdByManagerName: null };
+  const row = buildBriefRow(tempBrief);
+  row.dataset.new = 'true';
+
+  const form      = row.querySelector('.pd-row-form');
+  const titleIn   = row.querySelector('input[name="title"]');
+  const contentIn = row.querySelector('textarea[name="content"]');
+  const saveBtn   = row.querySelector('.pd-form-save-btn');
+  const cancelBtn = row.querySelector('.pd-form-cancel-btn');
+
+  cancelBtn.addEventListener('click', () => {
+    if (_expandedRow === row) _expandedRow = null;
+    row.remove();
+    if (_pdBriefsData !== null && _pdBriefsData.length === 0) {
+      list.innerHTML = briefEmptyStateHtml();
+    }
+  });
+
+  // Replace wired save from buildBriefRow with CREATE handler
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = true;
+  const canSave = () => titleIn.value.trim() !== '' && contentIn.value.trim() !== '';
+  [titleIn, contentIn].forEach(el =>
+    el.addEventListener('input', () => { newSaveBtn.disabled = !canSave(); })
+  );
+
+  newSaveBtn.addEventListener('click', async () => {
+    const title   = titleIn.value.trim();
+    const content = contentIn.value.trim();
+    if (!title || !content) {
+      if (!title) titleIn.focus(); else contentIn.focus();
+      return;
+    }
+
+    newSaveBtn.disabled    = true;
+    newSaveBtn.textContent = 'Saving…';
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content }),
+        }
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (_pdBriefsData === null) _pdBriefsData = [];
+      _pdBriefsData.push(created);
+
+      const emptyEl = list.querySelector('.pd-empty-state');
+      if (emptyEl) emptyEl.remove();
+
+      if (_expandedRow === row) _expandedRow = null;
+      row.remove();
+      const realRow = buildBriefRow(created);
+      list.appendChild(realRow);
+    } catch {
+      newSaveBtn.textContent = 'Save';
+      newSaveBtn.disabled    = false;
+    }
+  });
+
+  if (_expandedRow) collapseRow(_expandedRow);
+
+  const emptyEl = list.querySelector('.pd-empty-state');
+  if (emptyEl) emptyEl.remove();
+
+  list.prepend(row);
+  _expandedRow = row;
+  requestAnimationFrame(() => {
+    form.classList.add('expanded');
+    row.classList.add('pd-row--expanded');
+    titleIn.focus();
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
