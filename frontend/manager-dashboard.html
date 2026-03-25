@@ -348,6 +348,7 @@
           </div>
         </div>
         <div class="pd-panel" data-tab-panel="schedule" style="display:none">
+          <div id="gantt-container"></div>
           <div class="pd-schedule-toolbar">
             <div class="pd-view-btns">
               <button class="pd-view-btn active" data-view="dayGridMonth">Month</button>
@@ -842,6 +843,106 @@
   </div>
 
   </div> <!-- end body-layout -->
+
+  <!-- ── Shift Edit Modal ───────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="shift-edit-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shift-edit-title">
+
+      <div class="modal-header">
+        <h3 id="shift-edit-title" style="direction:rtl">עריכת משמרת</h3>
+        <button class="btn-close" id="shift-edit-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body" style="direction:rtl">
+        <div class="field">
+          <label for="shift-edit-role">תפקיד</label>
+          <select id="shift-edit-role" style="padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--card);width:100%"></select>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="shift-edit-start">שעת התחלה</label>
+            <input type="datetime-local" id="shift-edit-start" step="300" />
+          </div>
+          <div class="field">
+            <label for="shift-edit-end">שעת סיום</label>
+            <input type="datetime-local" id="shift-edit-end" step="300" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="shift-edit-qty">כמות נדרשת</label>
+          <input type="number" id="shift-edit-qty" min="1" />
+        </div>
+        <div id="shift-edit-error" class="msg-error" role="alert"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="shift-edit-cancel">ביטול</button>
+        <button class="btn-primary" id="btn-save-shift">שמור</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Shift Delete Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="shift-delete-overlay">
+    <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="shift-delete-title">
+
+      <div class="modal-header">
+        <h3 id="shift-delete-title" style="direction:rtl">מחיקת משמרת</h3>
+        <button class="btn-close" id="shift-delete-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body" style="direction:rtl">
+        <p style="font-size:14px;line-height:1.6;color:var(--text)">האם אתה בטוח שאתה רוצה למחוק את המשמרת?</p>
+        <p class="delete-warning">פעולה זו אינה ניתנת לביטול.</p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="shift-delete-cancel">ביטול</button>
+        <button class="btn-danger" id="btn-confirm-shift-delete">מחק</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Shift Add Modal ───────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="shift-add-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shift-add-title">
+
+      <div class="modal-header">
+        <h3 id="shift-add-title">Add Shift</h3>
+        <button class="btn-close" id="shift-add-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field">
+          <label for="shift-add-role">Role</label>
+          <select id="shift-add-role" style="padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--card);width:100%"></select>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="shift-add-start">Start Time</label>
+            <input type="time" id="shift-add-start" step="300" />
+          </div>
+          <div class="field">
+            <label for="shift-add-end">End Time</label>
+            <input type="time" id="shift-add-end" step="300" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="shift-add-qty">Required Quantity</label>
+          <input type="number" id="shift-add-qty" min="1" value="1" />
+        </div>
+        <div id="shift-add-error" class="msg-error" role="alert"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="shift-add-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-save-shift-add">Save</button>
+      </div>
+
+    </div>
+  </div>
 
   <script type="module" src="js/manager-dashboard.js"></script>
   <script>lucide.createIcons();</script>

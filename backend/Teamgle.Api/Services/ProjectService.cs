@@ -98,6 +98,32 @@ public class ProjectService : IProjectService
         return await _projectRepo.GetProjectDetailAsync(projId, firebaseUid);
     }
 
+    // ── Get schedule (events + shifts) for a project (access-checked) ─────
+    public async Task<ProjectScheduleResponse?> GetProjectScheduleAsync(string firebaseUid, string projId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetProjectScheduleAsync(projId, firebaseUid);
+    }
+
+    // ── Create a shift for an event (access-checked via ownership in SQL) ──
+    public async Task CreateEventShiftAsync(string firebaseUid, string eventId, CreateShiftRequest request)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.CreateEventShiftAsync(eventId, firebaseUid, request);
+    }
+
+    // ── Update a shift (access-checked via ownership in SQL) ───────────────
+    public async Task UpdateShiftAsync(string firebaseUid, string shiftId, UpdateShiftRequest request)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.UpdateShiftAsync(shiftId, firebaseUid, request);
+    }
+
+    // ── Delete a shift (access-checked via ownership in SQL) ───────────────
+    public async Task DeleteShiftAsync(string firebaseUid, string shiftId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.DeleteShiftAsync(shiftId, firebaseUid);
     // ── Tasks ──────────────────────────────────────────────────────────────
     private static readonly HashSet<string> ValidTaskStatuses   = ["open", "in_progress", "done", "canceled"];
     private static readonly HashSet<string> ValidTaskPriorities = ["low", "medium", "high", "urgent"];

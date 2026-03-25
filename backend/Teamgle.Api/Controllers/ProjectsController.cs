@@ -88,6 +88,33 @@ public class ProjectsController : ControllerBase
         }
     }
 
+    // ── GET /api/projects/{id}/schedule ───────────────────────────────────
+    [HttpGet("{id}/schedule")]
+    public async Task<IActionResult> GetProjectSchedule(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var schedule = await _projectService.GetProjectScheduleAsync(uid, id);
+            if (schedule == null)
+                return NotFound(new { error = "Project not found." });
+
+            return Ok(schedule);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching schedule for project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── POST /api/projects ─────────────────────────────────────────────────
     [HttpPost]
     public async Task<IActionResult> CreateProject([FromBody] CreateProjectRequest request)

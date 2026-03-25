@@ -284,6 +284,250 @@ public class ProjectRepository : IProjectRepository
         return detail;
     }
 
+    // ── Get schedule (events + shifts with staffing) for a project ────────
+    public async Task<ProjectScheduleResponse?> GetProjectScheduleAsync(string projId, string firebaseUid)
+    {
+        // Query 1: project name + access check (same guard as GetProjectDetailAsync)
+        const string projSql = """
+            SELECT p.Proj_ID AS ProjId, p.name AS Name
+            FROM Project p
+            INNER JOIN Manager_Project mp ON mp.project_ID    = p.Proj_ID
+            INNER JOIN [User]          u  ON u.user_ID         = mp.manager_user_ID
+            WHERE p.Proj_ID = @projId
+              AND u.FBUID   = @firebaseUid
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        ProjectScheduleResponse? schedule = null;
+
+        await using (var cmd = new SqlCommand(projSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId",      projId);
+            cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                schedule = new ProjectScheduleResponse
+                {
+                    ProjId = reader.GetString(reader.GetOrdinal("ProjId")),
+                    Name   = reader.GetString(reader.GetOrdinal("Name")),
+                };
+            }
+        }
+
+        if (schedule == null) return null;
+
+        // Query 2: all events with their shifts, role names, and per-shift staffed counts
+        const string scheduleSql = """
+            SELECT
+                e.event_ID                    AS EventId,
+                e.name                        AS EventName,
+                e.start_time                  AS EventStart,
+                e.end_time                    AS EventEnd,
+                e.location                    AS EventLocation,
+                s.Shift_ID                    AS ShiftId,
+                s.roll_ID                     AS RoleId,
+                r.Roll_name                   AS RoleName,
+                s.required_quantity           AS RequiredQuantity,
+                s.start_time                  AS ShiftStart,
+                s.end_time                    AS ShiftEnd,
+                COUNT(DISTINCT CASE
+                    WHEN es.status IN ('approved', 'manager_approved')
+                     AND (es.canceled IS NULL OR es.canceled = 0)
+                    THEN es.employee_user_ID
+                END)                          AS StaffedCount
+            FROM Event e
+            LEFT JOIN Shift           s  ON s.event_ID  = e.event_ID
+            LEFT JOIN Roll            r  ON r.Roll_ID   = s.roll_ID
+            LEFT JOIN Employee_Shift  es ON es.shift_ID = s.Shift_ID
+            WHERE e.project_ID = @projId
+            GROUP BY
+                e.event_ID, e.name, e.start_time, e.end_time, e.location,
+                s.Shift_ID, s.roll_ID, r.Roll_name, s.required_quantity, s.start_time, s.end_time
+            ORDER BY e.start_time, s.start_time
+            """;
+
+        await using (var cmd = new SqlCommand(scheduleSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@projId", projId);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            // Build event map to group rows (one row per shift, multiple shifts per event)
+            var eventMap = new Dictionary<string, ScheduleEventItem>();
+
+            while (await reader.ReadAsync())
+            {
+                var eventId = reader.GetString(reader.GetOrdinal("EventId"));
+
+                if (!eventMap.TryGetValue(eventId, out var eventItem))
+                {
+                    eventItem = new ScheduleEventItem
+                    {
+                        EventId   = eventId,
+                        EventName = reader.GetString(reader.GetOrdinal("EventName")),
+                        StartTime = reader.IsDBNull(reader.GetOrdinal("EventStart"))    ? null : reader.GetDateTime(reader.GetOrdinal("EventStart")),
+                        EndTime   = reader.IsDBNull(reader.GetOrdinal("EventEnd"))      ? null : reader.GetDateTime(reader.GetOrdinal("EventEnd")),
+                        Location  = reader.IsDBNull(reader.GetOrdinal("EventLocation")) ? null : reader.GetString(reader.GetOrdinal("EventLocation")),
+                    };
+                    eventMap[eventId] = eventItem;
+                }
+
+                // Only add a shift row if a shift actually exists for this event
+                if (!reader.IsDBNull(reader.GetOrdinal("ShiftId")))
+                {
+                    eventItem.Shifts.Add(new ScheduleShiftItem
+                    {
+                        ShiftId          = reader.GetString(reader.GetOrdinal("ShiftId")),
+                        RoleId           = reader.IsDBNull(reader.GetOrdinal("RoleId"))   ? "" : reader.GetString(reader.GetOrdinal("RoleId")),
+                        RoleName         = reader.IsDBNull(reader.GetOrdinal("RoleName")) ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
+                        RequiredQuantity = reader.GetInt32(reader.GetOrdinal("RequiredQuantity")),
+                        StaffedCount     = reader.GetInt32(reader.GetOrdinal("StaffedCount")),
+                        StartTime        = reader.IsDBNull(reader.GetOrdinal("ShiftStart")) ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
+                        EndTime          = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))   ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
+                    });
+                }
+            }
+
+            schedule.Events.AddRange(eventMap.Values);
+        }
+
+        return schedule;
+    }
+
+    // ── Update a shift (ownership-validated) ──────────────────────────────
+    public async Task UpdateShiftAsync(string shiftId, string firebaseUid, UpdateShiftRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RollId))
+            throw new ArgumentException("Role is required.");
+        if (request.RequiredQuantity < 1)
+            throw new ArgumentException("Required quantity must be at least 1.");
+        if (request.EndTime <= request.StartTime)
+            throw new ArgumentException("End time must be after start time.");
+
+        // UPDATE only if the shift belongs to a project the authenticated manager owns
+        const string sql = """
+            UPDATE Shift
+            SET roll_ID           = @rollId,
+                required_quantity = @requiredQuantity,
+                start_time        = @startTime,
+                end_time          = @endTime
+            WHERE Shift_ID = @shiftId
+              AND Shift_ID IN (
+                SELECT s.Shift_ID
+                FROM Shift s
+                INNER JOIN Event          e  ON e.event_ID     = s.event_ID
+                INNER JOIN Project        p  ON p.Proj_ID       = e.project_ID
+                INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
+                INNER JOIN [User]         u  ON u.user_ID       = mp.manager_user_ID
+                WHERE s.Shift_ID = @shiftId
+                  AND u.FBUID    = @firebaseUid
+              )
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+
+        cmd.Parameters.AddWithValue("@shiftId",          shiftId);
+        cmd.Parameters.AddWithValue("@firebaseUid",      firebaseUid);
+        cmd.Parameters.AddWithValue("@rollId",           request.RollId);
+        cmd.Parameters.AddWithValue("@requiredQuantity", request.RequiredQuantity);
+        cmd.Parameters.AddWithValue("@startTime",        request.StartTime);
+        cmd.Parameters.AddWithValue("@endTime",          request.EndTime);
+
+        await conn.OpenAsync();
+        var rows = await cmd.ExecuteNonQueryAsync();
+
+        if (rows == 0)
+            throw new KeyNotFoundException("Shift not found.");
+    }
+
+    // ── Delete a shift (ownership-validated) ──────────────────────────────
+    public async Task DeleteShiftAsync(string shiftId, string firebaseUid)
+    {
+        // DELETE only if the shift belongs to a project the authenticated manager owns
+        const string sql = """
+            DELETE FROM Shift
+            WHERE Shift_ID = @shiftId
+              AND Shift_ID IN (
+                SELECT s.Shift_ID
+                FROM Shift s
+                INNER JOIN Event          e  ON e.event_ID     = s.event_ID
+                INNER JOIN Project        p  ON p.Proj_ID       = e.project_ID
+                INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
+                INNER JOIN [User]         u  ON u.user_ID       = mp.manager_user_ID
+                WHERE s.Shift_ID = @shiftId
+                  AND u.FBUID    = @firebaseUid
+              )
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+        await conn.OpenAsync();
+        var rows = await cmd.ExecuteNonQueryAsync();
+
+        if (rows == 0)
+            throw new KeyNotFoundException("Shift not found.");
+    }
+
+    // ── Create a shift for an event (with ownership check) ────────────────
+    public async Task CreateEventShiftAsync(string eventId, string firebaseUid, CreateShiftRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RollId))
+            throw new ArgumentException("Role is required.");
+        if (request.RequiredQuantity < 1)
+            throw new ArgumentException("Required quantity must be at least 1.");
+        if (request.EndTime <= request.StartTime)
+            throw new ArgumentException("End time must be after start time.");
+
+        // Verify the event belongs to a project the authenticated manager owns
+        const string checkSql = """
+            SELECT e.event_ID
+            FROM Event e
+            INNER JOIN Project         p  ON p.Proj_ID      = e.project_ID
+            INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
+            INNER JOIN [User]          u  ON u.user_ID       = mp.manager_user_ID
+            WHERE e.event_ID = @eventId
+              AND u.FBUID    = @firebaseUid
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using (var checkCmd = new SqlCommand(checkSql, conn))
+        {
+            checkCmd.Parameters.AddWithValue("@eventId",     eventId);
+            checkCmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+            var found = await checkCmd.ExecuteScalarAsync();
+            if (found == null)
+                throw new KeyNotFoundException("Event not found.");
+        }
+
+        const string insertSql = """
+            INSERT INTO Shift
+                (Shift_ID, event_ID, roll_ID, required_quantity, start_time, end_time)
+            VALUES
+                (@shiftId, @eventId, @rollId, @requiredQuantity, @startTime, @endTime)
+            """;
+
+        await using var cmd = new SqlCommand(insertSql, conn);
+        cmd.Parameters.AddWithValue("@shiftId",          Guid.NewGuid().ToString());
+        cmd.Parameters.AddWithValue("@eventId",          eventId);
+        cmd.Parameters.AddWithValue("@rollId",           request.RollId);
+        cmd.Parameters.AddWithValue("@requiredQuantity", request.RequiredQuantity);
+        cmd.Parameters.AddWithValue("@startTime",        request.StartTime);
+        cmd.Parameters.AddWithValue("@endTime",          request.EndTime);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     // ── Insert into Shift ──────────────────────────────────────────────────
     public async Task CreateShiftAsync(string eventId, CreateShiftRequest request)
     {

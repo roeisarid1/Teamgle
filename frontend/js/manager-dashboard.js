@@ -5,6 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile }       from "./chat-service.js";
 import { initChat, destroyChat }  from "./chat-ui.js";
+import { attachTimePicker }       from "./time-picker.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -1367,6 +1368,7 @@ document.querySelector('.events-kanban').addEventListener('dblclick', e => {
 
 // ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
 
+let currentProjectId = null; // tracks which project is open in the detail view
 let currentProjectDetail = null; // holds last fetched ProjectDetailResponse
 let _pdCalendar          = null; // FullCalendar instance
 let _pdTasksData         = null; // cached tasks array for current project
@@ -1394,9 +1396,13 @@ function activateProjectTab(name) {
   if (name === 'schedule') renderScheduleCalendar();
   if (name === 'tasks')    renderTasksTab();
   if (name === 'brief')    renderBriefTab();
+  if (name === 'schedule' && currentProjectId) {
+    loadProjectSchedule(currentProjectId);
+  }
 }
 
 async function openProjectDetail(projId) {
+  currentProjectId = projId;
   // Reset to dashboard tab and show the section
   currentProjectDetail = null;
   _pdTasksData  = null;
@@ -1434,6 +1440,155 @@ async function openProjectDetail(projId) {
   }
 }
 
+// ── Load and render the Gantt schedule tab ─────────────────────────────────
+
+async function loadProjectSchedule(projId) {
+  const container = document.getElementById('gantt-container');
+  container.innerHTML = `
+    <div class="pd-placeholder">
+      <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">hourglass_top</span>
+      Loading schedule…
+    </div>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projId)}/schedule`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load schedule.');
+    const schedule = await res.json();
+    renderGantt(schedule);
+  } catch {
+    container.innerHTML = `
+      <div class="pd-placeholder" style="color:var(--red)">
+        <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">error</span>
+        Failed to load schedule.
+      </div>`;
+  }
+}
+
+function renderGantt(schedule) {
+  const container = document.getElementById('gantt-container');
+
+  if (!schedule.events || schedule.events.length === 0) {
+    container.innerHTML = `
+      <div class="pd-placeholder">
+        <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">calendar_month</span>
+        No events in this project yet.
+      </div>`;
+    return;
+  }
+
+  // Color palette assigned per role name (consistent within the chart)
+  const GANTT_COLORS = [
+    { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
+    { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
+    { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+    { bg: '#ede9fe', border: '#8b5cf6', text: '#4c1d95' },
+    { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+    { bg: '#e0f2fe', border: '#0ea5e9', text: '#0369a1' },
+    { bg: '#fce7f3', border: '#ec4899', text: '#9d174d' },
+    { bg: '#ccfbf1', border: '#14b8a6', text: '#115e59' },
+  ];
+  const roleColorMap = {};
+  let colorIdx = 0;
+
+  function getColor(roleName) {
+    if (!roleColorMap[roleName]) {
+      roleColorMap[roleName] = GANTT_COLORS[colorIdx % GANTT_COLORS.length];
+      colorIdx++;
+    }
+    return roleColorMap[roleName];
+  }
+
+  // Convert ISO datetime to % position on a 0–24h axis
+  function timeToPercent(isoStr) {
+    if (!isoStr) return 0;
+    const d = new Date(isoStr);
+    return ((d.getHours() * 60 + d.getMinutes()) / 1440) * 100;
+  }
+
+  function fmt2(n) { return String(n).padStart(2, '0'); }
+  function fmtTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return `${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
+  }
+  function fmtDate(isoStr) {
+    if (!isoStr) return '';
+    return new Date(isoStr).toLocaleDateString('he-IL', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // Hour axis ticks: every 2 hours (0, 2, 4, … 24)
+  const axisTicks = Array.from({ length: 13 }, (_, i) => {
+    const h = i * 2;
+    const pct = (h / 24) * 100;
+    return `<div class="gantt-hour-tick" style="left:${pct}%">${fmt2(h)}:00</div>`;
+  }).join('');
+
+  const sectionsHtml = schedule.events.map(ev => {
+    const dateLabel = ev.startTime
+      ? `${fmtDate(ev.startTime)} · ${fmtTime(ev.startTime)}–${fmtTime(ev.endTime)}`
+      : '';
+
+    const rowsHtml = ev.shifts.length === 0
+      ? `<div class="gantt-empty-row">No shifts defined for this event</div>`
+      : ev.shifts.map(shift => {
+          const color  = getColor(shift.roleName);
+          const left   = timeToPercent(shift.startTime);
+          const right  = timeToPercent(shift.endTime);
+          const width  = Math.max(right - left, 2); // floor at 2% so tiny bars stay visible
+          const label  = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
+          return `
+            <div class="gantt-row">
+              <div class="gantt-row-label">${escapeHtml(shift.roleName)}</div>
+              <div class="gantt-row-track">
+                <div class="gantt-bar"
+                     style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;background:${color.bg};border-color:${color.border};color:${color.text}">
+                  <span class="gantt-bar-label">${label}</span>
+                  <div class="gantt-bar-actions">
+                    <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="Edit shift"
+                            data-shift-id="${escapeHtml(shift.shiftId)}"
+                            data-role-id="${escapeHtml(shift.roleId)}"
+                            data-start="${shift.startTime ? new Date(shift.startTime).toISOString().slice(0,16) : ''}"
+                            data-end="${shift.endTime   ? new Date(shift.endTime).toISOString().slice(0,16)   : ''}"
+                            data-qty="${shift.requiredQuantity}">
+                      <i data-lucide="pencil" style="width:11px;height:11px"></i>
+                    </button>
+                    <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="Delete shift"
+                            data-shift-id="${escapeHtml(shift.shiftId)}">
+                      <i data-lucide="trash-2" style="width:11px;height:11px"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+    return `
+      <div class="gantt-event-section">
+        <div class="gantt-event-header">
+          <span class="gantt-event-name">${escapeHtml(ev.eventName)}</span>
+          <span class="gantt-event-date">${escapeHtml(dateLabel)}</span>
+        </div>
+        <div class="gantt-chart" dir="ltr">
+          <div class="gantt-axis-row">
+            <div class="gantt-row-label"></div>
+            <div class="gantt-axis-track">${axisTicks}</div>
+          </div>
+          ${rowsHtml}
+        </div>
+        <div class="gantt-footer">
+          <button class="btn-add-shift-gantt" type="button"
+                  data-event-id="${escapeHtml(ev.eventId)}"
+                  data-event-date="${ev.startTime ? new Date(ev.startTime).toISOString().slice(0,10) : ''}">+ Add Shift</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = sectionsHtml;
+
+  // Re-initialize Lucide icons for newly rendered elements
+  if (window.lucide) lucide.createIcons();
 // ── SCHEDULE / GANTT TAB ───────────────────────────────────────────────────
 
 // View-switcher buttons (delegated on the static toolbar element)
@@ -3105,11 +3260,11 @@ async function appendEventBlock() {
       <div class="form-row">
         <div class="field" data-field="event-start-${idx}">
           <label>Start Time <span class="req">*</span></label>
-          <input type="time" id="event-start-${idx}" />
+          <input type="time" id="event-start-${idx}" step="300" />
         </div>
         <div class="field" data-field="event-end-${idx}">
           <label>End Time <span class="req">*</span></label>
-          <input type="time" id="event-end-${idx}" />
+          <input type="time" id="event-end-${idx}" step="300" />
         </div>
       </div>
       <div class="form-row">
@@ -3169,6 +3324,10 @@ async function appendEventBlock() {
 
   document.getElementById("events-container").appendChild(block);
   lucide.createIcons();   // re-run so any new lucide icons render
+
+  // Attach time picker to the event's time inputs
+  attachTimePicker(document.getElementById(`event-start-${idx}`));
+  attachTimePicker(document.getElementById(`event-end-${idx}`));
 
   // Collapse all previous event blocks when a new one is added
   const allBlocks = document.querySelectorAll(".event-block");
@@ -3258,17 +3417,21 @@ function appendShiftRow(eventIdx, roles) {
     </div>
     <div class="field">
       <label>Start Time *</label>
-      <input type="time" />
+      <input type="time" step="300" />
     </div>
     <div class="field">
       <label>End Time *</label>
-      <input type="time" />
+      <input type="time" step="300" />
     </div>
     <button class="btn-remove-shift" type="button" title="Remove shift">×</button>
   `;
 
   row.querySelector(".btn-remove-shift").addEventListener("click", () => row.remove());
+
+  // Capture time inputs before attaching picker (type changes from "time" to "text")
+  const rowTimeInputs = Array.from(row.querySelectorAll('input[type="time"]'));
   list.appendChild(row);
+  rowTimeInputs.forEach(attachTimePicker);
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
@@ -3440,3 +3603,273 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── SHIFT EDIT / DELETE ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let editingShiftId  = null;
+let deletingShiftId = null;
+
+// ── Event delegation on gantt container ────────────────────────────────────
+document.getElementById('gantt-container').addEventListener('click', e => {
+  const editBtn     = e.target.closest('.gantt-bar-btn-edit');
+  const deleteBtn   = e.target.closest('.gantt-bar-btn-delete');
+  const addShiftBtn = e.target.closest('.btn-add-shift-gantt');
+  if (editBtn)     openShiftEditModal(editBtn);
+  if (deleteBtn)   openShiftDeleteModal(deleteBtn.dataset.shiftId);
+  if (addShiftBtn) openShiftAddModal(addShiftBtn.dataset.eventId, addShiftBtn.dataset.eventDate);
+});
+
+// ── Edit Modal ─────────────────────────────────────────────────────────────
+
+async function openShiftEditModal(btn) {
+  editingShiftId = btn.dataset.shiftId;
+  const roleId   = btn.dataset.roleId;
+  const startVal = btn.dataset.start; // already YYYY-MM-DDTHH:MM
+  const endVal   = btn.dataset.end;
+  const qty      = btn.dataset.qty;
+
+  // Reset error
+  const errEl = document.getElementById('shift-edit-error');
+  errEl.style.display = 'none';
+  errEl.textContent   = '';
+
+  // Pre-fill time + qty immediately
+  document.getElementById('shift-edit-start').value = startVal;
+  document.getElementById('shift-edit-end').value   = endVal;
+  document.getElementById('shift-edit-qty').value   = qty;
+
+  // Open modal
+  document.getElementById('shift-edit-overlay').classList.add('open');
+
+  // Load roles into dropdown
+  const select = document.getElementById('shift-edit-role');
+  select.innerHTML = '<option value="">טוען…</option>';
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/roles`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const roles = await res.json();
+    select.innerHTML = roles.map(r =>
+      `<option value="${escapeHtml(r.rollId)}" ${r.rollId === roleId ? 'selected' : ''}>${escapeHtml(r.rollName)}</option>`
+    ).join('');
+  } catch {
+    select.innerHTML = '<option value="">שגיאה בטעינת תפקידים</option>';
+  }
+}
+
+function closeShiftEditModal() {
+  document.getElementById('shift-edit-overlay').classList.remove('open');
+  editingShiftId = null;
+}
+
+document.getElementById('shift-edit-close').addEventListener('click',  closeShiftEditModal);
+document.getElementById('shift-edit-cancel').addEventListener('click', closeShiftEditModal);
+document.getElementById('shift-edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('shift-edit-overlay')) closeShiftEditModal();
+});
+
+document.getElementById('btn-save-shift').addEventListener('click', async () => {
+  if (!editingShiftId) return;
+
+  const rollId = document.getElementById('shift-edit-role').value;
+  const start  = document.getElementById('shift-edit-start').value;
+  const end    = document.getElementById('shift-edit-end').value;
+  const qty    = parseInt(document.getElementById('shift-edit-qty').value, 10);
+
+  const errEl = document.getElementById('shift-edit-error');
+  errEl.style.display = 'none';
+
+  if (!rollId) { errEl.textContent = 'יש לבחור תפקיד.'; errEl.style.display = ''; return; }
+  if (!start)  { errEl.textContent = 'יש להזין שעת התחלה.'; errEl.style.display = ''; return; }
+  if (!end)    { errEl.textContent = 'יש להזין שעת סיום.'; errEl.style.display = ''; return; }
+  if (end <= start) { errEl.textContent = 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.'; errEl.style.display = ''; return; }
+  if (!qty || qty < 1) { errEl.textContent = 'הכמות חייבת להיות לפחות 1.'; errEl.style.display = ''; return; }
+
+  const btn = document.getElementById('btn-save-shift');
+  btn.disabled    = true;
+  btn.textContent = 'שומר…';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(editingShiftId)}`, {
+      method:  'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rollId, startTime: start, endTime: end, requiredQuantity: qty })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.error || 'שגיאה בשמירת המשמרת.';
+      errEl.style.display = '';
+      return;
+    }
+
+    closeShiftEditModal();
+    if (currentProjectId) loadProjectSchedule(currentProjectId);
+  } catch {
+    errEl.textContent = 'שגיאת רשת. נסה שוב.';
+    errEl.style.display = '';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'שמור';
+  }
+});
+
+// ── Delete Modal ───────────────────────────────────────────────────────────
+
+function openShiftDeleteModal(shiftId) {
+  deletingShiftId = shiftId;
+  document.getElementById('shift-delete-overlay').classList.add('open');
+}
+
+function closeShiftDeleteModal() {
+  document.getElementById('shift-delete-overlay').classList.remove('open');
+  deletingShiftId = null;
+}
+
+document.getElementById('shift-delete-close').addEventListener('click',  closeShiftDeleteModal);
+document.getElementById('shift-delete-cancel').addEventListener('click', closeShiftDeleteModal);
+document.getElementById('shift-delete-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('shift-delete-overlay')) closeShiftDeleteModal();
+});
+
+document.getElementById('btn-confirm-shift-delete').addEventListener('click', async () => {
+  if (!deletingShiftId) return;
+
+  const btn = document.getElementById('btn-confirm-shift-delete');
+  btn.disabled    = true;
+  btn.textContent = 'מוחק…';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(deletingShiftId)}`, {
+      method:  'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'שגיאה במחיקת המשמרת.');
+      return;
+    }
+
+    closeShiftDeleteModal();
+    if (currentProjectId) loadProjectSchedule(currentProjectId);
+  } catch {
+    alert('שגיאת רשת. נסה שוב.');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'מחק';
+  }
+});
+
+// ── Add Shift Modal ─────────────────────────────────────────────────────────
+
+let addingShiftEventId   = null;
+let addingShiftEventDate = null;
+
+async function openShiftAddModal(eventId, eventDate) {
+  addingShiftEventId   = eventId;
+  addingShiftEventDate = eventDate;
+
+  const errEl = document.getElementById('shift-add-error');
+  errEl.style.display = 'none';
+  errEl.textContent   = '';
+
+  document.getElementById('shift-add-start').value = '';
+  document.getElementById('shift-add-end').value   = '';
+  document.getElementById('shift-add-qty').value   = 1;
+
+  document.getElementById('shift-add-overlay').classList.add('open');
+
+  // Load roles into dropdown
+  const select = document.getElementById('shift-add-role');
+  select.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const token = await getToken();
+    const res   = await fetch(`${API_BASE}/roles`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error();
+    const roles = await res.json();
+    select.innerHTML = '<option value="">Select a role…</option>' + roles.map(r =>
+      `<option value="${escapeHtml(r.rollId)}">${escapeHtml(r.rollName)}</option>`
+    ).join('');
+  } catch {
+    select.innerHTML = '<option value="">Error loading roles</option>';
+  }
+}
+
+function closeShiftAddModal() {
+  document.getElementById('shift-add-overlay').classList.remove('open');
+  addingShiftEventId   = null;
+  addingShiftEventDate = null;
+}
+
+document.getElementById('shift-add-close').addEventListener('click',  closeShiftAddModal);
+document.getElementById('shift-add-cancel').addEventListener('click', closeShiftAddModal);
+document.getElementById('shift-add-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('shift-add-overlay')) closeShiftAddModal();
+});
+
+document.getElementById('btn-save-shift-add').addEventListener('click', async () => {
+  if (!addingShiftEventId) return;
+
+  const rollId = document.getElementById('shift-add-role').value;
+  const start  = document.getElementById('shift-add-start').value;
+  const end    = document.getElementById('shift-add-end').value;
+  const qty    = parseInt(document.getElementById('shift-add-qty').value, 10);
+
+  const errEl = document.getElementById('shift-add-error');
+  errEl.style.display = 'none';
+
+  if (!rollId)          { errEl.textContent = 'Please select a role.';                  errEl.style.display = ''; return; }
+  if (!start)           { errEl.textContent = 'Please enter a start time.';              errEl.style.display = ''; return; }
+  if (!end)             { errEl.textContent = 'Please enter an end time.';               errEl.style.display = ''; return; }
+  if (end <= start)     { errEl.textContent = 'End time must be after start time.';      errEl.style.display = ''; return; }
+  if (!qty || qty < 1) { errEl.textContent = 'Required quantity must be at least 1.';  errEl.style.display = ''; return; }
+
+  // Compose full ISO datetime: use event's date + chosen time
+  const date    = addingShiftEventDate || new Date().toISOString().slice(0, 10);
+  const startDt = `${date}T${start}:00`;
+  const endDt   = `${date}T${end}:00`;
+
+  const btn = document.getElementById('btn-save-shift-add');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(addingShiftEventId)}/shifts`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rollId, startTime: startDt, endTime: endDt, requiredQuantity: qty })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.error || 'Error saving shift.';
+      errEl.style.display = '';
+      return;
+    }
+
+    closeShiftAddModal();
+    if (currentProjectId) loadProjectSchedule(currentProjectId);
+  } catch {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = '';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Save';
+  }
+});
+
+// ── Attach time picker to all static time inputs ────────────────────────────
+attachTimePicker(document.getElementById('shift-edit-start'));
+attachTimePicker(document.getElementById('shift-edit-end'));
+attachTimePicker(document.getElementById('shift-add-start'));
+attachTimePicker(document.getElementById('shift-add-end'));

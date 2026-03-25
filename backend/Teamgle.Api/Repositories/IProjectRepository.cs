@@ -16,10 +16,14 @@ public interface IProjectRepository
 
     // ── Shift ──────────────────────────────────────────────────────────────
     Task CreateShiftAsync(string eventId, CreateShiftRequest request);
+    Task CreateEventShiftAsync(string eventId, string firebaseUid, CreateShiftRequest request);
+    Task UpdateShiftAsync(string shiftId, string firebaseUid, UpdateShiftRequest request);
+    Task DeleteShiftAsync(string shiftId, string firebaseUid);
 
     // ── Query ──────────────────────────────────────────────────────────────
     Task<IEnumerable<ProjectListItemResponse>> GetProjectsByManagerAsync(string firebaseUid);
     Task<ProjectDetailResponse?> GetProjectDetailAsync(string projId, string firebaseUid);
+    Task<ProjectScheduleResponse?> GetProjectScheduleAsync(string projId, string firebaseUid);
 
     // ── Tasks ──────────────────────────────────────────────────────────────
     Task<IEnumerable<TaskItem>?> GetTasksByProjectIdAsync(string projId, string firebaseUid);
