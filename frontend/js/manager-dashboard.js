@@ -1939,9 +1939,10 @@ document.getElementById("pd-task-filter-bar").addEventListener("click", (e) => {
 
 // ── TASKS TAB ───────────────────────────────────────────────────────────────
 
+const TASK_STATUSES = ["open", "in_progress", "done", "canceled"];
+
 async function renderTasksTab() {
-  const list = document.getElementById("pd-task-list");
-  if (!list || !currentProjectDetail) return;
+  if (!currentProjectDetail) return;
 
   // Already loaded — just re-apply filters from cache
   if (_pdTasksData !== null) {
@@ -1949,7 +1950,11 @@ async function renderTasksTab() {
     return;
   }
 
-  list.innerHTML = '<div class="pd-loading">Loading tasks…</div>';
+  TASK_STATUSES.forEach((status) => {
+    const col = document.getElementById(`pd-col-${status}`);
+    if (col) col.innerHTML = '<div class="pd-loading">Loading…</div>';
+  });
+
   try {
     const token = await getToken();
     const res = await fetch(
@@ -1960,42 +1965,50 @@ async function renderTasksTab() {
     _pdTasksData = await res.json();
     applyTaskFilters();
   } catch {
-    list.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
+    TASK_STATUSES.forEach((status) => {
+      const col = document.getElementById(`pd-col-${status}`);
+      if (col) col.innerHTML = "";
+    });
+    const openCol = document.getElementById("pd-col-open");
+    if (openCol) openCol.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
   }
 }
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 function applyTaskFilters() {
-  const list = document.getElementById("pd-task-list");
-  if (!list || _pdTasksData === null) return;
+  if (_pdTasksData === null) return;
   // Don't re-render while an unsaved new row is open
-  if (list.querySelector('[data-new="true"]')) return;
-  // Detach stale _expandedRow reference (DOM will be replaced)
-  if (_expandedRow && list.contains(_expandedRow)) _expandedRow = null;
+  const openCol = document.getElementById("pd-col-open");
+  if (openCol && openCol.querySelector('[data-new="true"]')) return;
+  // Clear stale expanded row reference (DOM will be replaced)
+  if (_expandedRow) _expandedRow = null;
 
-  const filtered = _pdTasksData.filter((t) => {
-    const statusOk =
-      _taskFilterStatus === "all" || t.status === _taskFilterStatus;
-    const priorityOk =
-      _taskFilterPriority === "all" || t.priority === _taskFilterPriority;
-    return statusOk && priorityOk;
-  });
+  const filtered = _pdTasksData.filter(
+    (t) => _taskFilterPriority === "all" || t.priority === _taskFilterPriority,
+  );
   filtered.sort(
     (a, b) =>
       (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99),
   );
 
-  const isFiltered =
-    _taskFilterStatus !== "all" || _taskFilterPriority !== "all";
-  if (filtered.length === 0) {
-    list.innerHTML = isFiltered
-      ? '<div class="pd-filter-no-match">No tasks match the current filters.</div>'
-      : taskEmptyStateHtml();
-    return;
-  }
-  list.innerHTML = "";
-  filtered.forEach((t) => list.appendChild(buildTaskRow(t)));
+  TASK_STATUSES.forEach((status) => {
+    const col = document.getElementById(`pd-col-${status}`);
+    const countEl = document.getElementById(`pd-col-count-${status}`);
+    if (!col) return;
+    const colWrapper = col.closest(".pd-kanban-col");
+    const colTasks = filtered.filter((t) => t.status === status);
+    if (colTasks.length === 0) {
+      col.innerHTML = "";
+      if (countEl) countEl.textContent = "0";
+      if (colWrapper) colWrapper.style.display = "none";
+      return;
+    }
+    if (colWrapper) colWrapper.style.display = "";
+    if (countEl) countEl.textContent = colTasks.length;
+    col.innerHTML = "";
+    colTasks.forEach((t) => col.appendChild(buildTaskRow(t)));
+  });
 }
 
 function resetTaskFilterPills() {
@@ -2014,7 +2027,6 @@ function buildTaskRow(task) {
   row.dataset.taskId = task.taskId;
   row.innerHTML = `
     <div class="pd-row-summary">
-      <span class="pd-task-status-text">${task.status.replace("_", " ")}</span>
       <span class="pd-task-content">${escapeHtml(task.content)}</span>
       <div class="pd-row-meta">
         <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
@@ -2188,15 +2200,15 @@ function collapseRow(row) {
   if (_expandedRow === row) _expandedRow = null;
 }
 
-function taskEmptyStateHtml() {
-  return '<div class="pd-empty-state">No tasks yet. Start by adding your first task.</div>';
-}
 
 function addNewTaskRow() {
-  const list = document.getElementById("pd-task-list");
+  const list = document.getElementById("pd-col-open");
   if (!list) return;
   // Prevent double-add
   if (list.querySelector('[data-new="true"]')) return;
+  // Ensure the open column is visible (may be hidden if it had no tasks)
+  const colWrapper = list.closest(".pd-kanban-col");
+  if (colWrapper) colWrapper.style.display = "";
 
   const tempTask = {
     taskId: "",
@@ -2221,7 +2233,7 @@ function addNewTaskRow() {
     if (_expandedRow === row) _expandedRow = null;
     row.remove();
     if (_pdTasksData !== null) applyTaskFilters();
-    else list.innerHTML = taskEmptyStateHtml();
+    else list.innerHTML = '<div class="pd-kanban-empty">No tasks</div>';
   });
 
   // Replace the wired save from buildTaskRow with a fresh CREATE handler
@@ -2272,8 +2284,8 @@ function addNewTaskRow() {
   // Collapse any currently expanded row
   if (_expandedRow) collapseRow(_expandedRow);
 
-  // Remove empty state placeholder
-  const emptyEl = list.querySelector(".pd-empty-state");
+  // Remove empty state placeholder if present
+  const emptyEl = list.querySelector(".pd-kanban-empty");
   if (emptyEl) emptyEl.remove();
 
   list.prepend(row);

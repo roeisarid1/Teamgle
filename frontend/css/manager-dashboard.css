@@ -2893,3 +2893,80 @@ tr.expanded-row > td {
   .pd-filter-clear { margin-left: 0; }
   .pd-filter-pill { min-height: 36px; padding: 4px 12px; }
 }
+
+/* ── Kanban Board ─────────────────────────────────────────────────────────── */
+.pd-kanban-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-top: 4px;
+}
+
+.pd-kanban-col {
+  background: #f8f9fb;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.pd-kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pd-kanban-col-header--open        { border-top: 3px solid #d1d5db; }
+.pd-kanban-col-header--in_progress { border-top: 3px solid var(--blue); }
+.pd-kanban-col-header--done        { border-top: 3px solid #22c55e; }
+.pd-kanban-col-header--canceled    { border-top: 3px solid #fca5a5; }
+
+.pd-kanban-col-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pd-kanban-col-header--open        .pd-kanban-col-title { color: #9ca3af; }
+.pd-kanban-col-header--in_progress .pd-kanban-col-title { color: var(--blue); }
+.pd-kanban-col-header--done        .pd-kanban-col-title { color: #16a34a; }
+.pd-kanban-col-header--canceled    .pd-kanban-col-title { color: #ef4444; }
+
+.pd-kanban-col-count {
+  font-size: 11px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #6b7280;
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.pd-kanban-col-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.pd-kanban-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* In kanban, task rows should not show the left-border status bar (redundant with column color) */
+.pd-kanban-col-list .pd-task-row::before { display: none; }
+.pd-kanban-col-list .pd-task-row > .pd-row-summary,
+.pd-kanban-col-list .pd-task-row > .pd-row-form { padding-left: 12px; }
+.pd-kanban-col-list .pd-task-row > .pd-row-form.expanded { padding: 12px 12px 14px; }
+
+@media (max-width: 560px) {
+  .pd-kanban-board { grid-template-columns: 1fr; }
+}

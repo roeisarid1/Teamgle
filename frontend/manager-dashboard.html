@@ -365,16 +365,6 @@
           </div>
           <div class="pd-filter-bar" id="pd-task-filter-bar">
             <div class="pd-filter-section">
-              <span class="pd-field-label">Status</span>
-              <div class="pd-filter-group" data-filter-type="status">
-                <button class="pd-filter-pill active"                          data-filter="status" data-value="all">All</button>
-                <button class="pd-filter-pill pd-filter-pill--open"            data-filter="status" data-value="open">open</button>
-                <button class="pd-filter-pill pd-filter-pill--in_progress"     data-filter="status" data-value="in_progress">in progress</button>
-                <button class="pd-filter-pill pd-filter-pill--done"            data-filter="status" data-value="done">done</button>
-                <button class="pd-filter-pill pd-filter-pill--canceled"        data-filter="status" data-value="canceled">canceled</button>
-              </div>
-            </div>
-            <div class="pd-filter-section">
               <span class="pd-field-label">Priority</span>
               <div class="pd-filter-group" data-filter-type="priority">
                 <button class="pd-filter-pill active" data-filter="priority" data-value="all">All</button>
@@ -386,7 +376,36 @@
             </div>
             <button class="pd-filter-clear" id="btn-clear-task-filters" style="display:none">Clear filters</button>
           </div>
-          <div class="pd-task-list" id="pd-task-list"></div>
+          <div class="pd-kanban-board" id="pd-task-board">
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--open">
+                <span class="pd-kanban-col-title">Open</span>
+                <span class="pd-kanban-col-count" id="pd-col-count-open">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="pd-col-open"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--in_progress">
+                <span class="pd-kanban-col-title">In Progress</span>
+                <span class="pd-kanban-col-count" id="pd-col-count-in_progress">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="pd-col-in_progress"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--done">
+                <span class="pd-kanban-col-title">Done</span>
+                <span class="pd-kanban-col-count" id="pd-col-count-done">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="pd-col-done"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--canceled">
+                <span class="pd-kanban-col-title">Canceled</span>
+                <span class="pd-kanban-col-count" id="pd-col-count-canceled">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="pd-col-canceled"></div>
+            </div>
+          </div>
         </div>
         <div class="pd-panel" data-tab-panel="brief" style="display:none">
           <div class="pd-section-header">
