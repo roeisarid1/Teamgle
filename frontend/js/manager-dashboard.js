@@ -4643,14 +4643,6 @@ const STAFFING_MOCK = {
     { id: 10, name: "Yosi Katz",     initials: "YK", dept: "Security",    shiftsDone: 15,
       role: "Security Officer", cost: "₪155/hr", shift: null },
   ],
-  canceled: [
-    { id: 11, name: "Oren Tal",      initials: "OT", dept: "Event Staff", shiftsDone: 4,
-      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "Stage Manager",   cost: "₪175/hr",
-      canceledBy: "employee_request_canceled" },
-    { id: 12, name: "Dana Levy",     initials: "DL", dept: "Tech Crew",   shiftsDone: 7,
-      shift: "Main Show · Mar 15, 18:00–23:00",        role: "AV Technician",   cost: "₪205/hr",
-      canceledBy: "manager_approved_canceled" },
-  ],
 };
 
 function renderStaffingTab() {
@@ -4662,7 +4654,7 @@ function renderStaffingTab() {
 }
 
 function _buildStaffingHTML() {
-  const { applicants, approved, hold, rejected, potential, canceled } = STAFFING_MOCK;
+  const { applicants, approved, hold, rejected, potential } = STAFFING_MOCK;
   return `
     <div class="ps-header">
       <div class="ps-header-info">
@@ -4681,7 +4673,6 @@ function _buildStaffingHTML() {
     ${_buildStaffingSection("approved",  "Approved Workers",    "check-circle", "approved",  approved,   "approved")}
     ${_buildStaffingSection("hold",      "Hold / Standby",      "pause-circle", "hold",      hold,       "hold")}
     ${_buildStaffingSection("rejected",  "Rejected Workers",    "x-circle",     "rejected",  rejected,   "rejected")}
-    ${_buildStaffingSection("canceled",  "Canceled Workers",    "rotate-ccw",   "canceled",  canceled,   "canceled")}
   `;
 }
 
@@ -4716,10 +4707,12 @@ function _buildWorkerRow(w, sectionType) {
     btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
   if (sectionType === "applicant" || sectionType === "approved")
     btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
-  if (sectionType !== "rejected" && sectionType !== "canceled")
+  if (sectionType !== "rejected")
     btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
-  if (sectionType === "canceled")
-    btns += `<button class="ps-send-btn ps-send-btn--reassign" data-action="reassign" title="Re-assign to shift"><i data-lucide="rotate-ccw"></i> Re-assign</button>`;
+  if (sectionType === "rejected") {
+    btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
+    btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+  }
   btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
 
   return `
@@ -4825,15 +4818,14 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Individual send-request / re-assign buttons
+  // Individual send-request / return-to-pool buttons
   document.querySelectorAll(".ps-root .ps-send-btn").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
       const workerId = btn.closest(".ps-row")?.dataset.workerId;
-      const isReassign = btn.dataset.action === "reassign";
-      if (isReassign) {
-        console.log(`[Staffing] Re-assign canceled worker #${workerId}`);
-        btn.innerHTML = `<i data-lucide="check"></i> Re-assigned`;
+      if (btn.dataset.action === "return-to-pool") {
+        console.log(`[Staffing] Return worker #${workerId} to potential pool`);
+        btn.innerHTML = `<i data-lucide="check"></i> Moved`;
       } else {
         console.log(`[Staffing] Send request to worker #${workerId}`);
         btn.innerHTML = `<i data-lucide="check"></i> Sent`;
