@@ -4666,17 +4666,13 @@ function _buildStaffingHTML() {
           <i data-lucide="search" class="ps-search-icon"></i>
           <input type="text" class="ps-search" id="ps-search-input" placeholder="Search workers…">
         </div>
-        <button class="ps-btn-primary" id="ps-btn-send-all" ${potential.length === 0 ? "disabled" : ""}>
-          <i data-lucide="send"></i>
-          Send Request to All (${potential.length})
-        </button>
       </div>
     </div>
+    ${_buildPotentialSection(potential)}
     ${_buildStaffingSection("applicants", "Shift Applicants",    "inbox",        "pending",   applicants, "applicant")}
     ${_buildStaffingSection("approved",  "Approved Workers",    "check-circle", "approved",  approved,   "approved")}
     ${_buildStaffingSection("hold",      "Hold / Standby",      "pause-circle", "hold",      hold,       "hold")}
     ${_buildStaffingSection("rejected",  "Rejected Workers",    "x-circle",     "rejected",  rejected,   "rejected")}
-    ${_buildPotentialSection(potential)}
   `;
 }
 
@@ -4762,7 +4758,13 @@ function _buildPotentialSection(workers) {
           <span class="ps-section-title">Potential Workers</span>
           <span class="ps-badge ps-badge--potential">${workers.length}</span>
         </div>
-        <i data-lucide="chevron-down" class="ps-chevron"></i>
+        <div class="ps-section-hdr-right">
+          <button class="ps-btn-primary" id="ps-btn-send-all" ${workers.length === 0 ? "disabled" : ""}>
+            <i data-lucide="send"></i>
+            Send Request to All
+          </button>
+          <i data-lucide="chevron-down" class="ps-chevron"></i>
+        </div>
       </div>
       <div class="ps-section-body" id="ps-body-potential">
         <table class="ps-table">
@@ -4823,7 +4825,8 @@ function _initStaffingHandlers() {
   });
 
   // Send to all potential workers
-  document.getElementById("ps-btn-send-all")?.addEventListener("click", () => {
+  document.getElementById("ps-btn-send-all")?.addEventListener("click", (e) => {
+    e.stopPropagation();
     console.log("[Staffing] Send request to all potential workers");
     document.querySelectorAll("#ps-body-potential .ps-send-btn").forEach(btn => {
       btn.innerHTML = `<i data-lucide="check"></i> Sent`;

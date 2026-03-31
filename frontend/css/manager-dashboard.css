@@ -3069,6 +3069,11 @@ tr.expanded-row > td {
   align-items: center;
   gap: 9px;
 }
+.ps-section-hdr-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .ps-section-icon { color: var(--text-muted); width: 17px; height: 17px; flex-shrink: 0; }
 .ps-section-title { font-weight: 600; font-size: 14px; color: var(--text); }
 .ps-chevron {
