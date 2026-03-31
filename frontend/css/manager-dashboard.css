@@ -3063,18 +3063,21 @@ tr.expanded-row > td {
 #ps-section-approved   { border-left-color: #22c55e; }
 #ps-section-hold       { border-left-color: #a78bfa; }
 #ps-section-rejected   { border-left-color: #f87171; }
+#ps-section-canceled   { border-left-color: #94a3b8; }
 
 #ps-section-potential  .ps-section-hdr { background: #f0f3ff; }
 #ps-section-applicants .ps-section-hdr { background: #fff7ed; }
 #ps-section-approved   .ps-section-hdr { background: #f0fdf4; }
 #ps-section-hold       .ps-section-hdr { background: #f5f3ff; }
 #ps-section-rejected   .ps-section-hdr { background: #fff1f2; }
+#ps-section-canceled   .ps-section-hdr { background: #f8fafc; }
 
 #ps-section-potential  .ps-section-icon { color: #5B7BF0; }
 #ps-section-applicants .ps-section-icon { color: #f97316; }
 #ps-section-approved   .ps-section-icon { color: #22c55e; }
 #ps-section-hold       .ps-section-icon { color: #a78bfa; }
 #ps-section-rejected   .ps-section-icon { color: #f87171; }
+#ps-section-canceled   .ps-section-icon { color: #94a3b8; }
 
 /* Hover: slightly darker version of each tint */
 #ps-section-potential  .ps-section-hdr:hover { background: #e6ebff; }
@@ -3082,6 +3085,7 @@ tr.expanded-row > td {
 #ps-section-approved   .ps-section-hdr:hover { background: #dcfce7; }
 #ps-section-hold       .ps-section-hdr:hover { background: #ede9fe; }
 #ps-section-rejected   .ps-section-hdr:hover { background: #ffe4e6; }
+#ps-section-canceled   .ps-section-hdr:hover { background: #f1f5f9; }
 
 .ps-section-hdr {
   display: flex;
@@ -3128,6 +3132,7 @@ tr.expanded-row > td {
 .ps-badge--approved  { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .ps-badge--hold      { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .ps-badge--rejected  { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+.ps-badge--canceled  { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 .ps-badge--potential { background: var(--blue-light); color: var(--blue); border: 1px solid #c7d3fa; }
 
 /* Table */
@@ -3254,7 +3259,9 @@ tr.expanded-row > td {
 }
 .ps-send-btn:hover:not(:disabled) { background: var(--blue-light); }
 .ps-send-btn:disabled { cursor: default; }
-.ps-send-btn--sent { border-color: #4ade80; color: #16a34a; }
+.ps-send-btn--sent     { border-color: #4ade80; color: #16a34a; }
+.ps-send-btn--reassign { border-color: #94a3b8; color: #475569; }
+.ps-send-btn--reassign:hover:not(:disabled) { background: #f1f5f9; border-color: #64748b; }
 .ps-send-btn svg { width: 12px; height: 12px; }
 
 /* Responsive */
