@@ -4637,11 +4637,11 @@ const STAFFING_MOCK = {
   ],
   potential: [
     { id: 8,  name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
-      role: "AV Technician",   cost: "₪195/hr" },
+      role: "AV Technician",    cost: "₪195/hr", shift: "Opening Ceremony · Mar 15, 09:00–17:00" },
     { id: 9,  name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
-      role: "Crew Lead",       cost: "₪180/hr" },
+      role: "Crew Lead",        cost: "₪180/hr", shift: "Main Show · Mar 15, 18:00–23:00" },
     { id: 10, name: "Yosi Katz",     initials: "YK", dept: "Security",    shiftsDone: 15,
-      role: "Security Officer", cost: "₪155/hr" },
+      role: "Security Officer", cost: "₪155/hr", shift: null },
   ],
 };
 
@@ -4739,7 +4739,10 @@ function _buildPotentialSection(workers) {
             <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
           </div>
         </div></td>
-        <td><span class="ps-shift-badge ps-shift-badge--none">Not assigned yet</span></td>
+        <td>${w.shift
+          ? `<span class="ps-shift-badge">${escapeHtml(w.shift)}</span>`
+          : `<span class="ps-shift-badge ps-shift-badge--none">Select shift</span>`
+        }</td>
         <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
         <td class="ps-cost">${escapeHtml(w.cost)}</td>
         <td><div class="ps-actions-cell">
@@ -4769,7 +4772,7 @@ function _buildPotentialSection(workers) {
       <div class="ps-section-body" id="ps-body-potential">
         <table class="ps-table">
           <thead><tr>
-            <th>Worker Info</th><th>Assigned Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
+            <th>Worker Info</th><th>Applied Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
