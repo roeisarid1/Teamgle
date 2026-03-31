@@ -1696,16 +1696,39 @@ tr.expanded-row > td {
 .cp-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* Form section card (white box with title) */
 .form-section-card {
   background: var(--card);
   border: 1px solid var(--border);
+  border-left-width: 4px;
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+
+/* Project Details card — blue accent */
+.cp-body > .form-section-card:first-child {
+  border-left-color: #5B7BF0;
+}
+.cp-body > .form-section-card:first-child .form-section-header {
+  background: #f0f3ff;
+}
+.cp-body > .form-section-card:first-child .form-section-header:hover {
+  background: #e6ebff;
+}
+
+/* Events card — orange accent */
+.cp-body > .form-section-card:last-child {
+  border-left-color: #f97316;
+}
+.cp-body > .form-section-card:last-child .form-section-header {
+  background: #fff7ed;
+}
+.cp-body > .form-section-card:last-child .form-section-header:hover {
+  background: #ffedd5;
 }
 
 .form-section-header {
@@ -1715,6 +1738,7 @@ tr.expanded-row > td {
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   background: #fafbff;
+  transition: background var(--transition);
 }
 
 .form-section-title {
@@ -1796,9 +1820,11 @@ tr.expanded-row > td {
 
 /* Event block */
 .event-block {
-  border: 1.5px solid var(--border);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
   border-radius: 10px;
   overflow: hidden;
+  box-shadow: 0 1px 5px rgba(0,0,0,.05);
 }
 
 .event-block-header {
@@ -1806,8 +1832,9 @@ tr.expanded-row > td {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  background: #f8f9fc;
+  background: #f0f3ff;
   border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
 }
 
 .event-block-label {
@@ -2035,7 +2062,7 @@ tr.expanded-row > td {
   user-select: none;
 }
 
-.event-block-header:hover { background: #eef1fe; }
+.event-block-header:hover { background: #e6ebff; }
 
 .event-block-header-inner {
   display: flex;
