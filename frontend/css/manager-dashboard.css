@@ -3050,10 +3050,39 @@ tr.expanded-row > td {
 .ps-section {
   background: var(--card);
   border: 1px solid var(--border);
+  border-left-width: 4px;
   border-radius: var(--radius);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
+
+/* Per-section accent colors: left border + header tint */
+#ps-section-potential  { border-left-color: #5B7BF0; }
+#ps-section-applicants { border-left-color: #f97316; }
+#ps-section-approved   { border-left-color: #22c55e; }
+#ps-section-hold       { border-left-color: #a78bfa; }
+#ps-section-rejected   { border-left-color: #f87171; }
+
+#ps-section-potential  .ps-section-hdr { background: #f0f3ff; }
+#ps-section-applicants .ps-section-hdr { background: #fff7ed; }
+#ps-section-approved   .ps-section-hdr { background: #f0fdf4; }
+#ps-section-hold       .ps-section-hdr { background: #f5f3ff; }
+#ps-section-rejected   .ps-section-hdr { background: #fff1f2; }
+
+#ps-section-potential  .ps-section-icon { color: #5B7BF0; }
+#ps-section-applicants .ps-section-icon { color: #f97316; }
+#ps-section-approved   .ps-section-icon { color: #22c55e; }
+#ps-section-hold       .ps-section-icon { color: #a78bfa; }
+#ps-section-rejected   .ps-section-icon { color: #f87171; }
+
+/* Hover: slightly darker version of each tint */
+#ps-section-potential  .ps-section-hdr:hover { background: #e6ebff; }
+#ps-section-applicants .ps-section-hdr:hover { background: #ffedd5; }
+#ps-section-approved   .ps-section-hdr:hover { background: #dcfce7; }
+#ps-section-hold       .ps-section-hdr:hover { background: #ede9fe; }
+#ps-section-rejected   .ps-section-hdr:hover { background: #ffe4e6; }
+
 .ps-section-hdr {
   display: flex;
   align-items: center;
@@ -3062,8 +3091,8 @@ tr.expanded-row > td {
   cursor: pointer;
   user-select: none;
   transition: background var(--transition);
+  border-bottom: 1px solid transparent;
 }
-.ps-section-hdr:hover { background: var(--bg); }
 .ps-section-hdr-left {
   display: flex;
   align-items: center;
@@ -3074,8 +3103,8 @@ tr.expanded-row > td {
   align-items: center;
   gap: 10px;
 }
-.ps-section-icon { color: var(--text-muted); width: 17px; height: 17px; flex-shrink: 0; }
-.ps-section-title { font-weight: 600; font-size: 14px; color: var(--text); }
+.ps-section-icon { width: 17px; height: 17px; flex-shrink: 0; }
+.ps-section-title { font-weight: 700; font-size: 14px; color: var(--text); }
 .ps-chevron {
   width: 17px; height: 17px;
   color: var(--text-muted);
