@@ -1627,6 +1627,7 @@ function activateProjectTab(name) {
   if (name === "schedule") renderScheduleCalendar();
   if (name === "tasks") renderTasksTab();
   if (name === "brief") renderBriefTab();
+  if (name === "employees") renderStaffingTab();
   if (name === "schedule" && currentProjectId) {
     loadProjectSchedule(currentProjectId);
   }
@@ -4608,3 +4609,230 @@ attachTimePicker(document.getElementById("shift-edit-start"));
 attachTimePicker(document.getElementById("shift-edit-end"));
 attachTimePicker(document.getElementById("shift-add-start"));
 attachTimePicker(document.getElementById("shift-add-end"));
+
+// ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
+
+const STAFFING_MOCK = {
+  applicants: [
+    { id: 1, name: "Daniel Klein",   initials: "DK", dept: "Event Staff", shiftsDone: 2,
+      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "Stage Manager",       cost: "₪180/hr" },
+    { id: 2, name: "Maya Levi",      initials: "ML", dept: "Logistics",   shiftsDone: 5,
+      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Crew Lead",            cost: "₪210/hr" },
+    { id: 3, name: "Tom Ben-David",  initials: "TB", dept: "Security",    shiftsDone: 12,
+      shift: "Closing Night · Mar 16, 20:00–02:00",    role: "Security Officer",     cost: "₪160/hr" },
+  ],
+  approved: [
+    { id: 4, name: "Noa Shapiro",    initials: "NS", dept: "Production",  shiftsDone: 8,
+      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "Production Asst.",     cost: "₪150/hr" },
+    { id: 5, name: "Gal Cohen",      initials: "GC", dept: "Tech Crew",   shiftsDone: 3,
+      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "AV Technician",        cost: "₪200/hr" },
+  ],
+  hold: [
+    { id: 6, name: "Ran Mizrahi",    initials: "RM", dept: "Catering",    shiftsDone: 1,
+      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Waiter",               cost: "₪120/hr" },
+  ],
+  rejected: [
+    { id: 7, name: "Shira Avraham",  initials: "SA", dept: "Event Staff", shiftsDone: 0,
+      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "General Staff",        cost: "₪110/hr" },
+  ],
+  potential: [
+    { id: 8,  name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
+      role: "AV Technician",   cost: "₪195/hr" },
+    { id: 9,  name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
+      role: "Crew Lead",       cost: "₪180/hr" },
+    { id: 10, name: "Yosi Katz",     initials: "YK", dept: "Security",    shiftsDone: 15,
+      role: "Security Officer", cost: "₪155/hr" },
+  ],
+};
+
+function renderStaffingTab() {
+  const root = document.getElementById("ps-root");
+  if (!root) return;
+  root.innerHTML = _buildStaffingHTML();
+  if (window.lucide) lucide.createIcons();
+  _initStaffingHandlers();
+}
+
+function _buildStaffingHTML() {
+  const { applicants, approved, hold, rejected, potential } = STAFFING_MOCK;
+  return `
+    <div class="ps-header">
+      <div class="ps-header-info">
+        <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
+        <p class="ps-header-desc">Manage worker assignments for this project's shifts and events.</p>
+      </div>
+      <div class="ps-header-actions">
+        <div class="ps-search-wrap">
+          <i data-lucide="search" class="ps-search-icon"></i>
+          <input type="text" class="ps-search" id="ps-search-input" placeholder="Search workers…">
+        </div>
+        <button class="ps-btn-primary" id="ps-btn-send-all" ${potential.length === 0 ? "disabled" : ""}>
+          <i data-lucide="send"></i>
+          Send Request to All (${potential.length})
+        </button>
+      </div>
+    </div>
+    ${_buildStaffingSection("applicants", "Shift Applicants",    "inbox",        "pending",   applicants, "applicant")}
+    ${_buildStaffingSection("approved",  "Approved Workers",    "check-circle", "approved",  approved,   "approved")}
+    ${_buildStaffingSection("hold",      "Hold / Standby",      "pause-circle", "hold",      hold,       "hold")}
+    ${_buildStaffingSection("rejected",  "Rejected Workers",    "x-circle",     "rejected",  rejected,   "rejected")}
+    ${_buildPotentialSection(potential)}
+  `;
+}
+
+function _buildStaffingSection(key, title, icon, badgeType, workers, sectionType) {
+  const rows = workers.length === 0
+    ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+    : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+  return `
+    <div class="ps-section" id="ps-section-${key}">
+      <div class="ps-section-hdr" data-ps-toggle="${key}">
+        <div class="ps-section-hdr-left">
+          <i data-lucide="${icon}" class="ps-section-icon"></i>
+          <span class="ps-section-title">${title}</span>
+          <span class="ps-badge ps-badge--${badgeType}">${workers.length}</span>
+        </div>
+        <i data-lucide="chevron-down" class="ps-chevron"></i>
+      </div>
+      <div class="ps-section-body" id="ps-body-${key}">
+        <table class="ps-table">
+          <thead><tr>
+            <th>Worker Info</th><th>Applied Shift</th><th>Applied Role</th><th>Cost</th><th>Actions</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function _buildWorkerRow(w, sectionType) {
+  let btns = "";
+  if (sectionType === "applicant" || sectionType === "hold")
+    btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
+  if (sectionType === "applicant" || sectionType === "approved")
+    btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
+  if (sectionType !== "rejected")
+    btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
+  btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
+
+  return `
+    <tr class="ps-row" data-worker-id="${w.id}">
+      <td><div class="ps-cell-worker">
+        <div class="ps-avatar">${escapeHtml(w.initials)}</div>
+        <div>
+          <div class="ps-worker-name">${escapeHtml(w.name)}</div>
+          <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
+        </div>
+      </div></td>
+      <td><span class="ps-shift-badge">${escapeHtml(w.shift)}</span></td>
+      <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
+      <td class="ps-cost">${escapeHtml(w.cost)}</td>
+      <td><div class="ps-actions-cell">${btns}</div></td>
+    </tr>`;
+}
+
+function _buildPotentialSection(workers) {
+  const rows = workers.length === 0
+    ? `<tr><td colspan="5" class="ps-empty">No additional workers available.</td></tr>`
+    : workers.map(w => `
+      <tr class="ps-row" data-worker-id="${w.id}">
+        <td><div class="ps-cell-worker">
+          <div class="ps-avatar ps-avatar--potential">${escapeHtml(w.initials)}</div>
+          <div>
+            <div class="ps-worker-name">${escapeHtml(w.name)}</div>
+            <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
+          </div>
+        </div></td>
+        <td><span class="ps-shift-badge ps-shift-badge--none">Not assigned yet</span></td>
+        <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
+        <td class="ps-cost">${escapeHtml(w.cost)}</td>
+        <td><div class="ps-actions-cell">
+          <button class="ps-send-btn" data-action="send-request" title="Send shift request">
+            <i data-lucide="send"></i> Send Request
+          </button>
+          <button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>
+        </div></td>
+      </tr>`).join("");
+
+  return `
+    <div class="ps-section" id="ps-section-potential">
+      <div class="ps-section-hdr" data-ps-toggle="potential">
+        <div class="ps-section-hdr-left">
+          <i data-lucide="users" class="ps-section-icon"></i>
+          <span class="ps-section-title">Potential Workers</span>
+          <span class="ps-badge ps-badge--potential">${workers.length}</span>
+        </div>
+        <i data-lucide="chevron-down" class="ps-chevron"></i>
+      </div>
+      <div class="ps-section-body" id="ps-body-potential">
+        <table class="ps-table">
+          <thead><tr>
+            <th>Worker Info</th><th>Assigned Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function _initStaffingHandlers() {
+  // Section collapse / expand toggles
+  document.querySelectorAll("[data-ps-toggle]").forEach(hdr => {
+    hdr.addEventListener("click", () => {
+      const key = hdr.dataset.psToggle;
+      document.getElementById(`ps-section-${key}`)?.classList.toggle("ps-collapsed");
+    });
+  });
+
+  // Live search filter across all rows
+  document.getElementById("ps-search-input")?.addEventListener("input", e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll(".ps-root .ps-row").forEach(row => {
+      const name = row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
+      const role = row.querySelector(".ps-role-chip")?.textContent.toLowerCase() ?? "";
+      row.style.display = name.includes(q) || role.includes(q) ? "" : "none";
+    });
+  });
+
+  // Action buttons
+  document.querySelectorAll(".ps-root .ps-action-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const workerId = btn.closest(".ps-row")?.dataset.workerId;
+      if (action === "message") {
+        // Future: navigate to chat with this worker
+        console.log(`[Staffing] Open chat with worker #${workerId}`);
+      } else {
+        console.log(`[Staffing] Action "${action}" on worker #${workerId}`);
+      }
+    });
+  });
+
+  // Individual send-request buttons
+  document.querySelectorAll(".ps-root .ps-send-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const workerId = btn.closest(".ps-row")?.dataset.workerId;
+      console.log(`[Staffing] Send request to worker #${workerId}`);
+      btn.innerHTML = `<i data-lucide="check"></i> Sent`;
+      btn.disabled = true;
+      btn.classList.add("ps-send-btn--sent");
+      if (window.lucide) lucide.createIcons();
+    });
+  });
+
+  // Send to all potential workers
+  document.getElementById("ps-btn-send-all")?.addEventListener("click", () => {
+    console.log("[Staffing] Send request to all potential workers");
+    document.querySelectorAll("#ps-body-potential .ps-send-btn").forEach(btn => {
+      btn.innerHTML = `<i data-lucide="check"></i> Sent`;
+      btn.disabled = true;
+      btn.classList.add("ps-send-btn--sent");
+    });
+    const sendAll = document.getElementById("ps-btn-send-all");
+    sendAll.innerHTML = `<i data-lucide="check"></i> All Requests Sent`;
+    sendAll.disabled = true;
+    if (window.lucide) lucide.createIcons();
+  });
+}

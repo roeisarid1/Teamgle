@@ -2970,3 +2970,267 @@ tr.expanded-row > td {
 @media (max-width: 560px) {
   .pd-kanban-board { grid-template-columns: 1fr; }
 }
+
+/* ── Project Staffing — Employees Tab ──────────────────────────────────────── */
+
+.ps-root { padding: 4px 0; }
+
+/* Header */
+.ps-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.ps-header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.ps-header-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.ps-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ps-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ps-search-icon {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.ps-search {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 8px 32px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  outline: none;
+  transition: border-color var(--transition);
+  width: 200px;
+}
+.ps-search:focus { border-color: var(--blue); }
+.ps-search::placeholder { color: var(--text-muted); }
+.ps-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+.ps-btn-primary:hover:not(:disabled) { background: var(--blue-dark); }
+.ps-btn-primary:disabled { opacity: 0.65; cursor: default; }
+.ps-btn-primary svg { width: 14px; height: 14px; }
+
+/* Sections */
+.ps-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.ps-section-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+}
+.ps-section-hdr:hover { background: var(--bg); }
+.ps-section-hdr-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ps-section-icon { color: var(--text-muted); width: 17px; height: 17px; flex-shrink: 0; }
+.ps-section-title { font-weight: 600; font-size: 14px; color: var(--text); }
+.ps-chevron {
+  width: 17px; height: 17px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+.ps-section.ps-collapsed .ps-chevron { transform: rotate(-90deg); }
+.ps-section.ps-collapsed .ps-section-body { display: none; }
+.ps-section-body { border-top: 1px solid var(--border); }
+
+/* Status badges */
+.ps-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.ps-badge--pending   { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.ps-badge--approved  { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.ps-badge--hold      { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.ps-badge--rejected  { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+.ps-badge--potential { background: var(--blue-light); color: var(--blue); border: 1px solid #c7d3fa; }
+
+/* Table */
+.ps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ps-table thead th {
+  padding: 9px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ps-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.ps-table tbody tr:last-child { border-bottom: none; }
+.ps-table tbody tr:hover { background: #fafbff; }
+.ps-table td {
+  padding: 11px 16px;
+  vertical-align: middle;
+}
+.ps-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 28px 16px !important;
+}
+
+/* Worker cell */
+.ps-cell-worker { display: flex; align-items: center; gap: 10px; }
+.ps-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--blue-light);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: .03em;
+}
+.ps-avatar--potential {
+  background: #f3f4f6;
+  color: var(--text-muted);
+}
+.ps-worker-name { font-weight: 600; color: var(--text); font-size: 13px; }
+.ps-worker-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* Shift / role chips */
+.ps-shift-badge {
+  display: inline-block;
+  padding: 4px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+.ps-shift-badge--none {
+  background: #f9fafb;
+  color: var(--text-muted);
+  border-color: #e5e7eb;
+}
+.ps-role-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  background: var(--blue-light);
+  color: var(--blue);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ps-cost {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Actions cell */
+.ps-actions-cell { display: flex; align-items: center; gap: 5px; }
+.ps-action-btn {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+.ps-action-btn svg { width: 13px; height: 13px; }
+.ps-action-btn--approve:hover { background: #f0fdf4; border-color: #4ade80; color: #16a34a; }
+.ps-action-btn--hold:hover    { background: #fffbeb; border-color: #fcd34d; color: #d97706; }
+.ps-action-btn--reject:hover  { background: #fff1f2; border-color: #f87171; color: var(--red); }
+.ps-action-btn--msg:hover     { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
+.ps-send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: var(--card);
+  border: 1.5px solid var(--blue);
+  color: var(--blue);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+.ps-send-btn:hover:not(:disabled) { background: var(--blue-light); }
+.ps-send-btn:disabled { cursor: default; }
+.ps-send-btn--sent { border-color: #4ade80; color: #16a34a; }
+.ps-send-btn svg { width: 12px; height: 12px; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .ps-header { flex-direction: column; align-items: stretch; }
+  .ps-header-actions { justify-content: flex-end; }
+  .ps-search { width: 160px; }
+  .ps-table thead { display: none; }
+  .ps-table td { display: block; padding: 6px 16px; }
+  .ps-table td:first-child { padding-top: 12px; }
+  .ps-table td:last-child  { padding-bottom: 12px; }
+  .ps-table tr { border-bottom: 1px solid var(--border); display: block; }
+}
