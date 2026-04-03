@@ -4807,6 +4807,52 @@ function _stopStaffingPoll() {
   }
 }
 
+async function _handleWorkerStatusChange(eventId, fbUid, newStatus, btn) {
+  btn.disabled = true;
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      }
+    );
+    if (!res.ok) throw new Error("Failed to update status");
+    await loadAndRenderEventWorkers(eventId);
+  } catch {
+    btn.disabled = false;
+    alert("Failed to update worker status. Please try again.");
+  }
+}
+
+async function _handleReturnToPool(eventId, fbUid, btn) {
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`;
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    if (!res.ok) throw new Error("Failed to remove assignment");
+
+    await loadAndRenderEventWorkers(eventId);
+    if (currentProjectId) await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+  } catch {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
+    if (window.lucide) lucide.createIcons();
+    alert("Failed to return worker to pool. Please try again.");
+  }
+}
+
 // Builds the potential section with a loading skeleton (workers populated async)
 function _buildPotentialSection(eventId) {
   return `
@@ -5047,30 +5093,54 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Action buttons
-  document.querySelectorAll(".ps-root .ps-action-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const action = btn.dataset.action;
-      const workerId = btn.closest(".ps-row")?.dataset.workerId;
-      if (action === "message") {
-        console.log(`[Staffing] Open chat with worker #${workerId}`);
-      } else {
-        console.log(`[Staffing] Action "${action}" on worker #${workerId}`);
-      }
-    });
-  });
+  // Action buttons — event delegation handles dynamically rendered rows
+  const psRoot = document.querySelector(".ps-root");
+  if (psRoot) {
+    psRoot.addEventListener("click", async e => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
 
-  // Return-to-pool buttons (non-potential sections)
-  document.querySelectorAll(".ps-root .ps-send-btn--return").forEach(btn => {
-    btn.addEventListener("click", e => {
+      // Skip potential-worker buttons (handled separately)
+      if (btn.classList.contains("ps-btn--send-worker")) return;
+
       e.stopPropagation();
-      btn.innerHTML = `<i data-lucide="check"></i> Moved`;
-      btn.disabled = true;
-      btn.classList.add("ps-send-btn--sent");
-      if (window.lucide) lucide.createIcons();
+
+      const action = btn.dataset.action;
+      const row    = btn.closest(".ps-row");
+      if (!row) return;
+
+      const fbUid  = row.dataset.workerFbuid;
+      const status = row.dataset.workerStatus;
+
+      // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
+      const section   = row.closest(".ps-section");
+      const sectionId = section?.id ?? "";
+      const match     = sectionId.match(/^ps-section-(.+)-(applicants|approved|hold|rejected)$/);
+      const eventId   = match?.[1];
+
+      if (action === "message") {
+        console.log(`[Staffing] Open chat with ${fbUid}`);
+        return;
+      }
+
+      if (!fbUid || !eventId) return;
+
+      if (action === "return-to-pool") {
+        await _handleReturnToPool(eventId, fbUid, btn);
+        return;
+      }
+
+      const statusMap = {
+        approve: "manager_approved",
+        hold:    "manager_hold",
+        reject:  status === "manager_approved" ? "manager_approved_canceled" : "manager_reject",
+      };
+      const newStatus = statusMap[action];
+      if (!newStatus) return;
+
+      await _handleWorkerStatusChange(eventId, fbUid, newStatus, btn);
     });
-  });
+  }
   // Note: send-request and send-all for potential workers are wired in
   // _attachPotentialWorkerHandlers(), called after each event's workers load.
 }
