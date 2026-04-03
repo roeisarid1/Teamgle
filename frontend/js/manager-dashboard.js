@@ -4797,7 +4797,11 @@ async function loadAndRenderEventWorkers(eventId) {
 }
 
 function _startStaffingPoll() {
-  _stopStaffingPoll();
+  // Only clear the interval — do NOT abort the click controller (it was just set up)
+  if (_staffingPollInterval !== null) {
+    clearInterval(_staffingPollInterval);
+    _staffingPollInterval = null;
+  }
   const events = currentProjectDetail?.events ?? [];
   _staffingPollInterval = setInterval(() => {
     events.forEach(ev => loadAndRenderEventWorkers(ev.eventId));
