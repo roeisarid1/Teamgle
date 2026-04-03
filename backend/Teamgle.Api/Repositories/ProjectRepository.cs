@@ -1268,8 +1268,6 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
 
         await conn.OpenAsync();
-        var rowsAffected = await cmd.ExecuteNonQueryAsync();
-        if (rowsAffected == 0)
-            throw new KeyNotFoundException("No matching assignment found for this employee in this event.");
+        await cmd.ExecuteNonQueryAsync(); // idempotent — 0 rows affected is acceptable
     }
 }

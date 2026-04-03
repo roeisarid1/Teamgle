@@ -1435,6 +1435,9 @@ document.querySelectorAll(".nav-item[data-section]").forEach((item) => {
 });
 
 function activateSection(name) {
+  // Stop staffing poll whenever we leave the project detail view
+  if (name !== "project-detail") _stopStaffingPoll();
+
   document.querySelectorAll(".nav-item[data-section]").forEach((el) => {
     el.classList.toggle("active", el.dataset.section === name);
   });
