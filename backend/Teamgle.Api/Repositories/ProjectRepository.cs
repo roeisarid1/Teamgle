@@ -1161,6 +1161,7 @@ public class ProjectRepository : IProjectRepository
                   'manager_reject',
                   'manager_approved_canceled'
               )
+            ORDER BY u.lastName, u.firstName
             """;
 
         var result = new EventWorkersResponse();
@@ -1173,17 +1174,25 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
 
+        var ordShiftId   = reader.GetOrdinal("ShiftId");
+        var ordUserId    = reader.GetOrdinal("UserId");
+        var ordFbUid     = reader.GetOrdinal("FbUid");
+        var ordFirstName = reader.GetOrdinal("FirstName");
+        var ordLastName  = reader.GetOrdinal("LastName");
+        var ordRoleName  = reader.GetOrdinal("RoleName");
+        var ordStatus    = reader.GetOrdinal("Status");
+
         while (await reader.ReadAsync())
         {
             var item = new AssignedWorkerItem
             {
-                ShiftId   = reader["ShiftId"].ToString()   ?? "",
-                UserId    = reader["UserId"].ToString()    ?? "",
-                FbUid     = reader["FbUid"].ToString()     ?? "",
-                FirstName = reader["FirstName"].ToString() ?? "",
-                LastName  = reader["LastName"].ToString()  ?? "",
-                RoleName  = reader["RoleName"].ToString()  ?? "",
-                Status    = reader["Status"].ToString()    ?? "",
+                ShiftId   = reader.IsDBNull(ordShiftId)   ? "" : reader.GetString(ordShiftId),
+                UserId    = reader.IsDBNull(ordUserId)    ? "" : reader.GetString(ordUserId),
+                FbUid     = reader.IsDBNull(ordFbUid)     ? "" : reader.GetString(ordFbUid),
+                FirstName = reader.IsDBNull(ordFirstName) ? "" : reader.GetString(ordFirstName),
+                LastName  = reader.IsDBNull(ordLastName)  ? "" : reader.GetString(ordLastName),
+                RoleName  = reader.IsDBNull(ordRoleName)  ? "" : reader.GetString(ordRoleName),
+                Status    = reader.IsDBNull(ordStatus)    ? "" : reader.GetString(ordStatus),
             };
 
             switch (item.Status)
@@ -1228,7 +1237,9 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@managerFbUid",   managerFbUid);
 
         await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
+        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+        if (rowsAffected == 0)
+            throw new KeyNotFoundException("No matching assignment found for this employee in this event.");
     }
 
     // ── Delete all Employee_Shift rows for an employee in an event ────────
@@ -1257,6 +1268,8 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
 
         await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
+        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+        if (rowsAffected == 0)
+            throw new KeyNotFoundException("No matching assignment found for this employee in this event.");
     }
 }
