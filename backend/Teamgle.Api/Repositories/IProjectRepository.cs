@@ -44,4 +44,9 @@ public interface IProjectRepository
     // ── Potential Workers ──────────────────────────────────────────────────
     Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string projId, string eventId, string firebaseUid);
     Task SendOfferToEmployeeAsync(string projId, string eventId, string employeeFbUid, List<string> shiftIds, string firebaseUid);
+
+    // ── Event Workers (Staffing) ───────────────────────────────────────────
+    Task<EventWorkersResponse> GetEventWorkersAsync(string eventId, string firebaseUid);
+    Task UpdateWorkerStatusAsync(string eventId, string employeeFbUid, string newStatus, string managerFbUid);
+    Task DeleteWorkerAssignmentAsync(string eventId, string employeeFbUid, string managerFbUid);
 }
