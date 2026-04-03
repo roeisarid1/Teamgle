@@ -95,6 +95,7 @@ let allEmployees = [];
 let allCustomers = [];
 let chatInitialized = false;
 let _staffingPollInterval = null;
+let _staffingClickController = null;
 
 // Add mode
 let profileFile = null; // File | null — new file chosen for profile
@@ -4805,6 +4806,10 @@ function _stopStaffingPoll() {
     clearInterval(_staffingPollInterval);
     _staffingPollInterval = null;
   }
+  if (_staffingClickController) {
+    _staffingClickController.abort();
+    _staffingClickController = null;
+  }
 }
 
 async function _handleWorkerStatusChange(eventId, fbUid, newStatus, btn) {
@@ -4822,7 +4827,9 @@ async function _handleWorkerStatusChange(eventId, fbUid, newStatus, btn) {
     if (!res.ok) throw new Error("Failed to update status");
     await loadAndRenderEventWorkers(eventId);
   } catch {
-    btn.disabled = false;
+    // btn may be detached after re-render — re-query by fbUid
+    document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"] [data-action]`)
+      .forEach(b => { b.disabled = false; });
     alert("Failed to update worker status. Please try again.");
   }
 }
@@ -4846,9 +4853,12 @@ async function _handleReturnToPool(eventId, fbUid, btn) {
     await loadAndRenderEventWorkers(eventId);
     if (currentProjectId) await loadAndRenderPotentialWorkers(currentProjectId, eventId);
   } catch {
-    btn.disabled = false;
-    btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
-    if (window.lucide) lucide.createIcons();
+    // btn may be detached after partial re-render — re-query or restore if still attached
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
+      if (window.lucide) lucide.createIcons();
+    }
     alert("Failed to return worker to pool. Please try again.");
   }
 }
@@ -5096,6 +5106,8 @@ function _initStaffingHandlers() {
   // Action buttons — event delegation handles dynamically rendered rows
   const psRoot = document.querySelector(".ps-root");
   if (psRoot) {
+    if (_staffingClickController) _staffingClickController.abort();
+    _staffingClickController = new AbortController();
     psRoot.addEventListener("click", async e => {
       const btn = e.target.closest("[data-action]");
       if (!btn) return;
@@ -5139,7 +5151,7 @@ function _initStaffingHandlers() {
       if (!newStatus) return;
 
       await _handleWorkerStatusChange(eventId, fbUid, newStatus, btn);
-    });
+    }, { signal: _staffingClickController.signal });
   }
   // Note: send-request and send-all for potential workers are wired in
   // _attachPotentialWorkerHandlers(), called after each event's workers load.
