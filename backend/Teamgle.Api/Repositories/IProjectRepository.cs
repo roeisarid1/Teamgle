@@ -36,4 +36,8 @@ public interface IProjectRepository
     Task<BriefItem?> CreateBriefAsync(string projId, CreateBriefRequest request, string firebaseUid);
     Task<BriefItem?> UpdateBriefAsync(string briefId, string projId, UpdateBriefRequest request, string firebaseUid);
     Task<bool?> DeleteBriefAsync(string briefId, string projId, string firebaseUid);
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    Task<IEnumerable<JobOfferResponse>> GetJobOffersForEmployeeAsync(string firebaseUid);
+    Task<int> RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept);
 }

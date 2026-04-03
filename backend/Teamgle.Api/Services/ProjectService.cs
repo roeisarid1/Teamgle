@@ -197,4 +197,17 @@ public class ProjectService : IProjectService
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.DeleteBriefAsync(briefId, projId, firebaseUid);
     }
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    public async Task<IEnumerable<JobOfferResponse>> GetMyJobOffersAsync(string firebaseUid)
+    {
+        return await _projectRepo.GetJobOffersForEmployeeAsync(firebaseUid);
+    }
+
+    public async Task RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept)
+    {
+        var rowsAffected = await _projectRepo.RespondToJobOfferAsync(firebaseUid, shiftId, accept);
+        if (rowsAffected == 0)
+            throw new UnauthorizedAccessException("Offer not found, already responded, or does not belong to you.");
+    }
 }

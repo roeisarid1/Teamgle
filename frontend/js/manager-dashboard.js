@@ -4612,38 +4612,56 @@ attachTimePicker(document.getElementById("shift-add-end"));
 
 // ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
 
-const STAFFING_MOCK = {
-  applicants: [
-    { id: 1, name: "Daniel Klein",   initials: "DK", dept: "Event Staff", shiftsDone: 2,
-      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "Stage Manager",       cost: "₪180/hr" },
-    { id: 2, name: "Maya Levi",      initials: "ML", dept: "Logistics",   shiftsDone: 5,
-      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Crew Lead",            cost: "₪210/hr" },
-    { id: 3, name: "Tom Ben-David",  initials: "TB", dept: "Security",    shiftsDone: 12,
-      shift: "Closing Night · Mar 16, 20:00–02:00",    role: "Security Officer",     cost: "₪160/hr" },
-  ],
-  approved: [
-    { id: 4, name: "Noa Shapiro",    initials: "NS", dept: "Production",  shiftsDone: 8,
-      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "Production Asst.",     cost: "₪150/hr" },
-    { id: 5, name: "Gal Cohen",      initials: "GC", dept: "Tech Crew",   shiftsDone: 3,
-      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "AV Technician",        cost: "₪200/hr" },
-  ],
-  hold: [
-    { id: 6, name: "Ran Mizrahi",    initials: "RM", dept: "Catering",    shiftsDone: 1,
-      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Waiter",               cost: "₪120/hr" },
-  ],
-  rejected: [
-    { id: 7, name: "Shira Avraham",  initials: "SA", dept: "Event Staff", shiftsDone: 0,
-      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "General Staff",        cost: "₪110/hr" },
-  ],
-  potential: [
-    { id: 8,  name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
-      role: "AV Technician",    cost: "₪195/hr", shift: "Opening Ceremony · Mar 15, 09:00–17:00" },
-    { id: 9,  name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
-      role: "Crew Lead",        cost: "₪180/hr", shift: "Main Show · Mar 15, 18:00–23:00" },
-    { id: 10, name: "Yosi Katz",     initials: "YK", dept: "Security",    shiftsDone: 15,
-      role: "Security Officer", cost: "₪155/hr", shift: null },
-  ],
-};
+const STAFFING_EVENTS_MOCK = [
+  {
+    id: 'ev0',
+    name: 'Opening Ceremony',
+    meta: 'Mar 15 · 09:00–17:00 · Grand Ballroom',
+    applicants: [
+      { id: 1, name: "Daniel Klein",  initials: "DK", dept: "Event Staff", shiftsDone: 2,
+        shift: "Opening Ceremony · 09:00–17:00", role: "Stage Manager",    cost: "₪180/hr" },
+      { id: 2, name: "Maya Levi",     initials: "ML", dept: "Logistics",   shiftsDone: 5,
+        shift: "Opening Ceremony · 09:00–17:00", role: "Crew Lead",        cost: "₪210/hr" },
+    ],
+    approved: [
+      { id: 4, name: "Noa Shapiro",   initials: "NS", dept: "Production",  shiftsDone: 8,
+        shift: "Opening Ceremony · 09:00–17:00", role: "Production Asst.", cost: "₪150/hr" },
+    ],
+    hold: [
+      { id: 6, name: "Ran Mizrahi",   initials: "RM", dept: "Catering",    shiftsDone: 1,
+        shift: "Opening Ceremony · 09:00–17:00", role: "Waiter",           cost: "₪120/hr" },
+    ],
+    rejected: [],
+    potential: [
+      { id: 8, name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
+        role: "AV Technician",    cost: "₪195/hr", shift: "Opening Ceremony · 09:00–17:00" },
+      { id: 9, name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
+        role: "Crew Lead",        cost: "₪180/hr", shift: "Opening Ceremony · 09:00–17:00" },
+    ],
+  },
+  {
+    id: 'ev1',
+    name: 'Main Show',
+    meta: 'Mar 15 · 18:00–23:00 · Main Stage',
+    applicants: [
+      { id: 3, name: "Tom Ben-David", initials: "TB", dept: "Security",    shiftsDone: 12,
+        shift: "Main Show · 18:00–23:00", role: "Security Officer",        cost: "₪160/hr" },
+    ],
+    approved: [
+      { id: 5, name: "Gal Cohen",     initials: "GC", dept: "Tech Crew",   shiftsDone: 3,
+        shift: "Main Show · 18:00–23:00", role: "AV Technician",           cost: "₪200/hr" },
+    ],
+    hold: [],
+    rejected: [
+      { id: 7, name: "Shira Avraham", initials: "SA", dept: "Event Staff", shiftsDone: 0,
+        shift: "Main Show · 18:00–23:00", role: "General Staff",           cost: "₪110/hr" },
+    ],
+    potential: [
+      { id: 10, name: "Yosi Katz",    initials: "YK", dept: "Security",    shiftsDone: 15,
+        role: "Security Officer", cost: "₪155/hr", shift: null },
+    ],
+  },
+];
 
 function renderStaffingTab() {
   const root = document.getElementById("ps-root");
@@ -4654,7 +4672,19 @@ function renderStaffingTab() {
 }
 
 function _buildStaffingHTML() {
-  const { applicants, approved, hold, rejected, potential } = STAFFING_MOCK;
+  const eventsHtml = STAFFING_EVENTS_MOCK.map(ev => `
+    <div class="ps-event-block">
+      <div class="ps-event-header">
+        <span class="ps-event-name">${escapeHtml(ev.name)}</span>
+        <span class="ps-event-meta">${escapeHtml(ev.meta)}</span>
+      </div>
+      ${_buildPotentialSection(ev.id, ev.potential)}
+      ${_buildStaffingSection(ev.id, "applicants", "Shift Applicants", "inbox",        "pending",  ev.applicants, "applicant")}
+      ${_buildStaffingSection(ev.id, "approved",   "Approved Workers", "check-circle", "approved", ev.approved,   "approved")}
+      ${_buildStaffingSection(ev.id, "hold",       "Hold / Standby",   "pause-circle", "hold",     ev.hold,       "hold")}
+      ${_buildStaffingSection(ev.id, "rejected",   "Rejected Workers", "x-circle",     "rejected", ev.rejected,   "rejected")}
+    </div>`).join('');
+
   return `
     <div class="ps-header">
       <div class="ps-header-info">
@@ -4668,29 +4698,25 @@ function _buildStaffingHTML() {
         </div>
       </div>
     </div>
-    ${_buildPotentialSection(potential)}
-    ${_buildStaffingSection("applicants", "Shift Applicants",    "inbox",        "pending",   applicants, "applicant")}
-    ${_buildStaffingSection("approved",  "Approved Workers",    "check-circle", "approved",  approved,   "approved")}
-    ${_buildStaffingSection("hold",      "Hold / Standby",      "pause-circle", "hold",      hold,       "hold")}
-    ${_buildStaffingSection("rejected",  "Rejected Workers",    "x-circle",     "rejected",  rejected,   "rejected")}
+    ${eventsHtml}
   `;
 }
 
-function _buildStaffingSection(key, title, icon, badgeType, workers, sectionType) {
+function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, sectionType) {
   const rows = workers.length === 0
     ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
     : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
   return `
-    <div class="ps-section" id="ps-section-${key}">
-      <div class="ps-section-hdr" data-ps-toggle="${key}">
+    <div class="ps-section" id="ps-section-${eventId}-${key}" data-pinned="false" data-section-type="${key}">
+      <div class="ps-section-hdr" data-ps-section="${eventId}-${key}">
         <div class="ps-section-hdr-left">
           <i data-lucide="${icon}" class="ps-section-icon"></i>
           <span class="ps-section-title">${title}</span>
           <span class="ps-badge ps-badge--${badgeType}">${workers.length}</span>
         </div>
-        <i data-lucide="chevron-down" class="ps-chevron"></i>
+        <span class="ps-chevron">▾</span>
       </div>
-      <div class="ps-section-body" id="ps-body-${key}">
+      <div class="ps-section-body" id="ps-body-${eventId}-${key}">
         <table class="ps-table">
           <thead><tr>
             <th>Worker Info</th><th>Applied Shift</th><th>Applied Role</th><th>Cost</th><th>Actions</th>
@@ -4729,7 +4755,7 @@ function _buildWorkerRow(w, sectionType) {
     </tr>`;
 }
 
-function _buildPotentialSection(workers) {
+function _buildPotentialSection(eventId, workers) {
   const rows = workers.length === 0
     ? `<tr><td colspan="5" class="ps-empty">No additional workers available.</td></tr>`
     : workers.map(w => `
@@ -4756,22 +4782,22 @@ function _buildPotentialSection(workers) {
       </tr>`).join("");
 
   return `
-    <div class="ps-section" id="ps-section-potential">
-      <div class="ps-section-hdr" data-ps-toggle="potential">
+    <div class="ps-section" id="ps-section-${eventId}-potential" data-pinned="false" data-section-type="potential">
+      <div class="ps-section-hdr" data-ps-section="${eventId}-potential">
         <div class="ps-section-hdr-left">
           <i data-lucide="users" class="ps-section-icon"></i>
           <span class="ps-section-title">Potential Workers</span>
           <span class="ps-badge ps-badge--potential">${workers.length}</span>
         </div>
         <div class="ps-section-hdr-right">
-          <button class="ps-btn-primary" id="ps-btn-send-all" ${workers.length === 0 ? "disabled" : ""}>
+          <button class="ps-btn-primary ps-btn-send-all" data-event-id="${eventId}" ${workers.length === 0 ? "disabled" : ""}>
             <i data-lucide="send"></i>
             Send Request to All
           </button>
-          <i data-lucide="chevron-down" class="ps-chevron"></i>
+          <span class="ps-chevron">▾</span>
         </div>
       </div>
-      <div class="ps-section-body" id="ps-body-potential">
+      <div class="ps-section-body" id="ps-body-${eventId}-potential">
         <table class="ps-table">
           <thead><tr>
             <th>Worker Info</th><th>Applied Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
@@ -4783,11 +4809,22 @@ function _buildPotentialSection(workers) {
 }
 
 function _initStaffingHandlers() {
-  // Section collapse / expand toggles
-  document.querySelectorAll("[data-ps-toggle]").forEach(hdr => {
+  // Accordion: single-click opens/closes, double-click toggles pin
+  let clickTimer = null;
+
+  document.querySelectorAll("[data-ps-section]").forEach(hdr => {
     hdr.addEventListener("click", () => {
-      const key = hdr.dataset.psToggle;
-      document.getElementById(`ps-section-${key}`)?.classList.toggle("ps-collapsed");
+      if (clickTimer !== null) {
+        // Second click within 250ms → double-click → toggle pin
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        _toggleSectionPin(hdr);
+      } else {
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          _toggleSectionOpen(hdr);
+        }, 250);
+      }
     });
   });
 
@@ -4808,7 +4845,6 @@ function _initStaffingHandlers() {
       const action = btn.dataset.action;
       const workerId = btn.closest(".ps-row")?.dataset.workerId;
       if (action === "message") {
-        // Future: navigate to chat with this worker
         console.log(`[Staffing] Open chat with worker #${workerId}`);
       } else {
         console.log(`[Staffing] Action "${action}" on worker #${workerId}`);
@@ -4816,8 +4852,8 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Individual send-request / return-to-pool buttons
-  document.querySelectorAll(".ps-root .ps-send-btn").forEach(btn => {
+  // Individual send-request / return-to-pool buttons (excluding send-all)
+  document.querySelectorAll(".ps-root .ps-send-btn:not(.ps-btn-send-all)").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
       const workerId = btn.closest(".ps-row")?.dataset.workerId;
@@ -4834,18 +4870,77 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Send to all potential workers
-  document.getElementById("ps-btn-send-all")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    console.log("[Staffing] Send request to all potential workers");
-    document.querySelectorAll("#ps-body-potential .ps-send-btn").forEach(btn => {
-      btn.innerHTML = `<i data-lucide="check"></i> Sent`;
-      btn.disabled = true;
-      btn.classList.add("ps-send-btn--sent");
+  // Send to all potential workers (scoped per event)
+  document.querySelectorAll(".ps-btn-send-all").forEach(sendAll => {
+    sendAll.addEventListener("click", e => {
+      e.stopPropagation();
+      const eventId = sendAll.dataset.eventId;
+      console.log(`[Staffing] Send request to all potential workers in ${eventId}`);
+      document.querySelectorAll(`#ps-body-${eventId}-potential .ps-send-btn`).forEach(btn => {
+        btn.innerHTML = `<i data-lucide="check"></i> Sent`;
+        btn.disabled = true;
+        btn.classList.add("ps-send-btn--sent");
+      });
+      sendAll.innerHTML = `<i data-lucide="check"></i> All Requests Sent`;
+      sendAll.disabled = true;
+      if (window.lucide) lucide.createIcons();
     });
-    const sendAll = document.getElementById("ps-btn-send-all");
-    sendAll.innerHTML = `<i data-lucide="check"></i> All Requests Sent`;
-    sendAll.disabled = true;
-    if (window.lucide) lucide.createIcons();
   });
+}
+
+function _setSectionOpen(section, hdr, open) {
+  const chevron = hdr.querySelector(".ps-chevron");
+  if (open) {
+    section.classList.add("ps-section--open");
+    if (chevron) chevron.textContent = "▾";
+  } else {
+    section.classList.remove("ps-section--open");
+    section.dataset.pinned = "false";
+    section.classList.remove("ps-section--pinned");
+    if (chevron) chevron.textContent = "▾";
+  }
+}
+
+function _toggleSectionOpen(hdr) {
+  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  if (!section) return;
+
+  const isOpen     = section.classList.contains("ps-section--open");
+  const eventBlock = hdr.closest(".ps-event-block");
+
+  if (isOpen) {
+    // Single-click on an open section (pinned or not) → close and unpin it
+    _setSectionOpen(section, hdr, false);
+  } else {
+    // Close all non-pinned open sections in the same event block
+    eventBlock?.querySelectorAll(".ps-section--open").forEach(other => {
+      if (other.dataset.pinned !== "true") {
+        const otherHdr = other.querySelector(".ps-section-hdr");
+        if (otherHdr) _setSectionOpen(other, otherHdr, false);
+      }
+    });
+    // Open this section
+    _setSectionOpen(section, hdr, true);
+  }
+}
+
+function _toggleSectionPin(hdr) {
+  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  if (!section) return;
+  const chevron = hdr.querySelector(".ps-chevron");
+
+  if (section.dataset.pinned === "true") {
+    // Unpin (but keep open — user can single-click to close)
+    section.dataset.pinned = "false";
+    section.classList.remove("ps-section--pinned");
+    if (chevron) chevron.textContent = "▾";
+  } else {
+    // Pin — ensure open, change chevron to em dash
+    section.dataset.pinned = "true";
+    section.classList.add("ps-section--pinned");
+    if (!section.classList.contains("ps-section--open")) {
+      section.classList.add("ps-section--open");
+    }
+    if (chevron) chevron.textContent = "—";
+  }
 }

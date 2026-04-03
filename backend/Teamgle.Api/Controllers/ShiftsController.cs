@@ -129,4 +129,49 @@ public class ShiftsController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
+    // ── GET /api/shifts/my-offers ──────────────────────────────────────────
+    [HttpGet("my-offers")]
+    public async Task<IActionResult> GetMyOffers()
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var offers = await _projectService.GetMyJobOffersAsync(uid);
+            return Ok(offers);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching job offers for employee");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── PUT /api/shifts/{shiftId}/respond ──────────────────────────────────
+    [HttpPut("{shiftId}/respond")]
+    public async Task<IActionResult> RespondToOffer(string shiftId, [FromBody] RespondToOfferRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            await _projectService.RespondToJobOfferAsync(uid, shiftId, request.Accept);
+            var message = request.Accept ? "Shift accepted." : "Shift declined.";
+            return Ok(new { message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error responding to job offer for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }

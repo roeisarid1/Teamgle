@@ -3060,31 +3060,31 @@ tr.expanded-row > td {
   box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
 
-/* Per-section accent colors: left border + header tint */
-#ps-section-potential  { border-left-color: #5B7BF0; }
-#ps-section-applicants { border-left-color: #f97316; }
-#ps-section-approved   { border-left-color: #22c55e; }
-#ps-section-hold       { border-left-color: #a78bfa; }
-#ps-section-rejected   { border-left-color: #f87171; }
+/* Per-section accent colors: left border + header tint (keyed by data-section-type) */
+[data-section-type="potential"]  { border-left-color: #5B7BF0; }
+[data-section-type="applicants"] { border-left-color: #f97316; }
+[data-section-type="approved"]   { border-left-color: #22c55e; }
+[data-section-type="hold"]       { border-left-color: #a78bfa; }
+[data-section-type="rejected"]   { border-left-color: #f87171; }
 
-#ps-section-potential  .ps-section-hdr { background: #f0f3ff; }
-#ps-section-applicants .ps-section-hdr { background: #fff7ed; }
-#ps-section-approved   .ps-section-hdr { background: #f0fdf4; }
-#ps-section-hold       .ps-section-hdr { background: #f5f3ff; }
-#ps-section-rejected   .ps-section-hdr { background: #fff1f2; }
+[data-section-type="potential"]  .ps-section-hdr { background: #f0f3ff; }
+[data-section-type="applicants"] .ps-section-hdr { background: #fff7ed; }
+[data-section-type="approved"]   .ps-section-hdr { background: #f0fdf4; }
+[data-section-type="hold"]       .ps-section-hdr { background: #f5f3ff; }
+[data-section-type="rejected"]   .ps-section-hdr { background: #fff1f2; }
 
-#ps-section-potential  .ps-section-icon { color: #5B7BF0; }
-#ps-section-applicants .ps-section-icon { color: #f97316; }
-#ps-section-approved   .ps-section-icon { color: #22c55e; }
-#ps-section-hold       .ps-section-icon { color: #a78bfa; }
-#ps-section-rejected   .ps-section-icon { color: #f87171; }
+[data-section-type="potential"]  .ps-section-icon { color: #5B7BF0; }
+[data-section-type="applicants"] .ps-section-icon { color: #f97316; }
+[data-section-type="approved"]   .ps-section-icon { color: #22c55e; }
+[data-section-type="hold"]       .ps-section-icon { color: #a78bfa; }
+[data-section-type="rejected"]   .ps-section-icon { color: #f87171; }
 
 /* Hover: slightly darker version of each tint */
-#ps-section-potential  .ps-section-hdr:hover { background: #e6ebff; }
-#ps-section-applicants .ps-section-hdr:hover { background: #ffedd5; }
-#ps-section-approved   .ps-section-hdr:hover { background: #dcfce7; }
-#ps-section-hold       .ps-section-hdr:hover { background: #ede9fe; }
-#ps-section-rejected   .ps-section-hdr:hover { background: #ffe4e6; }
+[data-section-type="potential"]  .ps-section-hdr:hover { background: #e6ebff; }
+[data-section-type="applicants"] .ps-section-hdr:hover { background: #ffedd5; }
+[data-section-type="approved"]   .ps-section-hdr:hover { background: #dcfce7; }
+[data-section-type="hold"]       .ps-section-hdr:hover { background: #ede9fe; }
+[data-section-type="rejected"]   .ps-section-hdr:hover { background: #ffe4e6; }
 
 .ps-section-hdr {
   display: flex;
@@ -3109,13 +3109,62 @@ tr.expanded-row > td {
 .ps-section-icon { width: 17px; height: 17px; flex-shrink: 0; }
 .ps-section-title { font-weight: 700; font-size: 14px; color: var(--text); }
 .ps-chevron {
-  width: 17px; height: 17px;
+  font-size: 16px;
   color: var(--text-muted);
-  transition: transform var(--transition);
+  line-height: 1;
+  flex-shrink: 0;
 }
-.ps-section.ps-collapsed .ps-chevron { transform: rotate(-90deg); }
-.ps-section.ps-collapsed .ps-section-body { display: none; }
-.ps-section-body { border-top: 1px solid var(--border); }
+/* Accordion open/close via max-height (default = collapsed) */
+.ps-section-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 200ms ease-in-out;
+  border-top: 1px solid var(--border);
+}
+.ps-section--open .ps-section-body {
+  max-height: 2000px;
+}
+
+/* Chevron: rotation rule removed — state is now managed via textContent (▾ / —) */
+
+/* Pinned section: override left border with blue */
+.ps-section--pinned { border-left-color: var(--blue) !important; }
+
+/* Event block grouping */
+.ps-event-block {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ps-event-header {
+  padding: 14px 20px;
+  background: var(--blue-light, #eef1fe);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ps-event-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+.ps-event-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Sections inside an event block: remove individual radius/shadow/margin */
+.ps-event-block .ps-section {
+  border-radius: 0;
+  margin-bottom: 0;
+  box-shadow: none;
+  border-right: none;
+  border-top: none;
+}
+.ps-event-block .ps-section + .ps-section {
+  border-top: 1px solid var(--border);
+}
 
 /* Status badges */
 .ps-badge {
@@ -3273,4 +3322,288 @@ tr.expanded-row > td {
   .ps-table td:first-child { padding-top: 12px; }
   .ps-table td:last-child  { padding-bottom: 12px; }
   .ps-table tr { border-bottom: 1px solid var(--border); display: block; }
+}
+
+/* ── Job Offers (Employee) ──────────────────────────────────────────────────── */
+
+/* Offers badge in sidebar */
+.offers-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: auto;
+  line-height: 1;
+}
+
+/* Page layout */
+.offers-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+
+.offers-page-header {
+  margin-bottom: 24px;
+}
+
+.offers-page-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.offers-page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Offer card */
+.offer-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.offer-card:hover {
+  box-shadow: 0 4px 16px rgba(91,123,240,.12);
+  transform: translateY(-1px);
+}
+
+.offer-card--fade-out {
+  animation: offerFadeOut .35s ease forwards;
+}
+
+@keyframes offerFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(.96); height: 0; padding: 0; margin: 0; overflow: hidden; }
+}
+
+/* Card header: project name + event type badge */
+.offer-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.offer-project-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.offer-event-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 99px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+/* Event name — primary headline */
+.offer-event-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 14px;
+  line-height: 1.25;
+}
+
+/* Date line */
+.offer-date {
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+/* Meta row (location, role, attendees) */
+.offer-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+
+.offer-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.offer-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.offer-role-chip {
+  background: var(--blue-light);
+  color: var(--blue);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Pay rate */
+.offer-pay {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #15803d;
+  margin-bottom: 12px;
+}
+
+.offer-pay span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #16a34a;
+}
+
+/* Notes */
+.offer-notes {
+  border-left: 3px solid var(--border);
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+  background: #fafafa;
+}
+
+/* Offered by */
+.offer-by {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.offer-by strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Action buttons */
+.offer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.offer-btn {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), opacity var(--transition), transform var(--transition);
+  touch-action: manipulation;
+}
+
+.offer-btn:active { transform: scale(.97); }
+
+.offer-btn:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.offer-btn--accept {
+  background: var(--green);
+  color: #fff;
+}
+
+.offer-btn--accept:hover:not(:disabled) {
+  background: #5aad60;
+}
+
+.offer-btn--decline {
+  background: var(--card);
+  color: var(--red);
+  border: 1.5px solid var(--red);
+}
+
+.offer-btn--decline:hover:not(:disabled) {
+  background: #fff1f2;
+}
+
+/* Empty state */
+.offers-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.offers-empty p { margin: 0; line-height: 1.5; }
+.offers-empty span { font-size: 13px; }
+
+/* Skeleton loading */
+.offer-skeleton {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s infinite;
+  margin-bottom: 12px;
+}
+
+.skel-line  { height: 14px; }
+.skel-short  { width: 40%; }
+.skel-medium { width: 65%; }
+.skel-long   { width: 85%; }
+.skel-buttons {
+  height: 48px;
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+@keyframes skelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive — mobile first */
+@media (max-width: 480px) {
+  .offers-page { padding: 20px 12px 60px; }
+  .offer-card  { padding: 16px; }
+  .offer-event-name { font-size: 17px; }
+  .offer-actions { flex-direction: column; }
+  .offer-btn { flex: none; width: 100%; }
 }

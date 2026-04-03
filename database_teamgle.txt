@@ -1,0 +1,14 @@
+# Teamgle Database Documentation
+# DB: igroup34_prod on Media.ruppin.ac.il
+
+## Employee_Shift.status — CHECK constraint: CK_Employee_Shift_status
+# Allowed values:
+
+employee_request           // עובד ביקש להצטרף למשמרת
+manager_reject             // מנהל דחה את הבקשה
+manager_hold               // מנהל השאיר בהמתנה
+manager_approved           // מנהל אישר
+employee_request_canceled  // עובד ביטל את הבקשה
+manager_canceled           // מנהל ביטל את המשמרת
+manager_approved_canceled  // מנהל ביטל לאחר אישור
+manager_offer_sent         // מנהל שלח הצעה לעובד

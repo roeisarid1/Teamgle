@@ -813,4 +813,94 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@projId",  projId);
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    public async Task<IEnumerable<JobOfferResponse>> GetJobOffersForEmployeeAsync(string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                es.shift_ID,
+                es.pay_rate_per_hour,
+                es.notes,
+                es.planned_start_time,
+                es.planned_end_time,
+                s.start_time        AS shift_start_time,
+                s.end_time          AS shift_end_time,
+                r.Roll_name,
+                e.event_ID,
+                e.name              AS event_name,
+                e.location          AS event_location,
+                e.event_type,
+                e.attendees_count,
+                p.name              AS project_name,
+                u.firstName + ' ' + u.lastName AS manager_name
+            FROM Employee_Shift es
+            INNER JOIN [User] eu          ON es.employee_user_ID = eu.user_ID
+            INNER JOIN Shift s            ON es.shift_ID = s.Shift_ID
+            INNER JOIN Roll r             ON s.roll_ID = r.Roll_ID
+            INNER JOIN Event e            ON s.event_ID = e.event_ID
+            INNER JOIN Project p          ON e.project_ID = p.Proj_ID
+            INNER JOIN Manager_Project mp ON p.Proj_ID = mp.project_ID AND mp.is_owner = 1
+            INNER JOIN [User] u           ON mp.manager_user_ID = u.user_ID
+            WHERE eu.FBUID = @fbuid
+              AND es.status = 'manager_offer_sent'
+            ORDER BY COALESCE(es.planned_start_time, s.start_time)
+            """;
+
+        var offers = new List<JobOfferResponse>();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            offers.Add(new JobOfferResponse
+            {
+                ShiftId          = reader["shift_ID"].ToString()!,
+                PayRatePerHour   = reader["pay_rate_per_hour"] == DBNull.Value ? null : (decimal?)reader["pay_rate_per_hour"],
+                Notes            = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
+                PlannedStartTime = reader["planned_start_time"] == DBNull.Value ? null : (DateTime?)reader["planned_start_time"],
+                PlannedEndTime   = reader["planned_end_time"]   == DBNull.Value ? null : (DateTime?)reader["planned_end_time"],
+                ShiftStartTime   = reader["shift_start_time"]   == DBNull.Value ? null : (DateTime?)reader["shift_start_time"],
+                ShiftEndTime     = reader["shift_end_time"]     == DBNull.Value ? null : (DateTime?)reader["shift_end_time"],
+                RoleName         = reader["Roll_name"].ToString()!,
+                EventId          = reader["event_ID"].ToString()!,
+                EventName        = reader["event_name"].ToString()!,
+                EventLocation    = reader["event_location"] == DBNull.Value ? null : reader["event_location"].ToString(),
+                EventType        = reader["event_type"]     == DBNull.Value ? null : reader["event_type"].ToString(),
+                AttendeesCount   = reader["attendees_count"] == DBNull.Value ? null : (int?)reader["attendees_count"],
+                ProjectName      = reader["project_name"].ToString()!,
+                ManagerName      = reader["manager_name"].ToString()!,
+            });
+        }
+
+        return offers;
+    }
+
+    public async Task<int> RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept)
+    {
+        var newStatus = accept ? "employee_request" : "employee_request_canceled";
+
+        const string sql = """
+            UPDATE Employee_Shift
+            SET    status           = @newStatus,
+                   status_updated_at = GETUTCDATE()
+            WHERE  shift_ID         = @shiftId
+              AND  employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @fbuid)
+              AND  status           = 'manager_offer_sent'
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@newStatus", newStatus);
+        cmd.Parameters.AddWithValue("@shiftId",   shiftId);
+        cmd.Parameters.AddWithValue("@fbuid",      firebaseUid);
+
+        await conn.OpenAsync();
+        return await cmd.ExecuteNonQueryAsync();
+    }
 }
