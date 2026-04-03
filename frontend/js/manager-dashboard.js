@@ -4612,78 +4612,51 @@ attachTimePicker(document.getElementById("shift-add-end"));
 
 // ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
 
-const STAFFING_EVENTS_MOCK = [
-  {
-    id: 'ev0',
-    name: 'Opening Ceremony',
-    meta: 'Mar 15 · 09:00–17:00 · Grand Ballroom',
-    applicants: [
-      { id: 1, name: "Daniel Klein",  initials: "DK", dept: "Event Staff", shiftsDone: 2,
-        shift: "Opening Ceremony · 09:00–17:00", role: "Stage Manager",    cost: "₪180/hr" },
-      { id: 2, name: "Maya Levi",     initials: "ML", dept: "Logistics",   shiftsDone: 5,
-        shift: "Opening Ceremony · 09:00–17:00", role: "Crew Lead",        cost: "₪210/hr" },
-    ],
-    approved: [
-      { id: 4, name: "Noa Shapiro",   initials: "NS", dept: "Production",  shiftsDone: 8,
-        shift: "Opening Ceremony · 09:00–17:00", role: "Production Asst.", cost: "₪150/hr" },
-    ],
-    hold: [
-      { id: 6, name: "Ran Mizrahi",   initials: "RM", dept: "Catering",    shiftsDone: 1,
-        shift: "Opening Ceremony · 09:00–17:00", role: "Waiter",           cost: "₪120/hr" },
-    ],
-    rejected: [],
-    potential: [
-      { id: 8, name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
-        role: "AV Technician",    cost: "₪195/hr", shift: "Opening Ceremony · 09:00–17:00" },
-      { id: 9, name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
-        role: "Crew Lead",        cost: "₪180/hr", shift: "Opening Ceremony · 09:00–17:00" },
-    ],
-  },
-  {
-    id: 'ev1',
-    name: 'Main Show',
-    meta: 'Mar 15 · 18:00–23:00 · Main Stage',
-    applicants: [
-      { id: 3, name: "Tom Ben-David", initials: "TB", dept: "Security",    shiftsDone: 12,
-        shift: "Main Show · 18:00–23:00", role: "Security Officer",        cost: "₪160/hr" },
-    ],
-    approved: [
-      { id: 5, name: "Gal Cohen",     initials: "GC", dept: "Tech Crew",   shiftsDone: 3,
-        shift: "Main Show · 18:00–23:00", role: "AV Technician",           cost: "₪200/hr" },
-    ],
-    hold: [],
-    rejected: [
-      { id: 7, name: "Shira Avraham", initials: "SA", dept: "Event Staff", shiftsDone: 0,
-        shift: "Main Show · 18:00–23:00", role: "General Staff",           cost: "₪110/hr" },
-    ],
-    potential: [
-      { id: 10, name: "Yosi Katz",    initials: "YK", dept: "Security",    shiftsDone: 15,
-        role: "Security Officer", cost: "₪155/hr", shift: null },
-    ],
-  },
-];
-
 function renderStaffingTab() {
   const root = document.getElementById("ps-root");
   if (!root) return;
   root.innerHTML = _buildStaffingHTML();
   if (window.lucide) lucide.createIcons();
   _initStaffingHandlers();
+
+  // Fetch potential workers for each real event in background
+  const events = currentProjectDetail?.events ?? [];
+  events.forEach(ev => {
+    if (currentProjectId) loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+  });
 }
 
 function _buildStaffingHTML() {
-  const eventsHtml = STAFFING_EVENTS_MOCK.map(ev => `
-    <div class="ps-event-block">
+  const events = currentProjectDetail?.events ?? [];
+
+  if (events.length === 0) {
+    return `
+      <div class="ps-header">
+        <div class="ps-header-info">
+          <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
+          <p class="ps-header-desc">Manage worker assignments for this project's shifts and events.</p>
+        </div>
+      </div>
+      <div class="pd-placeholder" style="margin-top:32px">
+        No events in this project yet.
+      </div>`;
+  }
+
+  const eventsHtml = events.map(ev => {
+    const meta = _formatEventMeta(ev);
+    return `
+    <div class="ps-event-block" data-event-id="${escapeHtml(ev.eventId)}">
       <div class="ps-event-header">
         <span class="ps-event-name">${escapeHtml(ev.name)}</span>
-        <span class="ps-event-meta">${escapeHtml(ev.meta)}</span>
+        <span class="ps-event-meta">${escapeHtml(meta)}</span>
       </div>
-      ${_buildPotentialSection(ev.id, ev.potential)}
-      ${_buildStaffingSection(ev.id, "applicants", "Shift Applicants", "inbox",        "pending",  ev.applicants, "applicant")}
-      ${_buildStaffingSection(ev.id, "approved",   "Approved Workers", "check-circle", "approved", ev.approved,   "approved")}
-      ${_buildStaffingSection(ev.id, "hold",       "Hold / Standby",   "pause-circle", "hold",     ev.hold,       "hold")}
-      ${_buildStaffingSection(ev.id, "rejected",   "Rejected Workers", "x-circle",     "rejected", ev.rejected,   "rejected")}
-    </div>`).join('');
+      ${_buildPotentialSection(ev.eventId)}
+      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants", "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(ev.eventId, "approved",   "Approved Workers", "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(ev.eventId, "hold",       "Hold / Standby",   "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(ev.eventId, "rejected",   "Rejected Workers", "x-circle",     "rejected", [], "rejected")}
+    </div>`;
+  }).join('');
 
   return `
     <div class="ps-header">
@@ -4700,6 +4673,23 @@ function _buildStaffingHTML() {
     </div>
     ${eventsHtml}
   `;
+}
+
+function _formatEventMeta(ev) {
+  const parts = [];
+  if (ev.startTime) {
+    const d = new Date(ev.startTime);
+    const datePart = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const startT = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    let timePart = startT;
+    if (ev.endTime) {
+      const endT = new Date(ev.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+      timePart += `–${endT}`;
+    }
+    parts.push(`${datePart} · ${timePart}`);
+  }
+  if (ev.location) parts.push(ev.location);
+  return parts.join(" · ");
 }
 
 function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, sectionType) {
@@ -4755,42 +4745,18 @@ function _buildWorkerRow(w, sectionType) {
     </tr>`;
 }
 
-function _buildPotentialSection(eventId, workers) {
-  const rows = workers.length === 0
-    ? `<tr><td colspan="5" class="ps-empty">No additional workers available.</td></tr>`
-    : workers.map(w => `
-      <tr class="ps-row" data-worker-id="${w.id}">
-        <td><div class="ps-cell-worker">
-          <div class="ps-avatar ps-avatar--potential">${escapeHtml(w.initials)}</div>
-          <div>
-            <div class="ps-worker-name">${escapeHtml(w.name)}</div>
-            <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
-          </div>
-        </div></td>
-        <td>${w.shift
-          ? `<span class="ps-shift-badge">${escapeHtml(w.shift)}</span>`
-          : `<span class="ps-shift-badge ps-shift-badge--none">Select shift</span>`
-        }</td>
-        <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
-        <td class="ps-cost">${escapeHtml(w.cost)}</td>
-        <td><div class="ps-actions-cell">
-          <button class="ps-send-btn" data-action="send-request" title="Send shift request">
-            <i data-lucide="send"></i> Send Request
-          </button>
-          <button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>
-        </div></td>
-      </tr>`).join("");
-
+// Builds the potential section with a loading skeleton (workers populated async)
+function _buildPotentialSection(eventId) {
   return `
     <div class="ps-section" id="ps-section-${eventId}-potential" data-pinned="false" data-section-type="potential">
       <div class="ps-section-hdr" data-ps-section="${eventId}-potential">
         <div class="ps-section-hdr-left">
           <i data-lucide="users" class="ps-section-icon"></i>
           <span class="ps-section-title">Potential Workers</span>
-          <span class="ps-badge ps-badge--potential">${workers.length}</span>
+          <span class="ps-badge ps-badge--potential" id="ps-badge-${eventId}-potential">…</span>
         </div>
         <div class="ps-section-hdr-right">
-          <button class="ps-btn-primary ps-btn-send-all" data-event-id="${eventId}" ${workers.length === 0 ? "disabled" : ""}>
+          <button class="ps-btn-primary ps-btn-send-all" data-event-id="${eventId}" disabled>
             <i data-lucide="send"></i>
             Send Request to All
           </button>
@@ -4798,14 +4764,195 @@ function _buildPotentialSection(eventId, workers) {
         </div>
       </div>
       <div class="ps-section-body" id="ps-body-${eventId}-potential">
-        <table class="ps-table">
-          <thead><tr>
-            <th>Worker Info</th><th>Applied Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="ps-potential-loading">
+          <div class="ps-skel ps-skel-row"></div>
+          <div class="ps-skel ps-skel-row"></div>
+        </div>
       </div>
     </div>`;
+}
+
+// Called after fetch to replace loading state with real worker rows
+function _replacePotentialContent(eventId, workers) {
+  const body   = document.getElementById(`ps-body-${eventId}-potential`);
+  const badge  = document.getElementById(`ps-badge-${eventId}-potential`);
+  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  if (!body) return;
+
+  badge.textContent = workers.length;
+  sendAll.disabled  = workers.length === 0;
+
+  if (workers.length === 0) {
+    body.innerHTML = `
+      <table class="ps-table"><tbody>
+        <tr><td colspan="4" class="ps-empty">No eligible workers available for this event's shifts.</td></tr>
+      </tbody></table>`;
+    return;
+  }
+
+  const rows = workers.map(w => {
+    const initials = (w.firstName[0] + (w.lastName[0] || "")).toUpperCase();
+    const costLabel = w.costPerHour ? `₪${Number(w.costPerHour).toFixed(0)}/hr` : "—";
+
+    const shiftChecks = w.eligibleShifts.map(s => {
+      const isFull = s.activeAssignments >= s.requiredQuantity;
+      const timeLabel = s.startTime
+        ? new Date(s.startTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) +
+          (s.endTime ? "–" + new Date(s.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")
+        : "";
+      return `
+        <label class="ps-shift-check">
+          <input type="checkbox" data-shift-id="${escapeHtml(s.shiftId)}" checked>
+          <span class="ps-role-chip">${escapeHtml(s.roleName)}</span>
+          ${timeLabel ? `<span class="ps-shift-time">${timeLabel}</span>` : ""}
+          ${isFull ? `<span class="ps-shift-full">Full ${s.activeAssignments}/${s.requiredQuantity}</span>` : `<span class="ps-shift-slots">${s.activeAssignments}/${s.requiredQuantity}</span>`}
+        </label>`;
+    }).join("");
+
+    return `
+      <tr class="ps-row ps-row--potential" data-worker-fbuid="${escapeHtml(w.fbUid)}" data-worker-id="${escapeHtml(w.userId)}">
+        <td><div class="ps-cell-worker">
+          <div class="ps-avatar ps-avatar--potential">${escapeHtml(initials)}</div>
+          <div>
+            <div class="ps-worker-name">${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</div>
+            <div class="ps-worker-meta">${costLabel}</div>
+          </div>
+        </div></td>
+        <td><div class="ps-shift-checklist">${shiftChecks}</div></td>
+        <td class="ps-cost">${escapeHtml(costLabel)}</td>
+        <td><div class="ps-actions-cell">
+          <button class="ps-send-btn ps-btn--send-worker" data-action="send-request" title="Send shift request">
+            <i data-lucide="send"></i> Send Request
+          </button>
+          <button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message">
+            <i data-lucide="message-circle"></i>
+          </button>
+        </div></td>
+      </tr>`;
+  }).join("");
+
+  body.innerHTML = `
+    <table class="ps-table">
+      <thead><tr>
+        <th>Worker Info</th><th>Eligible Shifts</th><th>Cost</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  if (window.lucide) lucide.createIcons();
+  _attachPotentialWorkerHandlers(eventId);
+}
+
+async function loadAndRenderPotentialWorkers(projectId, eventId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to load");
+    const workers = await res.json();
+    _replacePotentialContent(eventId, workers);
+  } catch {
+    const body = document.getElementById(`ps-body-${eventId}-potential`);
+    if (body) body.innerHTML = `
+      <table class="ps-table"><tbody>
+        <tr><td colspan="4" class="ps-empty" style="color:var(--red)">Failed to load potential workers.</td></tr>
+      </tbody></table>`;
+    const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+    if (badge) badge.textContent = "!";
+  }
+}
+
+function _attachPotentialWorkerHandlers(eventId) {
+  const body = document.getElementById(`ps-body-${eventId}-potential`);
+  if (!body) return;
+
+  // Per-worker send request
+  body.querySelectorAll(".ps-btn--send-worker").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const row   = btn.closest(".ps-row--potential");
+      const fbuid = row?.dataset.workerFbuid;
+      if (!fbuid || !currentProjectId) return;
+
+      const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
+        .map(cb => cb.dataset.shiftId);
+      if (shiftIds.length === 0) {
+        alert("Select at least one shift before sending.");
+        return;
+      }
+
+      await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+    });
+  });
+
+  // Send to all
+  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  if (sendAll) {
+    sendAll.addEventListener("click", async e => {
+      e.stopPropagation();
+      sendAll.disabled = true;
+      sendAll.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i> Sending…`;
+      if (window.lucide) lucide.createIcons();
+
+      const rows = [...body.querySelectorAll(".ps-row--potential")];
+      for (const row of rows) {
+        const fbuid   = row.dataset.workerFbuid;
+        const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
+          .map(cb => cb.dataset.shiftId);
+        if (!fbuid || shiftIds.length === 0) continue;
+        const btn = row.querySelector(".ps-btn--send-worker");
+        await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+      }
+
+      sendAll.innerHTML = `<i data-lucide="check"></i> All Sent`;
+      if (window.lucide) lucide.createIcons();
+    });
+  }
+}
+
+async function _sendOfferToWorker(projectId, eventId, fbuid, shiftIds, btn, row) {
+  if (btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`; if (window.lucide) lucide.createIcons(); }
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ shiftIds }),
+      }
+    );
+    if (!res.ok) throw new Error();
+
+    // Fade out and remove the row
+    row.classList.add("ps-row--fade-out");
+    row.addEventListener("animationend", () => {
+      row.remove();
+      // Update badge
+      const remaining = document.querySelectorAll(`#ps-body-${eventId}-potential .ps-row--potential`).length;
+      const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+      if (badge) badge.textContent = remaining;
+      const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+      if (sendAll && remaining === 0) sendAll.disabled = true;
+      // Show empty state if no rows left
+      if (remaining === 0) {
+        const body = document.getElementById(`ps-body-${eventId}-potential`);
+        if (body) body.innerHTML = `
+          <table class="ps-table"><tbody>
+            <tr><td colspan="4" class="ps-empty">All available workers have been offered shifts.</td></tr>
+          </tbody></table>`;
+      }
+    }, { once: true });
+  } catch {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="send"></i> Send Request`;
+      if (window.lucide) lucide.createIcons();
+    }
+    alert("Failed to send offer. Please try again.");
+  }
 }
 
 function _initStaffingHandlers() {
@@ -4852,40 +4999,18 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Individual send-request / return-to-pool buttons (excluding send-all)
-  document.querySelectorAll(".ps-root .ps-send-btn:not(.ps-btn-send-all)").forEach(btn => {
+  // Return-to-pool buttons (non-potential sections)
+  document.querySelectorAll(".ps-root .ps-send-btn--return").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
-      const workerId = btn.closest(".ps-row")?.dataset.workerId;
-      if (btn.dataset.action === "return-to-pool") {
-        console.log(`[Staffing] Return worker #${workerId} to potential pool`);
-        btn.innerHTML = `<i data-lucide="check"></i> Moved`;
-      } else {
-        console.log(`[Staffing] Send request to worker #${workerId}`);
-        btn.innerHTML = `<i data-lucide="check"></i> Sent`;
-      }
+      btn.innerHTML = `<i data-lucide="check"></i> Moved`;
       btn.disabled = true;
       btn.classList.add("ps-send-btn--sent");
       if (window.lucide) lucide.createIcons();
     });
   });
-
-  // Send to all potential workers (scoped per event)
-  document.querySelectorAll(".ps-btn-send-all").forEach(sendAll => {
-    sendAll.addEventListener("click", e => {
-      e.stopPropagation();
-      const eventId = sendAll.dataset.eventId;
-      console.log(`[Staffing] Send request to all potential workers in ${eventId}`);
-      document.querySelectorAll(`#ps-body-${eventId}-potential .ps-send-btn`).forEach(btn => {
-        btn.innerHTML = `<i data-lucide="check"></i> Sent`;
-        btn.disabled = true;
-        btn.classList.add("ps-send-btn--sent");
-      });
-      sendAll.innerHTML = `<i data-lucide="check"></i> All Requests Sent`;
-      sendAll.disabled = true;
-      if (window.lucide) lucide.createIcons();
-    });
-  });
+  // Note: send-request and send-all for potential workers are wired in
+  // _attachPotentialWorkerHandlers(), called after each event's workers load.
 }
 
 function _setSectionOpen(section, hdr, open) {

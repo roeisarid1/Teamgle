@@ -3607,3 +3607,96 @@ tr.expanded-row > td {
   .offer-actions { flex-direction: column; }
   .offer-btn { flex: none; width: 100%; }
 }
+
+/* ── Potential Workers — shift checkboxes & staffing UI ─────────────────────── */
+
+/* Shift checklist inside a worker row */
+.ps-shift-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ps-shift-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  flex-wrap: wrap;
+}
+
+.ps-shift-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.ps-shift-time {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* "Full" badge next to a shift */
+.ps-shift-full {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 99px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* Slot counter (not full) */
+.ps-shift-slots {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Fade-out animation for removed worker rows */
+.ps-row--fade-out {
+  animation: psRowFade .3s ease forwards;
+}
+
+@keyframes psRowFade {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateX(8px); }
+}
+
+/* Spinner for loading state on buttons */
+.ps-spin {
+  animation: psSpin .8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes psSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Loading skeleton for potential workers section */
+.ps-potential-loading {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ps-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s infinite;
+}
+
+.ps-skel-row {
+  height: 40px;
+  width: 100%;
+}

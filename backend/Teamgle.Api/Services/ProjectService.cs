@@ -210,4 +210,20 @@ public class ProjectService : IProjectService
         if (rowsAffected == 0)
             throw new UnauthorizedAccessException("Offer not found, already responded, or does not belong to you.");
     }
+
+    // ── Potential Workers ──────────────────────────────────────────────────
+    public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetPotentialWorkersAsync(projId, eventId, firebaseUid);
+    }
+
+    public async Task SendOfferToEmployeeAsync(string firebaseUid, string projId, string eventId, string employeeFbUid, SendOfferRequest request)
+    {
+        if (request.ShiftIds == null || request.ShiftIds.Count == 0)
+            throw new ArgumentException("At least one shift must be selected.");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.SendOfferToEmployeeAsync(projId, eventId, employeeFbUid, request.ShiftIds, firebaseUid);
+    }
 }
