@@ -4623,6 +4623,7 @@ function renderStaffingTab() {
   const events = currentProjectDetail?.events ?? [];
   events.forEach(ev => {
     if (currentProjectId) loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+    loadAndRenderEventWorkers(ev.eventId);
   });
 }
 
@@ -4717,7 +4718,10 @@ function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, se
     </div>`;
 }
 
-function _buildWorkerRow(w, sectionType) {
+function _buildWorkerRow(worker, sectionType) {
+  const initials = ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
+  const name     = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
+
   let btns = "";
   if (sectionType === "applicant" || sectionType === "hold")
     btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
@@ -4730,19 +4734,58 @@ function _buildWorkerRow(w, sectionType) {
   btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
 
   return `
-    <tr class="ps-row" data-worker-id="${w.id}">
+    <tr class="ps-row"
+        data-worker-fbuid="${escapeHtml(worker.fbUid ?? "")}"
+        data-worker-status="${escapeHtml(worker.status ?? "")}"
+        data-shift-id="${escapeHtml(worker.shiftId ?? "")}">
       <td><div class="ps-cell-worker">
-        <div class="ps-avatar">${escapeHtml(w.initials)}</div>
+        <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
         <div>
-          <div class="ps-worker-name">${escapeHtml(w.name)}</div>
-          <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
+          <div class="ps-worker-name">${escapeHtml(name)}</div>
+          <div class="ps-worker-meta">${escapeHtml(worker.roleName ?? "")}</div>
         </div>
       </div></td>
-      <td><span class="ps-shift-badge">${escapeHtml(w.shift)}</span></td>
-      <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
-      <td class="ps-cost">${escapeHtml(w.cost)}</td>
+      <td><span class="ps-shift-badge">${escapeHtml((worker.shiftId ?? "").slice(0, 8))}</span></td>
+      <td><span class="ps-role-chip">${escapeHtml(worker.roleName ?? "")}</span></td>
+      <td class="ps-cost">—</td>
       <td><div class="ps-actions-cell">${btns}</div></td>
     </tr>`;
+}
+
+function _renderEventWorkerSection(eventId, key, workers, sectionType) {
+  const body  = document.getElementById(`ps-body-${eventId}-${key}`);
+  const badge = document.querySelector(`#ps-section-${eventId}-${key} .ps-badge`);
+  if (!body) return;
+
+  const tbody = body.querySelector("tbody");
+  if (!tbody) return;
+
+  const rows = workers.length === 0
+    ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+    : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+
+  tbody.innerHTML = rows;
+  if (badge) badge.textContent = workers.length;
+  if (window.lucide) lucide.createIcons();
+}
+
+async function loadAndRenderEventWorkers(eventId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to load event workers");
+    const data = await res.json();
+
+    _renderEventWorkerSection(eventId, "applicants", data.applicants ?? [], "applicant");
+    _renderEventWorkerSection(eventId, "approved",   data.approved   ?? [], "approved");
+    _renderEventWorkerSection(eventId, "hold",       data.hold       ?? [], "hold");
+    _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
+  } catch (err) {
+    console.error("[Staffing] Failed to load event workers:", err);
+  }
 }
 
 // Builds the potential section with a loading skeleton (workers populated async)
