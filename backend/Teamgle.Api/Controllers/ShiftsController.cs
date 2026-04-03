@@ -174,4 +174,92 @@ public class ShiftsController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
+    // ── GET /api/events/{eventId}/workers ──────────────────────────────────
+    [HttpGet]
+    [Route("~/api/events/{eventId}/workers")]
+    public async Task<IActionResult> GetEventWorkers(string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var workers = await _projectService.GetEventWorkersAsync(uid, eventId);
+            return Ok(workers);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching workers for event {EventId}", eventId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── PATCH /api/events/{eventId}/workers/{employeeFbUid} ───────────────
+    [HttpPatch]
+    [Route("~/api/events/{eventId}/workers/{employeeFbUid}")]
+    public async Task<IActionResult> UpdateWorkerStatus(
+        string eventId, string employeeFbUid, [FromBody] UpdateWorkerStatusRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            await _projectService.UpdateWorkerStatusAsync(uid, eventId, employeeFbUid, request.Status);
+            return Ok(new { message = "Status updated." });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating worker status");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── DELETE /api/events/{eventId}/workers/{employeeFbUid} ──────────────
+    [HttpDelete]
+    [Route("~/api/events/{eventId}/workers/{employeeFbUid}")]
+    public async Task<IActionResult> DeleteWorkerAssignment(string eventId, string employeeFbUid)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            await _projectService.DeleteWorkerAssignmentAsync(uid, eventId, employeeFbUid);
+            return Ok(new { message = "Assignment removed." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting worker assignment");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }

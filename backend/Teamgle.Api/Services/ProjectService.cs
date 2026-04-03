@@ -226,4 +226,33 @@ public class ProjectService : IProjectService
         await ResolveCompanyIdAsync(firebaseUid);
         await _projectRepo.SendOfferToEmployeeAsync(projId, eventId, employeeFbUid, request.ShiftIds, firebaseUid);
     }
+
+    // ── Event Workers (Staffing) ──────────────────────────────────────────
+    public async Task<EventWorkersResponse> GetEventWorkersAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid); // ensures caller is a manager
+        return await _projectRepo.GetEventWorkersAsync(eventId, firebaseUid);
+    }
+
+    public async Task UpdateWorkerStatusAsync(
+        string firebaseUid, string eventId, string employeeFbUid, string newStatus)
+    {
+        var allowed = new HashSet<string>
+        {
+            "manager_approved", "manager_hold",
+            "manager_reject",   "manager_approved_canceled"
+        };
+        if (!allowed.Contains(newStatus))
+            throw new ArgumentException($"Invalid status: {newStatus}");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.UpdateWorkerStatusAsync(eventId, employeeFbUid, newStatus, firebaseUid);
+    }
+
+    public async Task DeleteWorkerAssignmentAsync(
+        string firebaseUid, string eventId, string employeeFbUid)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.DeleteWorkerAssignmentAsync(eventId, employeeFbUid, firebaseUid);
+    }
 }
