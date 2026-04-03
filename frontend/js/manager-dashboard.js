@@ -94,6 +94,7 @@ let profile = null;
 let allEmployees = [];
 let allCustomers = [];
 let chatInitialized = false;
+let _staffingPollInterval = null;
 
 // Add mode
 let profileFile = null; // File | null — new file chosen for profile
@@ -1609,6 +1610,7 @@ let _taskFilterPriority = "all"; // active priority filter pill value
 document
   .getElementById("btn-back-from-project-detail")
   .addEventListener("click", () => {
+    _stopStaffingPoll();
     activateSection("projects");
   });
 
@@ -1618,6 +1620,7 @@ document.querySelectorAll(".pd-tab").forEach((tab) => {
 });
 
 function activateProjectTab(name) {
+  if (name !== "employees") _stopStaffingPoll();
   document.querySelectorAll(".pd-tab").forEach((t) => {
     t.classList.toggle("active", t.dataset.tab === name);
   });
@@ -4618,6 +4621,7 @@ function renderStaffingTab() {
   root.innerHTML = _buildStaffingHTML();
   if (window.lucide) lucide.createIcons();
   _initStaffingHandlers();
+  _startStaffingPoll();
 
   // Fetch potential workers for each real event in background
   const events = currentProjectDetail?.events ?? [];
@@ -4785,6 +4789,21 @@ async function loadAndRenderEventWorkers(eventId) {
     _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
+  }
+}
+
+function _startStaffingPoll() {
+  _stopStaffingPoll();
+  const events = currentProjectDetail?.events ?? [];
+  _staffingPollInterval = setInterval(() => {
+    events.forEach(ev => loadAndRenderEventWorkers(ev.eventId));
+  }, 15000);
+}
+
+function _stopStaffingPoll() {
+  if (_staffingPollInterval !== null) {
+    clearInterval(_staffingPollInterval);
+    _staffingPollInterval = null;
   }
 }
 
