@@ -210,9 +210,12 @@ public class ShiftsController : ControllerBase
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
+        if (string.IsNullOrWhiteSpace(request.ShiftId))
+            return BadRequest(new { error = "ShiftId is required." });
+
         try
         {
-            await _projectService.UpdateWorkerStatusAsync(uid, eventId, employeeFbUid, request.Status);
+            await _projectService.UpdateWorkerStatusAsync(uid, eventId, employeeFbUid, request.ShiftId, request.Status);
             return Ok(new { message = "Status updated." });
         }
         catch (ArgumentException ex)
@@ -237,15 +240,19 @@ public class ShiftsController : ControllerBase
     // ── DELETE /api/events/{eventId}/workers/{employeeFbUid} ──────────────
     [HttpDelete]
     [Route("~/api/events/{eventId}/workers/{employeeFbUid}")]
-    public async Task<IActionResult> DeleteWorkerAssignment(string eventId, string employeeFbUid)
+    public async Task<IActionResult> DeleteWorkerAssignment(
+        string eventId, string employeeFbUid, [FromQuery] string shiftId)
     {
         var uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
+        if (string.IsNullOrWhiteSpace(shiftId))
+            return BadRequest(new { error = "shiftId query parameter is required." });
+
         try
         {
-            await _projectService.DeleteWorkerAssignmentAsync(uid, eventId, employeeFbUid);
+            await _projectService.DeleteWorkerAssignmentAsync(uid, eventId, employeeFbUid, shiftId);
             return Ok(new { message = "Assignment removed." });
         }
         catch (UnauthorizedAccessException ex)

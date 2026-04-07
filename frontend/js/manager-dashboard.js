@@ -4819,7 +4819,7 @@ function _stopStaffingPoll() {
   }
 }
 
-async function _handleWorkerStatusChange(eventId, fbUid, newStatus, btn) {
+async function _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn) {
   btn.disabled = true;
   try {
     const token = await getToken();
@@ -4828,20 +4828,20 @@ async function _handleWorkerStatusChange(eventId, fbUid, newStatus, btn) {
       {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, shiftId }),
       }
     );
     if (!res.ok) throw new Error("Failed to update status");
     await loadAndRenderEventWorkers(eventId);
   } catch {
-    // btn may be detached after re-render — re-query by fbUid
-    document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"] [data-action]`)
+    // btn may be detached after re-render — re-query by fbUid+shiftId
+    document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"][data-shift-id="${CSS.escape(shiftId)}"] [data-action]`)
       .forEach(b => { b.disabled = false; });
     alert("Failed to update worker status. Please try again.");
   }
 }
 
-async function _handleReturnToPool(eventId, fbUid, btn) {
+async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
   btn.disabled = true;
   btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`;
   if (window.lucide) lucide.createIcons();
@@ -4849,7 +4849,7 @@ async function _handleReturnToPool(eventId, fbUid, btn) {
   try {
     const token = await getToken();
     const res = await fetch(
-      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}`,
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}?shiftId=${encodeURIComponent(shiftId)}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
@@ -5128,8 +5128,9 @@ function _initStaffingHandlers() {
       const row    = btn.closest(".ps-row");
       if (!row) return;
 
-      const fbUid  = row.dataset.workerFbuid;
-      const status = row.dataset.workerStatus;
+      const fbUid   = row.dataset.workerFbuid;
+      const status  = row.dataset.workerStatus;
+      const shiftId = row.dataset.shiftId;
 
       // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
       const section   = row.closest(".ps-section");
@@ -5142,10 +5143,10 @@ function _initStaffingHandlers() {
         return;
       }
 
-      if (!fbUid || !eventId) return;
+      if (!fbUid || !eventId || !shiftId) return;
 
       if (action === "return-to-pool") {
-        await _handleReturnToPool(eventId, fbUid, btn);
+        await _handleReturnToPool(eventId, fbUid, shiftId, btn);
         return;
       }
 
@@ -5157,7 +5158,7 @@ function _initStaffingHandlers() {
       const newStatus = statusMap[action];
       if (!newStatus) return;
 
-      await _handleWorkerStatusChange(eventId, fbUid, newStatus, btn);
+      await _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn);
     }, { signal: _staffingClickController.signal });
   }
   // Note: send-request and send-all for potential workers are wired in

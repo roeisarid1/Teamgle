@@ -235,7 +235,7 @@ public class ProjectService : IProjectService
     }
 
     public async Task UpdateWorkerStatusAsync(
-        string firebaseUid, string eventId, string employeeFbUid, string newStatus)
+        string firebaseUid, string eventId, string employeeFbUid, string shiftId, string newStatus)
     {
         var allowed = new HashSet<string>
         {
@@ -246,13 +246,13 @@ public class ProjectService : IProjectService
             throw new ArgumentException($"Invalid status: {newStatus}");
 
         await ResolveCompanyIdAsync(firebaseUid);
-        await _projectRepo.UpdateWorkerStatusAsync(eventId, employeeFbUid, newStatus, firebaseUid);
+        await _projectRepo.UpdateWorkerStatusAsync(eventId, employeeFbUid, shiftId, newStatus, firebaseUid);
     }
 
     public async Task DeleteWorkerAssignmentAsync(
-        string firebaseUid, string eventId, string employeeFbUid)
+        string firebaseUid, string eventId, string employeeFbUid, string shiftId)
     {
         await ResolveCompanyIdAsync(firebaseUid);
-        await _projectRepo.DeleteWorkerAssignmentAsync(eventId, employeeFbUid, firebaseUid);
+        await _projectRepo.DeleteWorkerAssignmentAsync(eventId, employeeFbUid, shiftId, firebaseUid);
     }
 }

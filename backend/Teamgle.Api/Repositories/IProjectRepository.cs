@@ -47,6 +47,6 @@ public interface IProjectRepository
 
     // ── Event Workers (Staffing) ───────────────────────────────────────────
     Task<EventWorkersResponse> GetEventWorkersAsync(string eventId, string firebaseUid);
-    Task UpdateWorkerStatusAsync(string eventId, string employeeFbUid, string newStatus, string managerFbUid);
-    Task DeleteWorkerAssignmentAsync(string eventId, string employeeFbUid, string managerFbUid);
+    Task UpdateWorkerStatusAsync(string eventId, string employeeFbUid, string shiftId, string newStatus, string managerFbUid);
+    Task DeleteWorkerAssignmentAsync(string eventId, string employeeFbUid, string shiftId, string managerFbUid);
 }

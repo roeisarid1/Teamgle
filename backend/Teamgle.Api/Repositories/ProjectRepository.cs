@@ -1208,15 +1208,16 @@ public class ProjectRepository : IProjectRepository
         return result;
     }
 
-    // ── Update status for all of an employee's shifts in an event ─────────
+    // ── Update status for a specific shift of an employee in an event ──────
     public async Task UpdateWorkerStatusAsync(
-        string eventId, string employeeFbUid, string newStatus, string managerFbUid)
+        string eventId, string employeeFbUid, string shiftId, string newStatus, string managerFbUid)
     {
         const string sql = """
             UPDATE Employee_Shift
             SET    status            = @newStatus,
                    status_updated_at = GETUTCDATE()
-            WHERE  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+            WHERE  shift_ID          = @shiftId
+              AND  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
               AND  shift_ID IN (
                   SELECT s.Shift_ID
                   FROM   Shift s
@@ -1232,6 +1233,7 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd  = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@newStatus",      newStatus);
+        cmd.Parameters.AddWithValue("@shiftId",        shiftId);
         cmd.Parameters.AddWithValue("@employeeFbUid",  employeeFbUid);
         cmd.Parameters.AddWithValue("@eventId",        eventId);
         cmd.Parameters.AddWithValue("@managerFbUid",   managerFbUid);
@@ -1239,16 +1241,17 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         var rowsAffected = await cmd.ExecuteNonQueryAsync();
         if (rowsAffected == 0)
-            throw new KeyNotFoundException("No matching assignment found for this employee in this event.");
+            throw new KeyNotFoundException("No matching assignment found for this shift.");
     }
 
-    // ── Delete all Employee_Shift rows for an employee in an event ────────
+    // ── Delete a specific Employee_Shift row (return one shift to pool) ────
     public async Task DeleteWorkerAssignmentAsync(
-        string eventId, string employeeFbUid, string managerFbUid)
+        string eventId, string employeeFbUid, string shiftId, string managerFbUid)
     {
         const string sql = """
             DELETE FROM Employee_Shift
-            WHERE  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+            WHERE  shift_ID          = @shiftId
+              AND  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
               AND  shift_ID IN (
                   SELECT s.Shift_ID
                   FROM   Shift s
@@ -1263,6 +1266,7 @@ public class ProjectRepository : IProjectRepository
 
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@shiftId",       shiftId);
         cmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
         cmd.Parameters.AddWithValue("@eventId",       eventId);
         cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
