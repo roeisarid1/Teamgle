@@ -197,4 +197,67 @@ public class ProjectService : IProjectService
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.DeleteBriefAsync(briefId, projId, firebaseUid);
     }
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    public async Task<IEnumerable<JobOfferResponse>> GetMyJobOffersAsync(string firebaseUid)
+    {
+        return await _projectRepo.GetJobOffersForEmployeeAsync(firebaseUid);
+    }
+
+    public async Task RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept)
+    {
+        var rowsAffected = await _projectRepo.RespondToJobOfferAsync(firebaseUid, shiftId, accept);
+        if (rowsAffected == 0)
+            throw new UnauthorizedAccessException("Offer not found, already responded, or does not belong to you.");
+    }
+
+    public async Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid)
+    {
+        return await _projectRepo.GetMyApplicationsAsync(firebaseUid);
+    }
+
+    // ── Potential Workers ──────────────────────────────────────────────────
+    public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetPotentialWorkersAsync(projId, eventId, firebaseUid);
+    }
+
+    public async Task SendOfferToEmployeeAsync(string firebaseUid, string projId, string eventId, string employeeFbUid, SendOfferRequest request)
+    {
+        if (request.ShiftIds == null || request.ShiftIds.Count == 0)
+            throw new ArgumentException("At least one shift must be selected.");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.SendOfferToEmployeeAsync(projId, eventId, employeeFbUid, request.ShiftIds, firebaseUid);
+    }
+
+    // ── Event Workers (Staffing) ──────────────────────────────────────────
+    public async Task<EventWorkersResponse> GetEventWorkersAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid); // ensures caller is a manager
+        return await _projectRepo.GetEventWorkersAsync(eventId, firebaseUid);
+    }
+
+    public async Task UpdateWorkerStatusAsync(
+        string firebaseUid, string eventId, string employeeFbUid, string shiftId, string newStatus)
+    {
+        var allowed = new HashSet<string>
+        {
+            "manager_approved", "manager_hold",
+            "manager_reject",   "manager_approved_canceled"
+        };
+        if (!allowed.Contains(newStatus))
+            throw new ArgumentException($"Invalid status: {newStatus}");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.UpdateWorkerStatusAsync(eventId, employeeFbUid, shiftId, newStatus, firebaseUid);
+    }
+
+    public async Task DeleteWorkerAssignmentAsync(
+        string firebaseUid, string eventId, string employeeFbUid, string shiftId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        await _projectRepo.DeleteWorkerAssignmentAsync(eventId, employeeFbUid, shiftId, firebaseUid);
+    }
 }

@@ -308,4 +308,46 @@ public class ProjectsController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
+    // ── GET /api/projects/{id}/events/{eventId}/potential-workers ──────────
+    [HttpGet("{id}/events/{eventId}/potential-workers")]
+    public async Task<IActionResult> GetPotentialWorkers(string id, string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var workers = await _projectService.GetPotentialWorkersAsync(uid, id, eventId);
+            if (workers == null) return NotFound(new { error = "Project or event not found." });
+            return Ok(workers);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching potential workers for event {EventId}", eventId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── POST /api/projects/{id}/events/{eventId}/potential-workers/{employeeFBUID}/send-offer
+    [HttpPost("{id}/events/{eventId}/potential-workers/{employeeFBUID}/send-offer")]
+    public async Task<IActionResult> SendOfferToEmployee(
+        string id, string eventId, string employeeFBUID, [FromBody] SendOfferRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            await _projectService.SendOfferToEmployeeAsync(uid, id, eventId, employeeFBUID, request);
+            return Ok(new { message = "Offer sent successfully." });
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending offer to employee {EmployeeFBUID}", employeeFBUID);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }

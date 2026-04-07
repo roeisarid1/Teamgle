@@ -23,4 +23,18 @@ public interface IProjectService
     Task<BriefItem?> CreateProjectBriefAsync(string firebaseUid, string projId, CreateBriefRequest request);
     Task<BriefItem?> UpdateProjectBriefAsync(string firebaseUid, string projId, string briefId, UpdateBriefRequest request);
     Task<bool?> DeleteProjectBriefAsync(string firebaseUid, string projId, string briefId);
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    Task<IEnumerable<JobOfferResponse>> GetMyJobOffersAsync(string firebaseUid);
+    Task RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept);
+    Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid);
+
+    // ── Potential Workers ──────────────────────────────────────────────────
+    Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId);
+    Task SendOfferToEmployeeAsync(string firebaseUid, string projId, string eventId, string employeeFbUid, SendOfferRequest request);
+
+    // ── Event Workers (Staffing) ───────────────────────────────────────────
+    Task<EventWorkersResponse> GetEventWorkersAsync(string firebaseUid, string eventId);
+    Task UpdateWorkerStatusAsync(string firebaseUid, string eventId, string employeeFbUid, string shiftId, string newStatus);
+    Task DeleteWorkerAssignmentAsync(string firebaseUid, string eventId, string employeeFbUid, string shiftId);
 }

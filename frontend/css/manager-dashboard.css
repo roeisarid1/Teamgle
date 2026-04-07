@@ -3060,31 +3060,31 @@ tr.expanded-row > td {
   box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
 
-/* Per-section accent colors: left border + header tint */
-#ps-section-potential  { border-left-color: #5B7BF0; }
-#ps-section-applicants { border-left-color: #f97316; }
-#ps-section-approved   { border-left-color: #22c55e; }
-#ps-section-hold       { border-left-color: #a78bfa; }
-#ps-section-rejected   { border-left-color: #f87171; }
+/* Per-section accent colors: left border + header tint (keyed by data-section-type) */
+[data-section-type="potential"]  { border-left-color: #5B7BF0; }
+[data-section-type="applicants"] { border-left-color: #f97316; }
+[data-section-type="approved"]   { border-left-color: #22c55e; }
+[data-section-type="hold"]       { border-left-color: #a78bfa; }
+[data-section-type="rejected"]   { border-left-color: #f87171; }
 
-#ps-section-potential  .ps-section-hdr { background: #f0f3ff; }
-#ps-section-applicants .ps-section-hdr { background: #fff7ed; }
-#ps-section-approved   .ps-section-hdr { background: #f0fdf4; }
-#ps-section-hold       .ps-section-hdr { background: #f5f3ff; }
-#ps-section-rejected   .ps-section-hdr { background: #fff1f2; }
+[data-section-type="potential"]  .ps-section-hdr { background: #f0f3ff; }
+[data-section-type="applicants"] .ps-section-hdr { background: #fff7ed; }
+[data-section-type="approved"]   .ps-section-hdr { background: #f0fdf4; }
+[data-section-type="hold"]       .ps-section-hdr { background: #f5f3ff; }
+[data-section-type="rejected"]   .ps-section-hdr { background: #fff1f2; }
 
-#ps-section-potential  .ps-section-icon { color: #5B7BF0; }
-#ps-section-applicants .ps-section-icon { color: #f97316; }
-#ps-section-approved   .ps-section-icon { color: #22c55e; }
-#ps-section-hold       .ps-section-icon { color: #a78bfa; }
-#ps-section-rejected   .ps-section-icon { color: #f87171; }
+[data-section-type="potential"]  .ps-section-icon { color: #5B7BF0; }
+[data-section-type="applicants"] .ps-section-icon { color: #f97316; }
+[data-section-type="approved"]   .ps-section-icon { color: #22c55e; }
+[data-section-type="hold"]       .ps-section-icon { color: #a78bfa; }
+[data-section-type="rejected"]   .ps-section-icon { color: #f87171; }
 
 /* Hover: slightly darker version of each tint */
-#ps-section-potential  .ps-section-hdr:hover { background: #e6ebff; }
-#ps-section-applicants .ps-section-hdr:hover { background: #ffedd5; }
-#ps-section-approved   .ps-section-hdr:hover { background: #dcfce7; }
-#ps-section-hold       .ps-section-hdr:hover { background: #ede9fe; }
-#ps-section-rejected   .ps-section-hdr:hover { background: #ffe4e6; }
+[data-section-type="potential"]  .ps-section-hdr:hover { background: #e6ebff; }
+[data-section-type="applicants"] .ps-section-hdr:hover { background: #ffedd5; }
+[data-section-type="approved"]   .ps-section-hdr:hover { background: #dcfce7; }
+[data-section-type="hold"]       .ps-section-hdr:hover { background: #ede9fe; }
+[data-section-type="rejected"]   .ps-section-hdr:hover { background: #ffe4e6; }
 
 .ps-section-hdr {
   display: flex;
@@ -3109,13 +3109,62 @@ tr.expanded-row > td {
 .ps-section-icon { width: 17px; height: 17px; flex-shrink: 0; }
 .ps-section-title { font-weight: 700; font-size: 14px; color: var(--text); }
 .ps-chevron {
-  width: 17px; height: 17px;
+  font-size: 16px;
   color: var(--text-muted);
-  transition: transform var(--transition);
+  line-height: 1;
+  flex-shrink: 0;
 }
-.ps-section.ps-collapsed .ps-chevron { transform: rotate(-90deg); }
-.ps-section.ps-collapsed .ps-section-body { display: none; }
-.ps-section-body { border-top: 1px solid var(--border); }
+/* Accordion open/close via max-height (default = collapsed) */
+.ps-section-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 200ms ease-in-out;
+  border-top: 1px solid var(--border);
+}
+.ps-section--open .ps-section-body {
+  max-height: 2000px;
+}
+
+/* Chevron: rotation rule removed — state is now managed via textContent (▾ / —) */
+
+/* Pinned section: override left border with blue */
+.ps-section--pinned { border-left-color: var(--blue) !important; }
+
+/* Event block grouping */
+.ps-event-block {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ps-event-header {
+  padding: 14px 20px;
+  background: var(--blue-light, #eef1fe);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ps-event-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+.ps-event-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Sections inside an event block: remove individual radius/shadow/margin */
+.ps-event-block .ps-section {
+  border-radius: 0;
+  margin-bottom: 0;
+  box-shadow: none;
+  border-right: none;
+  border-top: none;
+}
+.ps-event-block .ps-section + .ps-section {
+  border-top: 1px solid var(--border);
+}
 
 /* Status badges */
 .ps-badge {
@@ -3274,3 +3323,582 @@ tr.expanded-row > td {
   .ps-table td:last-child  { padding-bottom: 12px; }
   .ps-table tr { border-bottom: 1px solid var(--border); display: block; }
 }
+
+/* ── Job Offers (Employee) ──────────────────────────────────────────────────── */
+
+/* Offers badge in sidebar */
+.offers-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: auto;
+  line-height: 1;
+}
+
+/* Page layout */
+.offers-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+
+.offers-page-header {
+  margin-bottom: 24px;
+}
+
+.offers-page-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.offers-page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Offer card */
+.offer-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.offer-card:hover {
+  box-shadow: 0 4px 16px rgba(91,123,240,.12);
+  transform: translateY(-1px);
+}
+
+.offer-card--fade-out {
+  animation: offerFadeOut .35s ease forwards;
+}
+
+@keyframes offerFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(.96); height: 0; padding: 0; margin: 0; overflow: hidden; }
+}
+
+/* Card header: project name + event type badge */
+.offer-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.offer-project-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.offer-event-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 99px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+/* Event name — primary headline */
+.offer-event-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 14px;
+  line-height: 1.25;
+}
+
+/* Date line */
+.offer-date {
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+/* Meta row (location, role, attendees) */
+.offer-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+
+.offer-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.offer-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.offer-role-chip {
+  background: var(--blue-light);
+  color: var(--blue);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Pay rate */
+.offer-pay {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #15803d;
+  margin-bottom: 12px;
+}
+
+.offer-pay span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #16a34a;
+}
+
+/* Notes */
+.offer-notes {
+  border-left: 3px solid var(--border);
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+  background: #fafafa;
+}
+
+/* Offered by */
+.offer-by {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.offer-by strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Action buttons */
+.offer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.offer-btn {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), opacity var(--transition), transform var(--transition);
+  touch-action: manipulation;
+}
+
+.offer-btn:active { transform: scale(.97); }
+
+.offer-btn:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.offer-btn--accept {
+  background: var(--green);
+  color: #fff;
+}
+
+.offer-btn--accept:hover:not(:disabled) {
+  background: #5aad60;
+}
+
+.offer-btn--decline {
+  background: var(--card);
+  color: var(--red);
+  border: 1.5px solid var(--red);
+}
+
+.offer-btn--decline:hover:not(:disabled) {
+  background: #fff1f2;
+}
+
+/* Empty state */
+.offers-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.offers-empty p { margin: 0; line-height: 1.5; }
+.offers-empty span { font-size: 13px; }
+
+/* Skeleton loading */
+.offer-skeleton {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s infinite;
+  margin-bottom: 12px;
+}
+
+.skel-line  { height: 14px; }
+.skel-short  { width: 40%; }
+.skel-medium { width: 65%; }
+.skel-long   { width: 85%; }
+.skel-buttons {
+  height: 48px;
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+@keyframes skelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive — mobile first */
+@media (max-width: 480px) {
+  .offers-page { padding: 20px 12px 60px; }
+  .offer-card  { padding: 16px; }
+  .offer-event-name { font-size: 17px; }
+  .offer-actions { flex-direction: column; }
+  .offer-btn { flex: none; width: 100%; }
+}
+
+/* ── Potential Workers — shift checkboxes & staffing UI ─────────────────────── */
+
+/* Shift checklist inside a worker row */
+.ps-shift-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ps-shift-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  flex-wrap: wrap;
+}
+
+.ps-shift-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.ps-shift-time {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* "Full" badge next to a shift */
+.ps-shift-full {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 99px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* Slot counter (not full) */
+.ps-shift-slots {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Fade-out animation for removed worker rows */
+.ps-row--fade-out {
+  animation: psRowFade .3s ease forwards;
+}
+
+@keyframes psRowFade {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateX(8px); }
+}
+
+/* Spinner for loading state on buttons */
+.ps-spin {
+  animation: psSpin .8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes psSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Loading skeleton for potential workers section */
+.ps-potential-loading {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ps-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s infinite;
+}
+
+.ps-skel-row {
+  height: 40px;
+  width: 100%;
+}
+
+/* ── Project Detail — larger, clearer typography ─────────────────────────────
+   Scoped to #section-project-detail so nothing outside is affected.
+   ─────────────────────────────────────────────────────────────────────────── */
+#section-project-detail {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+}
+
+/* Project name / subtitle in header */
+#section-project-detail .cp-title    { font-size: 22px; }
+#section-project-detail .cp-subtitle { font-size: 15px; }
+
+/* Tab navigation */
+#section-project-detail .pd-tab { font-size: 16px; font-weight: 600; }
+
+/* Section / card headers inside tabs */
+#section-project-detail .section-title,
+#section-project-detail .tasks-title,
+#section-project-detail h2,
+#section-project-detail h3 { font-size: 20px; }
+
+/* Table body text */
+#section-project-detail table  { font-size: 16px; }
+#section-project-detail thead th { font-size: 13px; }
+#section-project-detail tbody td { font-size: 16px; }
+
+/* Task/Brief cards */
+#section-project-detail .task-content,
+#section-project-detail .brief-title,
+#section-project-detail .brief-body  { font-size: 16px; }
+
+#section-project-detail .task-meta,
+#section-project-detail .brief-meta  { font-size: 13px; }
+
+/* Priority/status chips & filter pills */
+#section-project-detail .priority-chip,
+#section-project-detail .status-chip,
+#section-project-detail .filter-chip,
+#section-project-detail .pf-chip        { font-size: 14px; }
+
+/* Task filter bar pills & label */
+#section-project-detail .pd-filter-pill {
+  font-size: 14px;
+  padding: 5px 16px;
+}
+#section-project-detail .pd-field-label { font-size: 14px; font-weight: 600; }
+
+/* Staffing section: worker name / meta */
+#section-project-detail .ps-worker-name { font-size: 16px; }
+#section-project-detail .ps-worker-meta { font-size: 13px; }
+#section-project-detail .ps-section-title { font-size: 15px; font-weight: 700; }
+#section-project-detail .ps-table { font-size: 16px; }
+#section-project-detail .ps-table thead th { font-size: 13px; }
+
+/* Potential workers */
+#section-project-detail .pw-name    { font-size: 16px; }
+#section-project-detail .pw-meta    { font-size: 13px; }
+
+/* Buttons inside project detail */
+#section-project-detail .btn-primary,
+#section-project-detail .btn-action,
+#section-project-detail .ps-send-btn { font-size: 15px; }
+
+/* ── Staffing overlap warning banner ────────────────────────────────────────── */
+.ps-overlap-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ps-overlap-banner ul { margin: 4px 0 0; padding-left: 18px; }
+.ps-overlap-banner li { margin-bottom: 2px; }
+
+/* ── My Applications — grouped layout ──────────────────────────────────────── */
+
+/* Group wrapper */
+.app-group {
+  margin-bottom: 28px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* Group header bar */
+.app-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.app-group-icon  { width: 18px; height: 18px; flex-shrink: 0; }
+.app-group-title { flex: 1; }
+.app-group-count {
+  background: rgba(0,0,0,.08);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Approved group */
+.app-group--approved .app-group-header {
+  background: #dcfce7;
+  color: #14532d;
+  border-bottom: 1px solid #bbf7d0;
+}
+.app-group--approved .app-group-icon { color: #16a34a; }
+
+/* Pending group */
+.app-group--pending .app-group-header {
+  background: #fefce8;
+  color: #713f12;
+  border-bottom: 1px solid #fde68a;
+}
+.app-group--pending .app-group-icon { color: #ca8a04; }
+
+/* Rejected group */
+.app-group--rejected .app-group-header {
+  background: #f9fafb;
+  color: #374151;
+  border-bottom: 1px solid var(--border);
+}
+.app-group--rejected .app-group-icon { color: #9ca3af; }
+
+/* Group body */
+.app-group-body { padding: 12px 14px; background: var(--card); display: flex; flex-direction: column; gap: 10px; }
+
+/* Empty state inside group */
+.app-group-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 12px 0 6px;
+}
+
+/* Cards inside each group */
+.app-card { margin-bottom: 0; }
+
+/* Approved card — green left accent + subtle background */
+.app-card--approved {
+  border-left: 4px solid #22c55e;
+  background: #f0fdf4;
+}
+.app-card--approved:hover { box-shadow: 0 4px 16px rgba(34,197,94,.15); }
+
+/* Pending card — yellow left accent */
+.app-card--pending {
+  border-left: 4px solid #facc15;
+}
+
+/* Rejected card — muted */
+.app-card--rejected,
+.app-card--canceled {
+  border-left: 4px solid #e5e7eb;
+  opacity: .8;
+}
+
+/* "Confirmed shift" label */
+.app-confirmed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #16a34a;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+
+/* Event name — more prominent inside app cards */
+.app-event-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 4px 0 10px;
+}
+
+/* Status badges */
+.app-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+.app-status--approved { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.app-status--pending  { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+.app-status--rejected { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.app-status--canceled { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }

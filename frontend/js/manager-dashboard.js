@@ -11,7 +11,7 @@ import {
   deleteObject,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile } from "./chat-service.js";
-import { initChat, destroyChat } from "./chat-ui.js";
+import { initChat, destroyChat, openChatWith } from "./chat-ui.js";
 import { attachTimePicker } from "./time-picker.js";
 
 const API_BASE = "http://localhost:5000/api";
@@ -94,6 +94,8 @@ let profile = null;
 let allEmployees = [];
 let allCustomers = [];
 let chatInitialized = false;
+let _staffingPollInterval = null;
+let _staffingClickController = null;
 
 // Add mode
 let profileFile = null; // File | null — new file chosen for profile
@@ -1433,6 +1435,9 @@ document.querySelectorAll(".nav-item[data-section]").forEach((item) => {
 });
 
 function activateSection(name) {
+  // Stop staffing poll whenever we leave the project detail view
+  if (name !== "project-detail") _stopStaffingPoll();
+
   document.querySelectorAll(".nav-item[data-section]").forEach((el) => {
     el.classList.toggle("active", el.dataset.section === name);
   });
@@ -1609,6 +1614,7 @@ let _taskFilterPriority = "all"; // active priority filter pill value
 document
   .getElementById("btn-back-from-project-detail")
   .addEventListener("click", () => {
+    _stopStaffingPoll();
     activateSection("projects");
   });
 
@@ -1618,6 +1624,7 @@ document.querySelectorAll(".pd-tab").forEach((tab) => {
 });
 
 function activateProjectTab(name) {
+  if (name !== "employees") _stopStaffingPoll();
   document.querySelectorAll(".pd-tab").forEach((t) => {
     t.classList.toggle("active", t.dataset.tab === name);
   });
@@ -1738,15 +1745,14 @@ function renderGantt(schedule) {
     return roleColorMap[roleName];
   }
 
-  // Convert ISO datetime to % position on a 0–24h axis
-  function timeToPercent(isoStr) {
-    if (!isoStr) return 0;
-    const d = new Date(isoStr);
-    return ((d.getHours() * 60 + d.getMinutes()) / 1440) * 100;
-  }
 
   function fmt2(n) {
     return String(n).padStart(2, "0");
+  }
+  // Converts a UTC ISO string to the local datetime-local input format (YYYY-MM-DDTHH:mm)
+  function toLocalDateTimeInput(isoStr) {
+    const d = new Date(isoStr);
+    return `${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}T${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
   }
   function fmtTime(isoStr) {
     if (!isoStr) return "";
@@ -1755,19 +1761,27 @@ function renderGantt(schedule) {
   }
   function fmtDate(isoStr) {
     if (!isoStr) return "";
-    return new Date(isoStr).toLocaleDateString("he-IL", {
+    return new Date(isoStr).toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
     });
   }
 
-  // Hour axis ticks: every 2 hours (0, 2, 4, … 24)
-  const axisTicks = Array.from({ length: 13 }, (_, i) => {
-    const h = i * 2;
-    const pct = (h / 24) * 100;
-    return `<div class="gantt-hour-tick" style="left:${pct}%">${fmt2(h)}:00</div>`;
-  }).join("");
+  // Returns minutes from day-start, adding 1440 for cross-midnight times
+  function toMinutes(isoStr, refIsoStr) {
+    if (!isoStr) return 0;
+    const d = new Date(isoStr);
+    let m = d.getHours() * 60 + d.getMinutes();
+    if (refIsoStr) {
+      const ref = new Date(refIsoStr);
+      const sameDay = d.getFullYear() === ref.getFullYear() &&
+                      d.getMonth()    === ref.getMonth()    &&
+                      d.getDate()     === ref.getDate();
+      if (!sameDay && d > ref) m += 1440;
+    }
+    return m;
+  }
 
   const sectionsHtml = schedule.events
     .map((ev) => {
@@ -1775,16 +1789,43 @@ function renderGantt(schedule) {
         ? `${fmtDate(ev.startTime)} · ${fmtTime(ev.startTime)}–${fmtTime(ev.endTime)}`
         : "";
 
+      // Compute windowed axis: from earliest shift start to latest shift end
+      let winStart = Infinity;
+      let winEnd   = 0;
+      ev.shifts.forEach(shift => {
+        const s = toMinutes(shift.startTime);
+        const e = toMinutes(shift.endTime, shift.startTime);
+        if (s < winStart) winStart = s;
+        if (e > winEnd)   winEnd   = e;
+      });
+      // Fallback for empty events
+      if (!isFinite(winStart)) { winStart = 0; winEnd = 1440; }
+      // Pad 1h on each side, snap to 1h boundaries for clean labels
+      winStart = Math.max(0, Math.floor((winStart - 60) / 60) * 60);
+      winEnd   = Math.ceil((winEnd + 60) / 60) * 60;
+      const spanMinutes = winEnd - winStart;
+
+      // Build axis ticks — one per hour inside the window (max ~12 ticks)
+      const tickStep = spanMinutes <= 480 ? 60 : 120; // 1h ticks for short spans, 2h for long
+      const axisTicks = [];
+      for (let m = winStart; m <= winEnd; m += tickStep) {
+        const pct   = ((m - winStart) / spanMinutes) * 100;
+        const hAbs  = Math.floor(m / 60);
+        const label = `${fmt2(hAbs % 24)}:00${hAbs >= 24 ? " +1" : ""}`;
+        axisTicks.push(`<div class="gantt-hour-tick" style="left:${pct.toFixed(2)}%">${label}</div>`);
+      }
+
       const rowsHtml =
         ev.shifts.length === 0
           ? `<div class="gantt-empty-row">No shifts defined for this event</div>`
           : ev.shifts
               .map((shift) => {
-                const color = getColor(shift.roleName);
-                const left = timeToPercent(shift.startTime);
-                const right = timeToPercent(shift.endTime);
-                const width = Math.max(right - left, 2); // floor at 2% so tiny bars stay visible
-                const label = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
+                const color  = getColor(shift.roleName);
+                const leftM  = toMinutes(shift.startTime);
+                const rightM = toMinutes(shift.endTime, shift.startTime);
+                const left   = ((leftM  - winStart) / spanMinutes) * 100;
+                const width  = Math.max((rightM - leftM) / spanMinutes * 100, 2);
+                const label  = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
                 return `
             <div class="gantt-row">
               <div class="gantt-row-label">${escapeHtml(shift.roleName)}</div>
@@ -1796,8 +1837,8 @@ function renderGantt(schedule) {
                     <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="Edit shift"
                             data-shift-id="${escapeHtml(shift.shiftId)}"
                             data-role-id="${escapeHtml(shift.roleId)}"
-                            data-start="${shift.startTime ? new Date(shift.startTime).toISOString().slice(0, 16) : ""}"
-                            data-end="${shift.endTime ? new Date(shift.endTime).toISOString().slice(0, 16) : ""}"
+                            data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
+                            data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
                             data-qty="${shift.requiredQuantity}">
                       <i data-lucide="pencil" style="width:11px;height:11px"></i>
                     </button>
@@ -1821,7 +1862,7 @@ function renderGantt(schedule) {
         <div class="gantt-chart" dir="ltr">
           <div class="gantt-axis-row">
             <div class="gantt-row-label"></div>
-            <div class="gantt-axis-track">${axisTicks}</div>
+            <div class="gantt-axis-track">${axisTicks.join("")}</div>
           </div>
           ${rowsHtml}
         </div>
@@ -1877,7 +1918,7 @@ function renderScheduleCalendar() {
   _pdCalendar = new FullCalendar.Calendar(el, {
     initialView: "dayGridMonth",
     direction: "rtl",
-    locale: "he",
+    locale: "en",
     headerToolbar: {
       start: "prev,next today",
       center: "title",
@@ -4285,7 +4326,7 @@ async function openShiftEditModal(btn) {
 
   // Load roles into dropdown
   const select = document.getElementById("shift-edit-role");
-  select.innerHTML = '<option value="">טוען…</option>';
+  select.innerHTML = '<option value="">Loading…</option>';
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/roles`, {
@@ -4300,7 +4341,7 @@ async function openShiftEditModal(btn) {
       )
       .join("");
   } catch {
-    select.innerHTML = '<option value="">שגיאה בטעינת תפקידים</option>';
+    select.innerHTML = '<option value="">Failed to load roles</option>';
   }
 }
 
@@ -4334,34 +4375,34 @@ document
     errEl.style.display = "none";
 
     if (!rollId) {
-      errEl.textContent = "יש לבחור תפקיד.";
+      errEl.textContent = "Please select a role.";
       errEl.style.display = "";
       return;
     }
     if (!start) {
-      errEl.textContent = "יש להזין שעת התחלה.";
+      errEl.textContent = "Please enter a start time.";
       errEl.style.display = "";
       return;
     }
     if (!end) {
-      errEl.textContent = "יש להזין שעת סיום.";
+      errEl.textContent = "Please enter an end time.";
       errEl.style.display = "";
       return;
     }
     if (end <= start) {
-      errEl.textContent = "שעת הסיום חייבת להיות אחרי שעת ההתחלה.";
+      errEl.textContent = "End time must be after start time.";
       errEl.style.display = "";
       return;
     }
     if (!qty || qty < 1) {
-      errEl.textContent = "הכמות חייבת להיות לפחות 1.";
+      errEl.textContent = "Quantity must be at least 1.";
       errEl.style.display = "";
       return;
     }
 
     const btn = document.getElementById("btn-save-shift");
     btn.disabled = true;
-    btn.textContent = "שומר…";
+    btn.textContent = "Saving…";
 
     try {
       const token = await getToken();
@@ -4384,7 +4425,7 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        errEl.textContent = data.error || "שגיאה בשמירת המשמרת.";
+        errEl.textContent = data.error || "Failed to save shift.";
         errEl.style.display = "";
         return;
       }
@@ -4392,11 +4433,11 @@ document
       closeShiftEditModal();
       if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      errEl.textContent = "שגיאת רשת. נסה שוב.";
+      errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.textContent = "שמור";
+      btn.textContent = "Save";
     }
   });
 
@@ -4432,7 +4473,7 @@ document
 
     const btn = document.getElementById("btn-confirm-shift-delete");
     btn.disabled = true;
-    btn.textContent = "מוחק…";
+    btn.textContent = "Deleting…";
 
     try {
       const token = await getToken();
@@ -4446,17 +4487,17 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "שגיאה במחיקת המשמרת.");
+        alert(data.error || "Failed to delete shift.");
         return;
       }
 
       closeShiftDeleteModal();
       if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      alert("שגיאת רשת. נסה שוב.");
+      alert("Network error. Please try again.");
     } finally {
       btn.disabled = false;
-      btn.textContent = "מחק";
+      btn.textContent = "Delete";
     }
   });
 
@@ -4612,49 +4653,55 @@ attachTimePicker(document.getElementById("shift-add-end"));
 
 // ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
 
-const STAFFING_MOCK = {
-  applicants: [
-    { id: 1, name: "Daniel Klein",   initials: "DK", dept: "Event Staff", shiftsDone: 2,
-      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "Stage Manager",       cost: "₪180/hr" },
-    { id: 2, name: "Maya Levi",      initials: "ML", dept: "Logistics",   shiftsDone: 5,
-      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Crew Lead",            cost: "₪210/hr" },
-    { id: 3, name: "Tom Ben-David",  initials: "TB", dept: "Security",    shiftsDone: 12,
-      shift: "Closing Night · Mar 16, 20:00–02:00",    role: "Security Officer",     cost: "₪160/hr" },
-  ],
-  approved: [
-    { id: 4, name: "Noa Shapiro",    initials: "NS", dept: "Production",  shiftsDone: 8,
-      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "Production Asst.",     cost: "₪150/hr" },
-    { id: 5, name: "Gal Cohen",      initials: "GC", dept: "Tech Crew",   shiftsDone: 3,
-      shift: "Opening Ceremony · Mar 15, 09:00–17:00", role: "AV Technician",        cost: "₪200/hr" },
-  ],
-  hold: [
-    { id: 6, name: "Ran Mizrahi",    initials: "RM", dept: "Catering",    shiftsDone: 1,
-      shift: "Main Show · Mar 15, 18:00–23:00",        role: "Waiter",               cost: "₪120/hr" },
-  ],
-  rejected: [
-    { id: 7, name: "Shira Avraham",  initials: "SA", dept: "Event Staff", shiftsDone: 0,
-      shift: "Setup Day · Mar 14, 08:00–16:00",        role: "General Staff",        cost: "₪110/hr" },
-  ],
-  potential: [
-    { id: 8,  name: "Amit Peretz",   initials: "AP", dept: "Tech Crew",   shiftsDone: 6,
-      role: "AV Technician",    cost: "₪195/hr", shift: "Opening Ceremony · Mar 15, 09:00–17:00" },
-    { id: 9,  name: "Hila Green",    initials: "HG", dept: "Logistics",   shiftsDone: 4,
-      role: "Crew Lead",        cost: "₪180/hr", shift: "Main Show · Mar 15, 18:00–23:00" },
-    { id: 10, name: "Yosi Katz",     initials: "YK", dept: "Security",    shiftsDone: 15,
-      role: "Security Officer", cost: "₪155/hr", shift: null },
-  ],
-};
-
 function renderStaffingTab() {
   const root = document.getElementById("ps-root");
   if (!root) return;
   root.innerHTML = _buildStaffingHTML();
   if (window.lucide) lucide.createIcons();
   _initStaffingHandlers();
+  _startStaffingPoll();
+
+  // Fetch potential workers for each real event in background
+  const events = currentProjectDetail?.events ?? [];
+  events.forEach(ev => {
+    if (currentProjectId) loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+    loadAndRenderEventWorkers(ev.eventId);
+  });
 }
 
 function _buildStaffingHTML() {
-  const { applicants, approved, hold, rejected, potential } = STAFFING_MOCK;
+  const events = currentProjectDetail?.events ?? [];
+
+  if (events.length === 0) {
+    return `
+      <div class="ps-header">
+        <div class="ps-header-info">
+          <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
+          <p class="ps-header-desc">Manage worker assignments for this project's shifts and events.</p>
+        </div>
+      </div>
+      <div class="pd-placeholder" style="margin-top:32px">
+        No events in this project yet.
+      </div>`;
+  }
+
+  const eventsHtml = events.map(ev => {
+    const meta = _formatEventMeta(ev);
+    return `
+    <div class="ps-event-block" data-event-id="${escapeHtml(ev.eventId)}">
+      <div class="ps-event-header">
+        <span class="ps-event-name">${escapeHtml(ev.name)}</span>
+        <span class="ps-event-meta">${escapeHtml(meta)}</span>
+      </div>
+      ${_buildPotentialSection(ev.eventId)}
+      ${_buildStaffingSection(ev.eventId, "awaiting",   "Awaiting Response", "clock",        "pending",  [], "awaiting")}
+      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants",  "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(ev.eventId, "approved",   "Approved Workers",  "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(ev.eventId, "hold",       "Hold / Standby",    "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(ev.eventId, "rejected",   "Rejected Workers",  "x-circle",     "rejected", [], "rejected")}
+    </div>`;
+  }).join('');
+
   return `
     <div class="ps-header">
       <div class="ps-header-info">
@@ -4668,29 +4715,42 @@ function _buildStaffingHTML() {
         </div>
       </div>
     </div>
-    ${_buildPotentialSection(potential)}
-    ${_buildStaffingSection("applicants", "Shift Applicants",    "inbox",        "pending",   applicants, "applicant")}
-    ${_buildStaffingSection("approved",  "Approved Workers",    "check-circle", "approved",  approved,   "approved")}
-    ${_buildStaffingSection("hold",      "Hold / Standby",      "pause-circle", "hold",      hold,       "hold")}
-    ${_buildStaffingSection("rejected",  "Rejected Workers",    "x-circle",     "rejected",  rejected,   "rejected")}
+    ${eventsHtml}
   `;
 }
 
-function _buildStaffingSection(key, title, icon, badgeType, workers, sectionType) {
+function _formatEventMeta(ev) {
+  const parts = [];
+  if (ev.startTime) {
+    const d = new Date(ev.startTime);
+    const datePart = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const startT = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    let timePart = startT;
+    if (ev.endTime) {
+      const endT = new Date(ev.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+      timePart += `–${endT}`;
+    }
+    parts.push(`${datePart} · ${timePart}`);
+  }
+  if (ev.location) parts.push(ev.location);
+  return parts.join(" · ");
+}
+
+function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, sectionType) {
   const rows = workers.length === 0
     ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
     : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
   return `
-    <div class="ps-section" id="ps-section-${key}">
-      <div class="ps-section-hdr" data-ps-toggle="${key}">
+    <div class="ps-section" id="ps-section-${eventId}-${key}" data-pinned="false" data-section-type="${key}">
+      <div class="ps-section-hdr" data-ps-section="${eventId}-${key}">
         <div class="ps-section-hdr-left">
           <i data-lucide="${icon}" class="ps-section-icon"></i>
           <span class="ps-section-title">${title}</span>
           <span class="ps-badge ps-badge--${badgeType}">${workers.length}</span>
         </div>
-        <i data-lucide="chevron-down" class="ps-chevron"></i>
+        <span class="ps-chevron">▾</span>
       </div>
-      <div class="ps-section-body" id="ps-body-${key}">
+      <div class="ps-section-body" id="ps-body-${eventId}-${key}">
         <table class="ps-table">
           <thead><tr>
             <th>Worker Info</th><th>Applied Shift</th><th>Applied Role</th><th>Cost</th><th>Actions</th>
@@ -4701,93 +4761,439 @@ function _buildStaffingSection(key, title, icon, badgeType, workers, sectionType
     </div>`;
 }
 
-function _buildWorkerRow(w, sectionType) {
+function _buildWorkerRow(worker, sectionType) {
+  const initials = ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
+  const name     = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
+
   let btns = "";
-  if (sectionType === "applicant" || sectionType === "hold")
-    btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
-  if (sectionType === "applicant" || sectionType === "approved")
-    btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
-  if (sectionType !== "rejected")
-    btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
-  if (sectionType === "rejected")
-    btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+  if (sectionType !== "awaiting") {
+    if (sectionType === "applicant" || sectionType === "hold")
+      btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
+    if (sectionType === "applicant" || sectionType === "approved")
+      btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
+    if (sectionType !== "rejected")
+      btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
+    if (sectionType === "rejected")
+      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+  }
   btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
 
   return `
-    <tr class="ps-row" data-worker-id="${w.id}">
+    <tr class="ps-row"
+        data-worker-fbuid="${escapeHtml(worker.fbUid ?? "")}"
+        data-worker-status="${escapeHtml(worker.status ?? "")}"
+        data-shift-id="${escapeHtml(worker.shiftId ?? "")}">
       <td><div class="ps-cell-worker">
-        <div class="ps-avatar">${escapeHtml(w.initials)}</div>
+        <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
         <div>
-          <div class="ps-worker-name">${escapeHtml(w.name)}</div>
-          <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
+          <div class="ps-worker-name">${escapeHtml(name)}</div>
+          <div class="ps-worker-meta">${escapeHtml(worker.roleName ?? "")}</div>
         </div>
       </div></td>
-      <td><span class="ps-shift-badge">${escapeHtml(w.shift)}</span></td>
-      <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
-      <td class="ps-cost">${escapeHtml(w.cost)}</td>
+      <td><span class="ps-shift-badge">${escapeHtml((worker.shiftId ?? "").slice(0, 8))}</span></td>
+      <td><span class="ps-role-chip">${escapeHtml(worker.roleName ?? "")}</span></td>
+      <td class="ps-cost">—</td>
       <td><div class="ps-actions-cell">${btns}</div></td>
     </tr>`;
 }
 
-function _buildPotentialSection(workers) {
-  const rows = workers.length === 0
-    ? `<tr><td colspan="5" class="ps-empty">No additional workers available.</td></tr>`
-    : workers.map(w => `
-      <tr class="ps-row" data-worker-id="${w.id}">
-        <td><div class="ps-cell-worker">
-          <div class="ps-avatar ps-avatar--potential">${escapeHtml(w.initials)}</div>
-          <div>
-            <div class="ps-worker-name">${escapeHtml(w.name)}</div>
-            <div class="ps-worker-meta">${escapeHtml(w.dept)} · ${w.shiftsDone} shift${w.shiftsDone !== 1 ? "s" : ""} done</div>
-          </div>
-        </div></td>
-        <td>${w.shift
-          ? `<span class="ps-shift-badge">${escapeHtml(w.shift)}</span>`
-          : `<span class="ps-shift-badge ps-shift-badge--none">Select shift</span>`
-        }</td>
-        <td><span class="ps-role-chip">${escapeHtml(w.role)}</span></td>
-        <td class="ps-cost">${escapeHtml(w.cost)}</td>
-        <td><div class="ps-actions-cell">
-          <button class="ps-send-btn" data-action="send-request" title="Send shift request">
-            <i data-lucide="send"></i> Send Request
-          </button>
-          <button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>
-        </div></td>
-      </tr>`).join("");
+function _renderEventWorkerSection(eventId, key, workers, sectionType) {
+  const body  = document.getElementById(`ps-body-${eventId}-${key}`);
+  const badge = document.querySelector(`#ps-section-${eventId}-${key} .ps-badge`);
+  if (!body) return;
 
+  const tbody = body.querySelector("tbody");
+  if (!tbody) return;
+
+  const rows = workers.length === 0
+    ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+    : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+
+  tbody.innerHTML = rows;
+  if (badge) badge.textContent = workers.length;
+  if (window.lucide) lucide.createIcons();
+}
+
+async function loadAndRenderEventWorkers(eventId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to load event workers");
+    const data = await res.json();
+
+    _renderEventWorkerSection(eventId, "awaiting",   data.awaiting   ?? [], "awaiting");
+    _renderEventWorkerSection(eventId, "applicants", data.applicants ?? [], "applicant");
+    _renderEventWorkerSection(eventId, "approved",   data.approved   ?? [], "approved");
+    _renderEventWorkerSection(eventId, "hold",       data.hold       ?? [], "hold");
+    _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
+    _renderOverlapWarnings(eventId, data.approved ?? []);
+  } catch (err) {
+    console.error("[Staffing] Failed to load event workers:", err);
+  }
+}
+
+function _shiftsOverlap(a, b) {
+  const aStart = a.shiftStart ? new Date(a.shiftStart) : null;
+  const aEnd   = a.shiftEnd   ? new Date(a.shiftEnd)   : null;
+  const bStart = b.shiftStart ? new Date(b.shiftStart) : null;
+  const bEnd   = b.shiftEnd   ? new Date(b.shiftEnd)   : null;
+  if (!aStart || !bStart) return false;
+  const aEndEff = aEnd   ?? aStart;
+  const bEndEff = bEnd   ?? bStart;
+  return aStart < bEndEff && bStart < aEndEff;
+}
+
+function _renderOverlapWarnings(eventId, approved) {
+  // Group approved workers by fbUid
+  const byWorker = new Map();
+  for (const w of approved) {
+    if (!byWorker.has(w.fbUid)) byWorker.set(w.fbUid, []);
+    byWorker.get(w.fbUid).push(w);
+  }
+
+  // Find all pairs that overlap
+  const warnings = [];
+  for (const [, shifts] of byWorker) {
+    if (shifts.length < 2) continue;
+    for (let i = 0; i < shifts.length; i++) {
+      for (let j = i + 1; j < shifts.length; j++) {
+        if (_shiftsOverlap(shifts[i], shifts[j])) {
+          const name = `${shifts[i].firstName} ${shifts[i].lastName}`.trim();
+          warnings.push(
+            `<strong>${escapeHtml(name)}</strong> is approved for both ` +
+            `<em>${escapeHtml(shifts[i].roleName)}</em> and <em>${escapeHtml(shifts[j].roleName)}</em> ` +
+            `with overlapping shift times.`
+          );
+        }
+      }
+    }
+  }
+
+  // Inject or clear the warning banner above the approved section
+  const sectionEl = document.getElementById(`ps-section-${eventId}-approved`);
+  const existingBanner = sectionEl?.previousElementSibling;
+  if (existingBanner?.classList.contains("ps-overlap-banner")) {
+    existingBanner.remove();
+  }
+
+  if (warnings.length === 0 || !sectionEl) return;
+
+  const banner = document.createElement("div");
+  banner.className = "ps-overlap-banner";
+  banner.innerHTML = `
+    <i data-lucide="alert-triangle" style="flex-shrink:0;width:16px;height:16px"></i>
+    <div>
+      <strong>Shift overlap detected</strong>
+      <ul>${warnings.map(w => `<li>${w}</li>`).join("")}</ul>
+    </div>`;
+  sectionEl.insertAdjacentElement("beforebegin", banner);
+  if (window.lucide) lucide.createIcons();
+}
+
+function _startStaffingPoll() {
+  // Only clear the interval — do NOT abort the click controller (it was just set up)
+  if (_staffingPollInterval !== null) {
+    clearInterval(_staffingPollInterval);
+    _staffingPollInterval = null;
+  }
+  const events = currentProjectDetail?.events ?? [];
+  _staffingPollInterval = setInterval(() => {
+    events.forEach(ev => loadAndRenderEventWorkers(ev.eventId));
+  }, 15000);
+}
+
+function _stopStaffingPoll() {
+  if (_staffingPollInterval !== null) {
+    clearInterval(_staffingPollInterval);
+    _staffingPollInterval = null;
+  }
+  if (_staffingClickController) {
+    _staffingClickController.abort();
+    _staffingClickController = null;
+  }
+}
+
+async function _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn) {
+  btn.disabled = true;
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, shiftId }),
+      }
+    );
+    if (!res.ok) throw new Error("Failed to update status");
+    await loadAndRenderEventWorkers(eventId);
+  } catch {
+    // btn may be detached after re-render — re-query by fbUid+shiftId
+    document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"][data-shift-id="${CSS.escape(shiftId)}"] [data-action]`)
+      .forEach(b => { b.disabled = false; });
+    alert("Failed to update worker status. Please try again.");
+  }
+}
+
+async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`;
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}?shiftId=${encodeURIComponent(shiftId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    if (!res.ok) throw new Error("Failed to remove assignment");
+
+    await loadAndRenderEventWorkers(eventId);
+    if (currentProjectId) await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+  } catch {
+    // btn may be detached after partial re-render — re-query or restore if still attached
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
+      if (window.lucide) lucide.createIcons();
+    }
+    alert("Failed to return worker to pool. Please try again.");
+  }
+}
+
+// Builds the potential section with a loading skeleton (workers populated async)
+function _buildPotentialSection(eventId) {
   return `
-    <div class="ps-section" id="ps-section-potential">
-      <div class="ps-section-hdr" data-ps-toggle="potential">
+    <div class="ps-section" id="ps-section-${eventId}-potential" data-pinned="false" data-section-type="potential">
+      <div class="ps-section-hdr" data-ps-section="${eventId}-potential">
         <div class="ps-section-hdr-left">
           <i data-lucide="users" class="ps-section-icon"></i>
           <span class="ps-section-title">Potential Workers</span>
-          <span class="ps-badge ps-badge--potential">${workers.length}</span>
+          <span class="ps-badge ps-badge--potential" id="ps-badge-${eventId}-potential">…</span>
         </div>
         <div class="ps-section-hdr-right">
-          <button class="ps-btn-primary" id="ps-btn-send-all" ${workers.length === 0 ? "disabled" : ""}>
+          <button class="ps-btn-primary ps-btn-send-all" data-event-id="${eventId}" disabled>
             <i data-lucide="send"></i>
             Send Request to All
           </button>
-          <i data-lucide="chevron-down" class="ps-chevron"></i>
+          <span class="ps-chevron">▾</span>
         </div>
       </div>
-      <div class="ps-section-body" id="ps-body-potential">
-        <table class="ps-table">
-          <thead><tr>
-            <th>Worker Info</th><th>Applied Shift</th><th>Available Role</th><th>Cost</th><th>Actions</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="ps-section-body" id="ps-body-${eventId}-potential">
+        <div class="ps-potential-loading">
+          <div class="ps-skel ps-skel-row"></div>
+          <div class="ps-skel ps-skel-row"></div>
+        </div>
       </div>
     </div>`;
 }
 
+// Called after fetch to replace loading state with real worker rows
+function _replacePotentialContent(eventId, workers) {
+  const body   = document.getElementById(`ps-body-${eventId}-potential`);
+  const badge  = document.getElementById(`ps-badge-${eventId}-potential`);
+  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  if (!body) return;
+
+  badge.textContent = workers.length;
+  sendAll.disabled  = workers.length === 0;
+
+  if (workers.length === 0) {
+    body.innerHTML = `
+      <table class="ps-table"><tbody>
+        <tr><td colspan="4" class="ps-empty">No eligible workers available for this event's shifts.</td></tr>
+      </tbody></table>`;
+    return;
+  }
+
+  const rows = workers.map(w => {
+    const initials = (w.firstName[0] + (w.lastName[0] || "")).toUpperCase();
+    const costLabel = w.costPerHour ? `₪${Number(w.costPerHour).toFixed(0)}/hr` : "—";
+
+    const shiftChecks = w.eligibleShifts.map(s => {
+      const isFull = s.activeAssignments >= s.requiredQuantity;
+      const timeLabel = s.startTime
+        ? new Date(s.startTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) +
+          (s.endTime ? "–" + new Date(s.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")
+        : "";
+      return `
+        <label class="ps-shift-check">
+          <input type="checkbox" data-shift-id="${escapeHtml(s.shiftId)}" checked>
+          <span class="ps-role-chip">${escapeHtml(s.roleName)}</span>
+          ${timeLabel ? `<span class="ps-shift-time">${timeLabel}</span>` : ""}
+          ${isFull ? `<span class="ps-shift-full">Full ${s.activeAssignments}/${s.requiredQuantity}</span>` : `<span class="ps-shift-slots">${s.activeAssignments}/${s.requiredQuantity}</span>`}
+        </label>`;
+    }).join("");
+
+    return `
+      <tr class="ps-row ps-row--potential" data-worker-fbuid="${escapeHtml(w.fbUid)}" data-worker-id="${escapeHtml(w.userId)}">
+        <td><div class="ps-cell-worker">
+          <div class="ps-avatar ps-avatar--potential">${escapeHtml(initials)}</div>
+          <div>
+            <div class="ps-worker-name">${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</div>
+            <div class="ps-worker-meta">${costLabel}</div>
+          </div>
+        </div></td>
+        <td><div class="ps-shift-checklist">${shiftChecks}</div></td>
+        <td class="ps-cost">${escapeHtml(costLabel)}</td>
+        <td><div class="ps-actions-cell">
+          <button class="ps-send-btn ps-btn--send-worker" data-action="send-request" title="Send shift request">
+            <i data-lucide="send"></i> Send Request
+          </button>
+          <button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message">
+            <i data-lucide="message-circle"></i>
+          </button>
+        </div></td>
+      </tr>`;
+  }).join("");
+
+  body.innerHTML = `
+    <table class="ps-table">
+      <thead><tr>
+        <th>Worker Info</th><th>Eligible Shifts</th><th>Cost</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  if (window.lucide) lucide.createIcons();
+  _attachPotentialWorkerHandlers(eventId);
+}
+
+async function loadAndRenderPotentialWorkers(projectId, eventId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to load");
+    const workers = await res.json();
+    _replacePotentialContent(eventId, workers);
+  } catch {
+    const body = document.getElementById(`ps-body-${eventId}-potential`);
+    if (body) body.innerHTML = `
+      <table class="ps-table"><tbody>
+        <tr><td colspan="4" class="ps-empty" style="color:var(--red)">Failed to load potential workers.</td></tr>
+      </tbody></table>`;
+    const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+    if (badge) badge.textContent = "!";
+  }
+}
+
+function _attachPotentialWorkerHandlers(eventId) {
+  const body = document.getElementById(`ps-body-${eventId}-potential`);
+  if (!body) return;
+
+  // Per-worker send request
+  body.querySelectorAll(".ps-btn--send-worker").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const row   = btn.closest(".ps-row--potential");
+      const fbuid = row?.dataset.workerFbuid;
+      if (!fbuid || !currentProjectId) return;
+
+      const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
+        .map(cb => cb.dataset.shiftId);
+      if (shiftIds.length === 0) {
+        alert("Select at least one shift before sending.");
+        return;
+      }
+
+      await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+    });
+  });
+
+  // Send to all
+  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  if (sendAll) {
+    sendAll.addEventListener("click", async e => {
+      e.stopPropagation();
+      sendAll.disabled = true;
+      sendAll.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i> Sending…`;
+      if (window.lucide) lucide.createIcons();
+
+      const rows = [...body.querySelectorAll(".ps-row--potential")];
+      for (const row of rows) {
+        const fbuid   = row.dataset.workerFbuid;
+        const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
+          .map(cb => cb.dataset.shiftId);
+        if (!fbuid || shiftIds.length === 0) continue;
+        const btn = row.querySelector(".ps-btn--send-worker");
+        await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+      }
+
+      sendAll.innerHTML = `<i data-lucide="check"></i> All Sent`;
+      if (window.lucide) lucide.createIcons();
+    });
+  }
+}
+
+async function _sendOfferToWorker(projectId, eventId, fbuid, shiftIds, btn, row) {
+  if (btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`; if (window.lucide) lucide.createIcons(); }
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ shiftIds }),
+      }
+    );
+    if (!res.ok) throw new Error();
+
+    // Fade out and remove the row
+    row.classList.add("ps-row--fade-out");
+    row.addEventListener("animationend", () => {
+      row.remove();
+      // Update badge
+      const remaining = document.querySelectorAll(`#ps-body-${eventId}-potential .ps-row--potential`).length;
+      const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+      if (badge) badge.textContent = remaining;
+      const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+      if (sendAll && remaining === 0) sendAll.disabled = true;
+      // Show empty state if no rows left
+      if (remaining === 0) {
+        const body = document.getElementById(`ps-body-${eventId}-potential`);
+        if (body) body.innerHTML = `
+          <table class="ps-table"><tbody>
+            <tr><td colspan="4" class="ps-empty">All available workers have been offered shifts.</td></tr>
+          </tbody></table>`;
+      }
+    }, { once: true });
+  } catch {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="send"></i> Send Request`;
+      if (window.lucide) lucide.createIcons();
+    }
+    alert("Failed to send offer. Please try again.");
+  }
+}
+
 function _initStaffingHandlers() {
-  // Section collapse / expand toggles
-  document.querySelectorAll("[data-ps-toggle]").forEach(hdr => {
+  // Accordion: single-click opens/closes, double-click toggles pin
+  let clickTimer = null;
+
+  document.querySelectorAll("[data-ps-section]").forEach(hdr => {
     hdr.addEventListener("click", () => {
-      const key = hdr.dataset.psToggle;
-      document.getElementById(`ps-section-${key}`)?.classList.toggle("ps-collapsed");
+      if (clickTimer !== null) {
+        // Second click within 250ms → double-click → toggle pin
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        _toggleSectionPin(hdr);
+      } else {
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          _toggleSectionOpen(hdr);
+        }, 250);
+      }
     });
   });
 
@@ -4801,51 +5207,117 @@ function _initStaffingHandlers() {
     });
   });
 
-  // Action buttons
-  document.querySelectorAll(".ps-root .ps-action-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
+  // Action buttons — event delegation handles dynamically rendered rows
+  const psRoot = document.querySelector(".ps-root");
+  if (psRoot) {
+    if (_staffingClickController) _staffingClickController.abort();
+    _staffingClickController = new AbortController();
+    psRoot.addEventListener("click", async e => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+
+      // Skip potential-worker send-request button (handled separately)
+      if (btn.classList.contains("ps-btn--send-worker")) return;
+
       e.stopPropagation();
+
       const action = btn.dataset.action;
-      const workerId = btn.closest(".ps-row")?.dataset.workerId;
+      const row    = btn.closest(".ps-row");
+      if (!row) return;
+
+      const fbUid   = row.dataset.workerFbuid;
+      const status  = row.dataset.workerStatus;
+      const shiftId = row.dataset.shiftId;
+
       if (action === "message") {
-        // Future: navigate to chat with this worker
-        console.log(`[Staffing] Open chat with worker #${workerId}`);
-      } else {
-        console.log(`[Staffing] Action "${action}" on worker #${workerId}`);
+        if (!fbUid) return;
+        _initChatSection();          // ensure chat is initialized
+        activateSection("chats");
+        openChatWith(fbUid);
+        return;
+      }
+
+      // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
+      const section   = row.closest(".ps-section");
+      const sectionId = section?.id ?? "";
+      const match     = sectionId.match(/^ps-section-(.+)-(applicants|approved|hold|rejected)$/);
+      const eventId   = match?.[1];
+
+      if (!fbUid || !eventId || !shiftId) return;
+
+      if (action === "return-to-pool") {
+        await _handleReturnToPool(eventId, fbUid, shiftId, btn);
+        return;
+      }
+
+      const statusMap = {
+        approve: "manager_approved",
+        hold:    "manager_hold",
+        reject:  status === "manager_approved" ? "manager_approved_canceled" : "manager_reject",
+      };
+      const newStatus = statusMap[action];
+      if (!newStatus) return;
+
+      await _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn);
+    }, { signal: _staffingClickController.signal });
+  }
+  // Note: send-request and send-all for potential workers are wired in
+  // _attachPotentialWorkerHandlers(), called after each event's workers load.
+}
+
+function _setSectionOpen(section, hdr, open) {
+  const chevron = hdr.querySelector(".ps-chevron");
+  if (open) {
+    section.classList.add("ps-section--open");
+    if (chevron) chevron.textContent = "▾";
+  } else {
+    section.classList.remove("ps-section--open");
+    section.dataset.pinned = "false";
+    section.classList.remove("ps-section--pinned");
+    if (chevron) chevron.textContent = "▾";
+  }
+}
+
+function _toggleSectionOpen(hdr) {
+  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  if (!section) return;
+
+  const isOpen     = section.classList.contains("ps-section--open");
+  const eventBlock = hdr.closest(".ps-event-block");
+
+  if (isOpen) {
+    // Single-click on an open section (pinned or not) → close and unpin it
+    _setSectionOpen(section, hdr, false);
+  } else {
+    // Close all non-pinned open sections in the same event block
+    eventBlock?.querySelectorAll(".ps-section--open").forEach(other => {
+      if (other.dataset.pinned !== "true") {
+        const otherHdr = other.querySelector(".ps-section-hdr");
+        if (otherHdr) _setSectionOpen(other, otherHdr, false);
       }
     });
-  });
+    // Open this section
+    _setSectionOpen(section, hdr, true);
+  }
+}
 
-  // Individual send-request / return-to-pool buttons
-  document.querySelectorAll(".ps-root .ps-send-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const workerId = btn.closest(".ps-row")?.dataset.workerId;
-      if (btn.dataset.action === "return-to-pool") {
-        console.log(`[Staffing] Return worker #${workerId} to potential pool`);
-        btn.innerHTML = `<i data-lucide="check"></i> Moved`;
-      } else {
-        console.log(`[Staffing] Send request to worker #${workerId}`);
-        btn.innerHTML = `<i data-lucide="check"></i> Sent`;
-      }
-      btn.disabled = true;
-      btn.classList.add("ps-send-btn--sent");
-      if (window.lucide) lucide.createIcons();
-    });
-  });
+function _toggleSectionPin(hdr) {
+  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  if (!section) return;
+  const chevron = hdr.querySelector(".ps-chevron");
 
-  // Send to all potential workers
-  document.getElementById("ps-btn-send-all")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    console.log("[Staffing] Send request to all potential workers");
-    document.querySelectorAll("#ps-body-potential .ps-send-btn").forEach(btn => {
-      btn.innerHTML = `<i data-lucide="check"></i> Sent`;
-      btn.disabled = true;
-      btn.classList.add("ps-send-btn--sent");
-    });
-    const sendAll = document.getElementById("ps-btn-send-all");
-    sendAll.innerHTML = `<i data-lucide="check"></i> All Requests Sent`;
-    sendAll.disabled = true;
-    if (window.lucide) lucide.createIcons();
-  });
+  if (section.dataset.pinned === "true") {
+    // Unpin (but keep open — user can single-click to close)
+    section.dataset.pinned = "false";
+    section.classList.remove("ps-section--pinned");
+    if (chevron) chevron.textContent = "▾";
+  } else {
+    // Pin — ensure open, change chevron to em dash
+    section.dataset.pinned = "true";
+    section.classList.add("ps-section--pinned");
+    if (!section.classList.contains("ps-section--open")) {
+      section.classList.add("ps-section--open");
+    }
+    if (chevron) chevron.textContent = "—";
+  }
 }

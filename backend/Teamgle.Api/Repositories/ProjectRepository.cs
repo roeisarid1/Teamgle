@@ -813,4 +813,538 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@projId",  projId);
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
+
+    // ── Employee Job Offers ────────────────────────────────────────────────
+    public async Task<IEnumerable<JobOfferResponse>> GetJobOffersForEmployeeAsync(string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                es.shift_ID,
+                es.pay_rate_per_hour,
+                es.notes,
+                es.planned_start_time,
+                es.planned_end_time,
+                s.start_time        AS shift_start_time,
+                s.end_time          AS shift_end_time,
+                r.Roll_name,
+                e.event_ID,
+                e.name              AS event_name,
+                e.location          AS event_location,
+                e.event_type,
+                e.attendees_count,
+                p.name              AS project_name,
+                u.firstName + ' ' + u.lastName AS manager_name
+            FROM Employee_Shift es
+            INNER JOIN [User] eu          ON es.employee_user_ID = eu.user_ID
+            INNER JOIN Shift s            ON es.shift_ID = s.Shift_ID
+            INNER JOIN Roll r             ON s.roll_ID = r.Roll_ID
+            INNER JOIN Event e            ON s.event_ID = e.event_ID
+            INNER JOIN Project p          ON e.project_ID = p.Proj_ID
+            INNER JOIN Manager_Project mp ON p.Proj_ID = mp.project_ID AND mp.is_owner = 1
+            INNER JOIN [User] u           ON mp.manager_user_ID = u.user_ID
+            WHERE eu.FBUID = @fbuid
+              AND es.status = 'manager_offer_sent'
+            ORDER BY COALESCE(es.planned_start_time, s.start_time)
+            """;
+
+        var offers = new List<JobOfferResponse>();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            offers.Add(new JobOfferResponse
+            {
+                ShiftId          = reader["shift_ID"].ToString()!,
+                PayRatePerHour   = reader["pay_rate_per_hour"] == DBNull.Value ? null : (decimal?)reader["pay_rate_per_hour"],
+                Notes            = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
+                PlannedStartTime = reader["planned_start_time"] == DBNull.Value ? null : (DateTime?)reader["planned_start_time"],
+                PlannedEndTime   = reader["planned_end_time"]   == DBNull.Value ? null : (DateTime?)reader["planned_end_time"],
+                ShiftStartTime   = reader["shift_start_time"]   == DBNull.Value ? null : (DateTime?)reader["shift_start_time"],
+                ShiftEndTime     = reader["shift_end_time"]     == DBNull.Value ? null : (DateTime?)reader["shift_end_time"],
+                RoleName         = reader["Roll_name"].ToString()!,
+                EventId          = reader["event_ID"].ToString()!,
+                EventName        = reader["event_name"].ToString()!,
+                EventLocation    = reader["event_location"] == DBNull.Value ? null : reader["event_location"].ToString(),
+                EventType        = reader["event_type"]     == DBNull.Value ? null : reader["event_type"].ToString(),
+                AttendeesCount   = reader["attendees_count"] == DBNull.Value ? null : (int?)reader["attendees_count"],
+                ProjectName      = reader["project_name"].ToString()!,
+                ManagerName      = reader["manager_name"].ToString()!,
+            });
+        }
+
+        return offers;
+    }
+
+    public async Task<int> RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept)
+    {
+        var newStatus = accept ? "employee_request" : "employee_request_canceled";
+
+        const string sql = """
+            UPDATE Employee_Shift
+            SET    status           = @newStatus,
+                   status_updated_at = GETUTCDATE()
+            WHERE  shift_ID         = @shiftId
+              AND  employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @fbuid)
+              AND  status           = 'manager_offer_sent'
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@newStatus", newStatus);
+        cmd.Parameters.AddWithValue("@shiftId",   shiftId);
+        cmd.Parameters.AddWithValue("@fbuid",      firebaseUid);
+
+        await conn.OpenAsync();
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
+    // ── Potential Workers ──────────────────────────────────────────────────
+    public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(
+        string projId, string eventId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Access check (returns null if project not found, throws if no access)
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null)
+            return null;
+
+        // Verify the event belongs to this project
+        const string eventCheckSql = "SELECT 1 FROM Event WHERE event_ID = @eventId AND project_ID = @projId";
+        await using (var cmd = new SqlCommand(eventCheckSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@eventId", eventId);
+            cmd.Parameters.AddWithValue("@projId",  projId);
+            if (await cmd.ExecuteScalarAsync() == null)
+                return null; // event not found under this project
+        }
+
+        // Get company_ID of the calling manager
+        string? companyId;
+        const string companySql = "SELECT company_ID FROM [User] WHERE FBUID = @fbuid";
+        await using (var cmd = new SqlCommand(companySql, conn))
+        {
+            cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
+            companyId = (await cmd.ExecuteScalarAsync()) as string;
+        }
+        if (companyId == null) return null;
+
+        // Get eligible employees: in same company, role matches a shift in this event,
+        // not actively assigned to any shift in this event, and has registered (FBUID not null)
+        const string workerSql = """
+            SELECT DISTINCT u.user_ID, u.FBUID, u.firstName, u.lastName, emp.cost_per_hour
+            FROM [User] u
+            INNER JOIN Employee emp        ON emp.user_ID          = u.user_ID
+            INNER JOIN Employee_Roll er    ON er.employee_user_ID  = u.user_ID
+            INNER JOIN Shift s             ON s.roll_ID            = er.roll_ID
+                                          AND s.event_ID           = @eventId
+            WHERE u.company_ID = @companyId
+              AND u.FBUID IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM Employee_Shift es
+                  INNER JOIN Shift s2 ON s2.Shift_ID = es.shift_ID AND s2.event_ID = @eventId
+                  WHERE es.employee_user_ID = u.user_ID
+                    AND es.status IN (
+                        'manager_offer_sent','employee_request',
+                        'manager_hold','manager_approved'
+                    )
+              )
+            """;
+
+        var workers = new List<PotentialWorkerResponse>();
+        await using (var cmd = new SqlCommand(workerSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@eventId",   eventId);
+            cmd.Parameters.AddWithValue("@companyId", companyId);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                workers.Add(new PotentialWorkerResponse
+                {
+                    UserId      = reader.GetString(reader.GetOrdinal("user_ID")),
+                    FbUid       = reader.IsDBNull(reader.GetOrdinal("FBUID")) ? "" : reader.GetString(reader.GetOrdinal("FBUID")),
+                    FirstName   = reader.GetString(reader.GetOrdinal("firstName")),
+                    LastName    = reader.GetString(reader.GetOrdinal("lastName")),
+                    CostPerHour = reader.IsDBNull(reader.GetOrdinal("cost_per_hour")) ? null : reader.GetDecimal(reader.GetOrdinal("cost_per_hour")),
+                });
+            }
+        }
+
+        if (workers.Count == 0) return workers;
+
+        // Get eligible shifts per worker with active assignment counts (global per shift)
+        var userIds    = workers.Select(w => w.UserId).ToList();
+        var paramNames = userIds.Select((_, i) => $"@u{i}").ToList();
+
+        var shiftSql = $"""
+            SELECT
+                er.employee_user_ID,
+                s.Shift_ID,
+                s.roll_ID,
+                r.Roll_name,
+                s.start_time,
+                s.end_time,
+                s.required_quantity,
+                (SELECT COUNT(*) FROM Employee_Shift es2
+                 WHERE es2.shift_ID = s.Shift_ID
+                   AND es2.status IN (
+                       'manager_offer_sent','employee_request',
+                       'manager_hold','manager_approved'
+                   )
+                ) AS ActiveAssignments
+            FROM Shift s
+            INNER JOIN Roll r          ON r.Roll_ID          = s.roll_ID
+            INNER JOIN Employee_Roll er ON er.roll_ID         = s.roll_ID
+            WHERE s.event_ID = @eventId
+              AND er.employee_user_ID IN ({string.Join(",", paramNames)})
+            ORDER BY s.start_time
+            """;
+
+        var shiftMap = new Dictionary<string, List<EligibleShiftItem>>();
+        await using (var cmd = new SqlCommand(shiftSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@eventId", eventId);
+            for (int i = 0; i < userIds.Count; i++)
+                cmd.Parameters.AddWithValue(paramNames[i], userIds[i]);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var uid = reader.GetString(reader.GetOrdinal("employee_user_ID"));
+                if (!shiftMap.TryGetValue(uid, out var list))
+                    shiftMap[uid] = list = [];
+
+                list.Add(new EligibleShiftItem
+                {
+                    ShiftId           = reader.GetString(reader.GetOrdinal("Shift_ID")),
+                    RoleId            = reader.GetString(reader.GetOrdinal("roll_ID")),
+                    RoleName          = reader.GetString(reader.GetOrdinal("Roll_name")),
+                    StartTime         = reader.IsDBNull(reader.GetOrdinal("start_time")) ? null : reader.GetDateTime(reader.GetOrdinal("start_time")),
+                    EndTime           = reader.IsDBNull(reader.GetOrdinal("end_time"))   ? null : reader.GetDateTime(reader.GetOrdinal("end_time")),
+                    RequiredQuantity  = reader.GetInt32(reader.GetOrdinal("required_quantity")),
+                    ActiveAssignments = reader.GetInt32(reader.GetOrdinal("ActiveAssignments")),
+                });
+            }
+        }
+
+        foreach (var w in workers)
+            w.EligibleShifts = shiftMap.TryGetValue(w.UserId, out var shifts) ? shifts : [];
+
+        return workers;
+    }
+
+    public async Task SendOfferToEmployeeAsync(
+        string projId, string eventId, string employeeFbUid,
+        List<string> shiftIds, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Access check
+        if (await CheckProjectAccessAsync(conn, projId, firebaseUid) == null)
+            throw new KeyNotFoundException("Project not found.");
+
+        // Verify event belongs to project
+        const string eventCheckSql = "SELECT 1 FROM Event WHERE event_ID = @eventId AND project_ID = @projId";
+        await using (var cmd = new SqlCommand(eventCheckSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@eventId", eventId);
+            cmd.Parameters.AddWithValue("@projId",  projId);
+            if (await cmd.ExecuteScalarAsync() == null)
+                throw new KeyNotFoundException("Event not found.");
+        }
+
+        // Resolve employee user_ID and verify same company as manager
+        string? employeeUserId;
+        const string empSql = """
+            SELECT eu.user_ID
+            FROM [User] eu
+            INNER JOIN Employee e ON e.user_ID = eu.user_ID
+            WHERE eu.FBUID = @empFbUid
+              AND eu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
+            """;
+        await using (var cmd = new SqlCommand(empSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@empFbUid",     employeeFbUid);
+            cmd.Parameters.AddWithValue("@managerFbUid", firebaseUid);
+            employeeUserId = (await cmd.ExecuteScalarAsync()) as string;
+        }
+        if (employeeUserId == null)
+            throw new UnauthorizedAccessException("Employee not found or not in your company.");
+
+        // Validate all provided shiftIds belong to this event
+        var shiftParamNames = shiftIds.Select((_, i) => $"@s{i}").ToList();
+        var validateSql = $"""
+            SELECT COUNT(*)
+            FROM Shift
+            WHERE event_ID = @eventId
+              AND Shift_ID IN ({string.Join(",", shiftParamNames)})
+            """;
+        await using (var cmd = new SqlCommand(validateSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@eventId", eventId);
+            for (int i = 0; i < shiftIds.Count; i++)
+                cmd.Parameters.AddWithValue(shiftParamNames[i], shiftIds[i]);
+            var validCount = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            if (validCount != shiftIds.Count)
+                throw new ArgumentException("One or more shift IDs do not belong to this event.");
+        }
+
+        // Insert Employee_Shift rows in a transaction, skipping active duplicates
+        await using var tx = conn.BeginTransaction();
+        try
+        {
+            const string insertSql = """
+                INSERT INTO Employee_Shift (shift_ID, employee_user_ID, status, status_updated_at, payment_status)
+                SELECT @shiftId, @empUserId, 'manager_offer_sent', GETUTCDATE(), 'pending'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM Employee_Shift
+                    WHERE shift_ID          = @shiftId
+                      AND employee_user_ID  = @empUserId
+                      AND status IN (
+                          'manager_offer_sent','employee_request',
+                          'manager_hold','manager_approved'
+                      )
+                )
+                """;
+
+            foreach (var shiftId in shiftIds)
+            {
+                await using var cmd = new SqlCommand(insertSql, conn, tx);
+                cmd.Parameters.AddWithValue("@shiftId",   shiftId);
+                cmd.Parameters.AddWithValue("@empUserId", employeeUserId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    // ── Get all assigned workers for an event, grouped by status ─────────
+    public async Task<EventWorkersResponse> GetEventWorkersAsync(string eventId, string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                es.shift_ID   AS ShiftId,
+                u.user_ID     AS UserId,
+                u.FBUID       AS FbUid,
+                u.firstName   AS FirstName,
+                u.lastName    AS LastName,
+                r.Roll_name   AS RoleName,
+                es.status     AS Status,
+                s.start_time  AS ShiftStart,
+                s.end_time    AS ShiftEnd
+            FROM Employee_Shift es
+            INNER JOIN [User]  u  ON u.user_ID  = es.employee_user_ID
+            INNER JOIN Shift   s  ON s.Shift_ID = es.shift_ID
+            INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
+            INNER JOIN Event   e  ON e.event_ID = s.event_ID
+            INNER JOIN Project p  ON p.Proj_ID  = e.project_ID
+            INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
+            INNER JOIN [User]  mu ON mu.user_ID = mp.manager_user_ID
+            WHERE e.event_ID  = @eventId
+              AND mu.FBUID    = @firebaseUid
+              AND es.status  IN (
+                  'manager_offer_sent',
+                  'employee_request',
+                  'manager_approved',
+                  'manager_hold',
+                  'manager_reject',
+                  'manager_approved_canceled'
+              )
+            ORDER BY u.lastName, u.firstName
+            """;
+
+        var result = new EventWorkersResponse();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@eventId",     eventId);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var ordShiftId    = reader.GetOrdinal("ShiftId");
+        var ordUserId     = reader.GetOrdinal("UserId");
+        var ordFbUid      = reader.GetOrdinal("FbUid");
+        var ordFirstName  = reader.GetOrdinal("FirstName");
+        var ordLastName   = reader.GetOrdinal("LastName");
+        var ordRoleName   = reader.GetOrdinal("RoleName");
+        var ordStatus     = reader.GetOrdinal("Status");
+        var ordShiftStart = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd   = reader.GetOrdinal("ShiftEnd");
+
+        while (await reader.ReadAsync())
+        {
+            var item = new AssignedWorkerItem
+            {
+                ShiftId    = reader.IsDBNull(ordShiftId)    ? "" : reader.GetString(ordShiftId),
+                UserId     = reader.IsDBNull(ordUserId)     ? "" : reader.GetString(ordUserId),
+                FbUid      = reader.IsDBNull(ordFbUid)      ? "" : reader.GetString(ordFbUid),
+                FirstName  = reader.IsDBNull(ordFirstName)  ? "" : reader.GetString(ordFirstName),
+                LastName   = reader.IsDBNull(ordLastName)   ? "" : reader.GetString(ordLastName),
+                RoleName   = reader.IsDBNull(ordRoleName)   ? "" : reader.GetString(ordRoleName),
+                Status     = reader.IsDBNull(ordStatus)     ? "" : reader.GetString(ordStatus),
+                ShiftStart = reader.IsDBNull(ordShiftStart) ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd   = reader.IsDBNull(ordShiftEnd)   ? null : reader.GetDateTime(ordShiftEnd),
+            };
+
+            switch (item.Status)
+            {
+                case "manager_offer_sent":         result.Awaiting.Add(item);   break;
+                case "employee_request":           result.Applicants.Add(item); break;
+                case "manager_approved":           result.Approved.Add(item);   break;
+                case "manager_hold":               result.Hold.Add(item);       break;
+                case "manager_reject":
+                case "manager_approved_canceled":  result.Rejected.Add(item);   break;
+            }
+        }
+
+        return result;
+    }
+
+    // ── Update status for a specific shift of an employee in an event ──────
+    public async Task UpdateWorkerStatusAsync(
+        string eventId, string employeeFbUid, string shiftId, string newStatus, string managerFbUid)
+    {
+        const string sql = """
+            UPDATE Employee_Shift
+            SET    status            = @newStatus,
+                   status_updated_at = GETUTCDATE()
+            WHERE  shift_ID          = @shiftId
+              AND  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+              AND  shift_ID IN (
+                  SELECT s.Shift_ID
+                  FROM   Shift s
+                  INNER JOIN Event           e  ON e.event_ID   = s.event_ID
+                  INNER JOIN Project         p  ON p.Proj_ID    = e.project_ID
+                  INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
+                  INNER JOIN [User]          mu ON mu.user_ID   = mp.manager_user_ID
+                  WHERE e.event_ID = @eventId
+                    AND mu.FBUID   = @managerFbUid
+              )
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@newStatus",      newStatus);
+        cmd.Parameters.AddWithValue("@shiftId",        shiftId);
+        cmd.Parameters.AddWithValue("@employeeFbUid",  employeeFbUid);
+        cmd.Parameters.AddWithValue("@eventId",        eventId);
+        cmd.Parameters.AddWithValue("@managerFbUid",   managerFbUid);
+
+        await conn.OpenAsync();
+        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+        if (rowsAffected == 0)
+            throw new KeyNotFoundException("No matching assignment found for this shift.");
+    }
+
+    // ── Delete a specific Employee_Shift row (return one shift to pool) ────
+    public async Task DeleteWorkerAssignmentAsync(
+        string eventId, string employeeFbUid, string shiftId, string managerFbUid)
+    {
+        const string sql = """
+            DELETE FROM Employee_Shift
+            WHERE  shift_ID          = @shiftId
+              AND  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+              AND  shift_ID IN (
+                  SELECT s.Shift_ID
+                  FROM   Shift s
+                  INNER JOIN Event           e  ON e.event_ID   = s.event_ID
+                  INNER JOIN Project         p  ON p.Proj_ID    = e.project_ID
+                  INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
+                  INNER JOIN [User]          mu ON mu.user_ID   = mp.manager_user_ID
+                  WHERE e.event_ID = @eventId
+                    AND mu.FBUID   = @managerFbUid
+              )
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@shiftId",       shiftId);
+        cmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
+        cmd.Parameters.AddWithValue("@eventId",       eventId);
+        cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync(); // idempotent — 0 rows affected is acceptable
+    }
+
+    // ── Employee's own applications (all active statuses except hold/offer) ─
+    public async Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                es.shift_ID     AS ShiftId,
+                es.status       AS Status,
+                r.Roll_name     AS RoleName,
+                e.name          AS EventName,
+                e.location      AS EventLocation,
+                s.start_time    AS ShiftStart,
+                s.end_time      AS ShiftEnd,
+                p.name          AS ProjectName
+            FROM Employee_Shift es
+            INNER JOIN [User]   u  ON u.user_ID  = es.employee_user_ID
+            INNER JOIN Shift    s  ON s.Shift_ID = es.shift_ID
+            INNER JOIN Roll     r  ON r.Roll_ID  = s.roll_ID
+            INNER JOIN Event    e  ON e.event_ID = s.event_ID
+            INNER JOIN Project  p  ON p.Proj_ID  = e.project_ID
+            WHERE u.FBUID    = @firebaseUid
+              AND es.status IN (
+                  'employee_request',
+                  'manager_approved',
+                  'manager_reject',
+                  'manager_approved_canceled'
+              )
+            ORDER BY e.start_time DESC
+            """;
+
+        var results = new List<MyApplicationResponse>();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var ordShiftId       = reader.GetOrdinal("ShiftId");
+        var ordStatus        = reader.GetOrdinal("Status");
+        var ordRoleName      = reader.GetOrdinal("RoleName");
+        var ordEventName     = reader.GetOrdinal("EventName");
+        var ordEventLocation = reader.GetOrdinal("EventLocation");
+        var ordShiftStart    = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd      = reader.GetOrdinal("ShiftEnd");
+        var ordProjectName   = reader.GetOrdinal("ProjectName");
+
+        while (await reader.ReadAsync())
+        {
+            results.Add(new MyApplicationResponse
+            {
+                ShiftId       = reader.IsDBNull(ordShiftId)       ? "" : reader.GetString(ordShiftId),
+                Status        = reader.IsDBNull(ordStatus)        ? "" : reader.GetString(ordStatus),
+                RoleName      = reader.IsDBNull(ordRoleName)      ? "" : reader.GetString(ordRoleName),
+                EventName     = reader.IsDBNull(ordEventName)     ? "" : reader.GetString(ordEventName),
+                EventLocation = reader.IsDBNull(ordEventLocation) ? null : reader.GetString(ordEventLocation),
+                ShiftStart    = reader.IsDBNull(ordShiftStart)    ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd      = reader.IsDBNull(ordShiftEnd)      ? null : reader.GetDateTime(ordShiftEnd),
+                ProjectName   = reader.IsDBNull(ordProjectName)   ? "" : reader.GetString(ordProjectName),
+            });
+        }
+
+        return results;
+    }
 }
