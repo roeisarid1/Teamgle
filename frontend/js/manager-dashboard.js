@@ -1761,7 +1761,7 @@ function renderGantt(schedule) {
   }
   function fmtDate(isoStr) {
     if (!isoStr) return "";
-    return new Date(isoStr).toLocaleDateString("he-IL", {
+    return new Date(isoStr).toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -1918,7 +1918,7 @@ function renderScheduleCalendar() {
   _pdCalendar = new FullCalendar.Calendar(el, {
     initialView: "dayGridMonth",
     direction: "rtl",
-    locale: "he",
+    locale: "en",
     headerToolbar: {
       start: "prev,next today",
       center: "title",
@@ -4326,7 +4326,7 @@ async function openShiftEditModal(btn) {
 
   // Load roles into dropdown
   const select = document.getElementById("shift-edit-role");
-  select.innerHTML = '<option value="">טוען…</option>';
+  select.innerHTML = '<option value="">Loading…</option>';
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/roles`, {
@@ -4341,7 +4341,7 @@ async function openShiftEditModal(btn) {
       )
       .join("");
   } catch {
-    select.innerHTML = '<option value="">שגיאה בטעינת תפקידים</option>';
+    select.innerHTML = '<option value="">Failed to load roles</option>';
   }
 }
 
@@ -4375,34 +4375,34 @@ document
     errEl.style.display = "none";
 
     if (!rollId) {
-      errEl.textContent = "יש לבחור תפקיד.";
+      errEl.textContent = "Please select a role.";
       errEl.style.display = "";
       return;
     }
     if (!start) {
-      errEl.textContent = "יש להזין שעת התחלה.";
+      errEl.textContent = "Please enter a start time.";
       errEl.style.display = "";
       return;
     }
     if (!end) {
-      errEl.textContent = "יש להזין שעת סיום.";
+      errEl.textContent = "Please enter an end time.";
       errEl.style.display = "";
       return;
     }
     if (end <= start) {
-      errEl.textContent = "שעת הסיום חייבת להיות אחרי שעת ההתחלה.";
+      errEl.textContent = "End time must be after start time.";
       errEl.style.display = "";
       return;
     }
     if (!qty || qty < 1) {
-      errEl.textContent = "הכמות חייבת להיות לפחות 1.";
+      errEl.textContent = "Quantity must be at least 1.";
       errEl.style.display = "";
       return;
     }
 
     const btn = document.getElementById("btn-save-shift");
     btn.disabled = true;
-    btn.textContent = "שומר…";
+    btn.textContent = "Saving…";
 
     try {
       const token = await getToken();
@@ -4425,7 +4425,7 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        errEl.textContent = data.error || "שגיאה בשמירת המשמרת.";
+        errEl.textContent = data.error || "Failed to save shift.";
         errEl.style.display = "";
         return;
       }
@@ -4433,11 +4433,11 @@ document
       closeShiftEditModal();
       if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      errEl.textContent = "שגיאת רשת. נסה שוב.";
+      errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.textContent = "שמור";
+      btn.textContent = "Save";
     }
   });
 
@@ -4473,7 +4473,7 @@ document
 
     const btn = document.getElementById("btn-confirm-shift-delete");
     btn.disabled = true;
-    btn.textContent = "מוחק…";
+    btn.textContent = "Deleting…";
 
     try {
       const token = await getToken();
@@ -4487,17 +4487,17 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "שגיאה במחיקת המשמרת.");
+        alert(data.error || "Failed to delete shift.");
         return;
       }
 
       closeShiftDeleteModal();
       if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      alert("שגיאת רשת. נסה שוב.");
+      alert("Network error. Please try again.");
     } finally {
       btn.disabled = false;
-      btn.textContent = "מחק";
+      btn.textContent = "Delete";
     }
   });
 
