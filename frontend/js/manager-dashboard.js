@@ -1784,24 +1784,31 @@ function renderGantt(schedule) {
         ? `${fmtDate(ev.startTime)} · ${fmtTime(ev.startTime)}–${fmtTime(ev.endTime)}`
         : "";
 
-      // Compute the axis span: max end-minute across all shifts, rounded up to next even hour, min 24h
-      let maxMin = 1440;
+      // Compute windowed axis: from earliest shift start to latest shift end
+      let winStart = Infinity;
+      let winEnd   = 0;
       ev.shifts.forEach(shift => {
-        const end = toMinutes(shift.endTime, shift.startTime);
-        if (end > maxMin) maxMin = end;
+        const s = toMinutes(shift.startTime);
+        const e = toMinutes(shift.endTime, shift.startTime);
+        if (s < winStart) winStart = s;
+        if (e > winEnd)   winEnd   = e;
       });
-      // Round up to next 2-hour boundary
-      const totalMinutes = Math.ceil(maxMin / 120) * 120;
-      const totalHours   = totalMinutes / 60;
+      // Fallback for empty events
+      if (!isFinite(winStart)) { winStart = 0; winEnd = 1440; }
+      // Pad 1h on each side, snap to 1h boundaries for clean labels
+      winStart = Math.max(0, Math.floor((winStart - 60) / 60) * 60);
+      winEnd   = Math.ceil((winEnd + 60) / 60) * 60;
+      const spanMinutes = winEnd - winStart;
 
-      // Build axis ticks spaced every 2h over the full span
-      const tickCount = totalHours / 2 + 1;
-      const axisTicks = Array.from({ length: tickCount }, (_, i) => {
-        const h   = i * 2;
-        const pct = (h / totalHours) * 100;
-        const label = `${fmt2(h % 24)}:00${h >= 24 ? " +1" : ""}`;
-        return `<div class="gantt-hour-tick" style="left:${pct}%">${label}</div>`;
-      }).join("");
+      // Build axis ticks — one per hour inside the window (max ~12 ticks)
+      const tickStep = spanMinutes <= 480 ? 60 : 120; // 1h ticks for short spans, 2h for long
+      const axisTicks = [];
+      for (let m = winStart; m <= winEnd; m += tickStep) {
+        const pct   = ((m - winStart) / spanMinutes) * 100;
+        const hAbs  = Math.floor(m / 60);
+        const label = `${fmt2(hAbs % 24)}:00${hAbs >= 24 ? " +1" : ""}`;
+        axisTicks.push(`<div class="gantt-hour-tick" style="left:${pct.toFixed(2)}%">${label}</div>`);
+      }
 
       const rowsHtml =
         ev.shifts.length === 0
@@ -1811,8 +1818,8 @@ function renderGantt(schedule) {
                 const color  = getColor(shift.roleName);
                 const leftM  = toMinutes(shift.startTime);
                 const rightM = toMinutes(shift.endTime, shift.startTime);
-                const left   = (leftM  / totalMinutes) * 100;
-                const width  = Math.max((rightM - leftM) / totalMinutes * 100, 2);
+                const left   = ((leftM  - winStart) / spanMinutes) * 100;
+                const width  = Math.max((rightM - leftM) / spanMinutes * 100, 2);
                 const label  = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
                 return `
             <div class="gantt-row">
@@ -1850,7 +1857,7 @@ function renderGantt(schedule) {
         <div class="gantt-chart" dir="ltr">
           <div class="gantt-axis-row">
             <div class="gantt-row-label"></div>
-            <div class="gantt-axis-track">${axisTicks}</div>
+            <div class="gantt-axis-track">${axisTicks.join("")}</div>
           </div>
           ${rowsHtml}
         </div>
