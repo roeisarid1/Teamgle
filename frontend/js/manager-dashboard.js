@@ -1749,6 +1749,11 @@ function renderGantt(schedule) {
   function fmt2(n) {
     return String(n).padStart(2, "0");
   }
+  // Converts a UTC ISO string to the local datetime-local input format (YYYY-MM-DDTHH:mm)
+  function toLocalDateTimeInput(isoStr) {
+    const d = new Date(isoStr);
+    return `${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}T${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
+  }
   function fmtTime(isoStr) {
     if (!isoStr) return "";
     const d = new Date(isoStr);
@@ -1832,8 +1837,8 @@ function renderGantt(schedule) {
                     <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="Edit shift"
                             data-shift-id="${escapeHtml(shift.shiftId)}"
                             data-role-id="${escapeHtml(shift.roleId)}"
-                            data-start="${shift.startTime ? new Date(shift.startTime).toISOString().slice(0, 16) : ""}"
-                            data-end="${shift.endTime ? new Date(shift.endTime).toISOString().slice(0, 16) : ""}"
+                            data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
+                            data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
                             data-qty="${shift.requiredQuantity}">
                       <i data-lucide="pencil" style="width:11px;height:11px"></i>
                     </button>
