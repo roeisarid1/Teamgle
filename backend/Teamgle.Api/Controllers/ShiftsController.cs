@@ -175,6 +175,26 @@ public class ShiftsController : ControllerBase
         }
     }
 
+    // ── GET /api/shifts/my-applications ───────────────────────────────────
+    [HttpGet("my-applications")]
+    public async Task<IActionResult> GetMyApplications()
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var applications = await _projectService.GetMyApplicationsAsync(uid);
+            return Ok(applications);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching applications for employee");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── GET /api/events/{eventId}/workers ──────────────────────────────────
     [HttpGet]
     [Route("~/api/events/{eventId}/workers")]

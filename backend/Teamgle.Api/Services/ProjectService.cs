@@ -211,6 +211,11 @@ public class ProjectService : IProjectService
             throw new UnauthorizedAccessException("Offer not found, already responded, or does not belong to you.");
     }
 
+    public async Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid)
+    {
+        return await _projectRepo.GetMyApplicationsAsync(firebaseUid);
+    }
+
     // ── Potential Workers ──────────────────────────────────────────────────
     public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId)
     {

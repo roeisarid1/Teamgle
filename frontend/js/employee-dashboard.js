@@ -18,10 +18,11 @@ const btnHamburger     = document.getElementById("btn-hamburger");
 const btnSidebarReopen = document.getElementById("btn-sidebar-reopen");
 const sidebar          = document.querySelector(".sidebar");
 const sidebarBackdrop  = document.getElementById("sidebar-backdrop");
-const pageContent      = document.getElementById("page-content");
-const chatSection      = document.getElementById("section-chats");
-const offersList       = document.getElementById("offers-list");
-const offersBadge      = document.getElementById("offers-badge");
+const pageContent        = document.getElementById("page-content");
+const chatSection        = document.getElementById("section-chats");
+const offersList         = document.getElementById("offers-list");
+const offersBadge        = document.getElementById("offers-badge");
+const applicationsList   = document.getElementById("applications-list");
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -69,6 +70,8 @@ function showSection(sectionId) {
 
   activeSection = sectionId;
   lucide.createIcons();
+
+  if (sectionId === "applications") loadApplications();
 }
 
 document.querySelectorAll(".nav-item[data-section]").forEach(link => {
@@ -287,6 +290,104 @@ function escHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ── My Applications ───────────────────────────────────────────────────────────
+async function loadApplications() {
+  applicationsList.innerHTML = renderSkeletons(2);
+
+  let apps;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/shifts/my-applications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Failed to load applications.");
+    apps = await res.json();
+  } catch {
+    applicationsList.innerHTML = `
+      <div class="offers-empty">
+        <i data-lucide="wifi-off" style="width:40px;height:40px;color:var(--text-muted)"></i>
+        <p>Could not load applications. Please try again.</p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  if (apps.length === 0) {
+    applicationsList.innerHTML = `
+      <div class="offers-empty">
+        <i data-lucide="clipboard-list" style="width:48px;height:48px;color:var(--blue-light)"></i>
+        <p>No applications yet.<br><span>Accept a job offer to get started.</span></p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  const approved = apps.filter(a => a.status === "manager_approved");
+  const pending  = apps.filter(a => a.status === "employee_request");
+  const rejected = apps.filter(a => a.status === "manager_reject" || a.status === "manager_approved_canceled");
+
+  applicationsList.innerHTML = [
+    renderApplicationGroup("approved", "check-circle-2", "Approved Shifts",        approved, "No approved shifts yet."),
+    renderApplicationGroup("pending",  "clock",          "Pending Applications",    pending,  "No pending applications."),
+    renderApplicationGroup("rejected", "x-circle",       "Rejected / Canceled",     rejected, "Nothing here."),
+  ].join("");
+
+  lucide.createIcons();
+}
+
+function renderApplicationGroup(type, icon, title, apps, emptyMsg) {
+  const cards = apps.length === 0
+    ? `<p class="app-group-empty">${emptyMsg}</p>`
+    : apps.map(a => renderApplicationCard(a, type)).join("");
+
+  return `
+    <div class="app-group app-group--${type}">
+      <div class="app-group-header">
+        <i data-lucide="${icon}" class="app-group-icon"></i>
+        <span class="app-group-title">${title}</span>
+        <span class="app-group-count">${apps.length}</span>
+      </div>
+      <div class="app-group-body">${cards}</div>
+    </div>`;
+}
+
+function renderApplicationCard(app, groupType) {
+  const dateLine = (app.shiftStart || app.shiftEnd)
+    ? formatDateRange(app.shiftStart, app.shiftEnd)
+    : "";
+  const location = app.eventLocation
+    ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(app.eventLocation)}</span></div>`
+    : "";
+  const confirmedLabel = groupType === "approved"
+    ? `<div class="app-confirmed-label"><i data-lucide="check" style="width:13px;height:13px"></i> Confirmed shift</div>`
+    : "";
+  const statusBadge = {
+    approved: `<span class="app-status-badge app-status--approved">✓ Approved</span>`,
+    pending:  `<span class="app-status-badge app-status--pending">Pending</span>`,
+    rejected: app.status === "manager_approved_canceled"
+                ? `<span class="app-status-badge app-status--canceled">Canceled</span>`
+                : `<span class="app-status-badge app-status--rejected">Not Selected</span>`,
+  }[groupType] ?? "";
+
+  return `
+    <div class="offer-card app-card app-card--${groupType}">
+      ${confirmedLabel}
+      <div class="offer-card-header">
+        <div class="offer-project-name">${escHtml(app.projectName)}</div>
+        ${statusBadge}
+      </div>
+      <h3 class="offer-event-name app-event-name">${escHtml(app.eventName)}</h3>
+      ${dateLine ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${dateLine}</span></div>` : ""}
+      <div class="offer-meta-row">
+        ${location}
+        <div class="offer-meta-item">
+          <i data-lucide="tag" class="offer-icon"></i>
+          <span class="offer-role-chip">${escHtml(app.roleName)}</span>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Auth gate ─────────────────────────────────────────────────────────────────

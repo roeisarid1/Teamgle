@@ -3700,3 +3700,205 @@ tr.expanded-row > td {
   height: 40px;
   width: 100%;
 }
+
+/* ── Project Detail — larger, clearer typography ─────────────────────────────
+   Scoped to #section-project-detail so nothing outside is affected.
+   ─────────────────────────────────────────────────────────────────────────── */
+#section-project-detail {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+}
+
+/* Project name / subtitle in header */
+#section-project-detail .cp-title    { font-size: 22px; }
+#section-project-detail .cp-subtitle { font-size: 15px; }
+
+/* Tab navigation */
+#section-project-detail .pd-tab { font-size: 16px; font-weight: 600; }
+
+/* Section / card headers inside tabs */
+#section-project-detail .section-title,
+#section-project-detail .tasks-title,
+#section-project-detail h2,
+#section-project-detail h3 { font-size: 20px; }
+
+/* Table body text */
+#section-project-detail table  { font-size: 16px; }
+#section-project-detail thead th { font-size: 13px; }
+#section-project-detail tbody td { font-size: 16px; }
+
+/* Task/Brief cards */
+#section-project-detail .task-content,
+#section-project-detail .brief-title,
+#section-project-detail .brief-body  { font-size: 16px; }
+
+#section-project-detail .task-meta,
+#section-project-detail .brief-meta  { font-size: 13px; }
+
+/* Priority/status chips & filter pills */
+#section-project-detail .priority-chip,
+#section-project-detail .status-chip,
+#section-project-detail .filter-chip,
+#section-project-detail .pf-chip        { font-size: 14px; }
+
+/* Task filter bar pills & label */
+#section-project-detail .pd-filter-pill {
+  font-size: 14px;
+  padding: 5px 16px;
+}
+#section-project-detail .pd-field-label { font-size: 14px; font-weight: 600; }
+
+/* Staffing section: worker name / meta */
+#section-project-detail .ps-worker-name { font-size: 16px; }
+#section-project-detail .ps-worker-meta { font-size: 13px; }
+#section-project-detail .ps-section-title { font-size: 15px; font-weight: 700; }
+#section-project-detail .ps-table { font-size: 16px; }
+#section-project-detail .ps-table thead th { font-size: 13px; }
+
+/* Potential workers */
+#section-project-detail .pw-name    { font-size: 16px; }
+#section-project-detail .pw-meta    { font-size: 13px; }
+
+/* Buttons inside project detail */
+#section-project-detail .btn-primary,
+#section-project-detail .btn-action,
+#section-project-detail .ps-send-btn { font-size: 15px; }
+
+/* ── Staffing overlap warning banner ────────────────────────────────────────── */
+.ps-overlap-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ps-overlap-banner ul { margin: 4px 0 0; padding-left: 18px; }
+.ps-overlap-banner li { margin-bottom: 2px; }
+
+/* ── My Applications — grouped layout ──────────────────────────────────────── */
+
+/* Group wrapper */
+.app-group {
+  margin-bottom: 28px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* Group header bar */
+.app-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.app-group-icon  { width: 18px; height: 18px; flex-shrink: 0; }
+.app-group-title { flex: 1; }
+.app-group-count {
+  background: rgba(0,0,0,.08);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Approved group */
+.app-group--approved .app-group-header {
+  background: #dcfce7;
+  color: #14532d;
+  border-bottom: 1px solid #bbf7d0;
+}
+.app-group--approved .app-group-icon { color: #16a34a; }
+
+/* Pending group */
+.app-group--pending .app-group-header {
+  background: #fefce8;
+  color: #713f12;
+  border-bottom: 1px solid #fde68a;
+}
+.app-group--pending .app-group-icon { color: #ca8a04; }
+
+/* Rejected group */
+.app-group--rejected .app-group-header {
+  background: #f9fafb;
+  color: #374151;
+  border-bottom: 1px solid var(--border);
+}
+.app-group--rejected .app-group-icon { color: #9ca3af; }
+
+/* Group body */
+.app-group-body { padding: 12px 14px; background: var(--card); display: flex; flex-direction: column; gap: 10px; }
+
+/* Empty state inside group */
+.app-group-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 12px 0 6px;
+}
+
+/* Cards inside each group */
+.app-card { margin-bottom: 0; }
+
+/* Approved card — green left accent + subtle background */
+.app-card--approved {
+  border-left: 4px solid #22c55e;
+  background: #f0fdf4;
+}
+.app-card--approved:hover { box-shadow: 0 4px 16px rgba(34,197,94,.15); }
+
+/* Pending card — yellow left accent */
+.app-card--pending {
+  border-left: 4px solid #facc15;
+}
+
+/* Rejected card — muted */
+.app-card--rejected,
+.app-card--canceled {
+  border-left: 4px solid #e5e7eb;
+  opacity: .8;
+}
+
+/* "Confirmed shift" label */
+.app-confirmed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #16a34a;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+
+/* Event name — more prominent inside app cards */
+.app-event-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 4px 0 10px;
+}
+
+/* Status badges */
+.app-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+.app-status--approved { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.app-status--pending  { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+.app-status--rejected { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.app-status--canceled { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }

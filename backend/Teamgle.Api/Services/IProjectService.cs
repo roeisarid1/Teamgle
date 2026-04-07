@@ -27,6 +27,7 @@ public interface IProjectService
     // ── Employee Job Offers ────────────────────────────────────────────────
     Task<IEnumerable<JobOfferResponse>> GetMyJobOffersAsync(string firebaseUid);
     Task RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept);
+    Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid);
 
     // ── Potential Workers ──────────────────────────────────────────────────
     Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId);

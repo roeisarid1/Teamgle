@@ -11,7 +11,7 @@ import {
   deleteObject,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile } from "./chat-service.js";
-import { initChat, destroyChat } from "./chat-ui.js";
+import { initChat, destroyChat, openChatWith } from "./chat-ui.js";
 import { attachTimePicker } from "./time-picker.js";
 
 const API_BASE = "http://localhost:5000/api";
@@ -4660,10 +4660,11 @@ function _buildStaffingHTML() {
         <span class="ps-event-meta">${escapeHtml(meta)}</span>
       </div>
       ${_buildPotentialSection(ev.eventId)}
-      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants", "inbox",        "pending",  [], "applicant")}
-      ${_buildStaffingSection(ev.eventId, "approved",   "Approved Workers", "check-circle", "approved", [], "approved")}
-      ${_buildStaffingSection(ev.eventId, "hold",       "Hold / Standby",   "pause-circle", "hold",     [], "hold")}
-      ${_buildStaffingSection(ev.eventId, "rejected",   "Rejected Workers", "x-circle",     "rejected", [], "rejected")}
+      ${_buildStaffingSection(ev.eventId, "awaiting",   "Awaiting Response", "clock",        "pending",  [], "awaiting")}
+      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants",  "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(ev.eventId, "approved",   "Approved Workers",  "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(ev.eventId, "hold",       "Hold / Standby",    "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(ev.eventId, "rejected",   "Rejected Workers",  "x-circle",     "rejected", [], "rejected")}
     </div>`;
   }).join('');
 
@@ -4731,14 +4732,16 @@ function _buildWorkerRow(worker, sectionType) {
   const name     = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
 
   let btns = "";
-  if (sectionType === "applicant" || sectionType === "hold")
-    btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
-  if (sectionType === "applicant" || sectionType === "approved")
-    btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
-  if (sectionType !== "rejected")
-    btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
-  if (sectionType === "rejected")
-    btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+  if (sectionType !== "awaiting") {
+    if (sectionType === "applicant" || sectionType === "hold")
+      btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
+    if (sectionType === "applicant" || sectionType === "approved")
+      btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
+    if (sectionType !== "rejected")
+      btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
+    if (sectionType === "rejected")
+      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+  }
   btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
 
   return `
@@ -4787,13 +4790,73 @@ async function loadAndRenderEventWorkers(eventId) {
     if (!res.ok) throw new Error("Failed to load event workers");
     const data = await res.json();
 
+    _renderEventWorkerSection(eventId, "awaiting",   data.awaiting   ?? [], "awaiting");
     _renderEventWorkerSection(eventId, "applicants", data.applicants ?? [], "applicant");
     _renderEventWorkerSection(eventId, "approved",   data.approved   ?? [], "approved");
     _renderEventWorkerSection(eventId, "hold",       data.hold       ?? [], "hold");
     _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
+    _renderOverlapWarnings(eventId, data.approved ?? []);
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
   }
+}
+
+function _shiftsOverlap(a, b) {
+  const aStart = a.shiftStart ? new Date(a.shiftStart) : null;
+  const aEnd   = a.shiftEnd   ? new Date(a.shiftEnd)   : null;
+  const bStart = b.shiftStart ? new Date(b.shiftStart) : null;
+  const bEnd   = b.shiftEnd   ? new Date(b.shiftEnd)   : null;
+  if (!aStart || !bStart) return false;
+  const aEndEff = aEnd   ?? aStart;
+  const bEndEff = bEnd   ?? bStart;
+  return aStart < bEndEff && bStart < aEndEff;
+}
+
+function _renderOverlapWarnings(eventId, approved) {
+  // Group approved workers by fbUid
+  const byWorker = new Map();
+  for (const w of approved) {
+    if (!byWorker.has(w.fbUid)) byWorker.set(w.fbUid, []);
+    byWorker.get(w.fbUid).push(w);
+  }
+
+  // Find all pairs that overlap
+  const warnings = [];
+  for (const [, shifts] of byWorker) {
+    if (shifts.length < 2) continue;
+    for (let i = 0; i < shifts.length; i++) {
+      for (let j = i + 1; j < shifts.length; j++) {
+        if (_shiftsOverlap(shifts[i], shifts[j])) {
+          const name = `${shifts[i].firstName} ${shifts[i].lastName}`.trim();
+          warnings.push(
+            `<strong>${escapeHtml(name)}</strong> is approved for both ` +
+            `<em>${escapeHtml(shifts[i].roleName)}</em> and <em>${escapeHtml(shifts[j].roleName)}</em> ` +
+            `with overlapping shift times.`
+          );
+        }
+      }
+    }
+  }
+
+  // Inject or clear the warning banner above the approved section
+  const sectionEl = document.getElementById(`ps-section-${eventId}-approved`);
+  const existingBanner = sectionEl?.previousElementSibling;
+  if (existingBanner?.classList.contains("ps-overlap-banner")) {
+    existingBanner.remove();
+  }
+
+  if (warnings.length === 0 || !sectionEl) return;
+
+  const banner = document.createElement("div");
+  banner.className = "ps-overlap-banner";
+  banner.innerHTML = `
+    <i data-lucide="alert-triangle" style="flex-shrink:0;width:16px;height:16px"></i>
+    <div>
+      <strong>Shift overlap detected</strong>
+      <ul>${warnings.map(w => `<li>${w}</li>`).join("")}</ul>
+    </div>`;
+  sectionEl.insertAdjacentElement("beforebegin", banner);
+  if (window.lucide) lucide.createIcons();
 }
 
 function _startStaffingPoll() {
@@ -5119,7 +5182,7 @@ function _initStaffingHandlers() {
       const btn = e.target.closest("[data-action]");
       if (!btn) return;
 
-      // Skip potential-worker buttons (handled separately)
+      // Skip potential-worker send-request button (handled separately)
       if (btn.classList.contains("ps-btn--send-worker")) return;
 
       e.stopPropagation();
@@ -5132,16 +5195,19 @@ function _initStaffingHandlers() {
       const status  = row.dataset.workerStatus;
       const shiftId = row.dataset.shiftId;
 
+      if (action === "message") {
+        if (!fbUid) return;
+        _initChatSection();          // ensure chat is initialized
+        activateSection("chats");
+        openChatWith(fbUid);
+        return;
+      }
+
       // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
       const section   = row.closest(".ps-section");
       const sectionId = section?.id ?? "";
       const match     = sectionId.match(/^ps-section-(.+)-(applicants|approved|hold|rejected)$/);
       const eventId   = match?.[1];
-
-      if (action === "message") {
-        console.log(`[Staffing] Open chat with ${fbUid}`);
-        return;
-      }
 
       if (!fbUid || !eventId || !shiftId) return;
 

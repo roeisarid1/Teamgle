@@ -1143,7 +1143,9 @@ public class ProjectRepository : IProjectRepository
                 u.firstName   AS FirstName,
                 u.lastName    AS LastName,
                 r.Roll_name   AS RoleName,
-                es.status     AS Status
+                es.status     AS Status,
+                s.start_time  AS ShiftStart,
+                s.end_time    AS ShiftEnd
             FROM Employee_Shift es
             INNER JOIN [User]  u  ON u.user_ID  = es.employee_user_ID
             INNER JOIN Shift   s  ON s.Shift_ID = es.shift_ID
@@ -1155,6 +1157,7 @@ public class ProjectRepository : IProjectRepository
             WHERE e.event_ID  = @eventId
               AND mu.FBUID    = @firebaseUid
               AND es.status  IN (
+                  'manager_offer_sent',
                   'employee_request',
                   'manager_approved',
                   'manager_hold',
@@ -1174,29 +1177,34 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
 
-        var ordShiftId   = reader.GetOrdinal("ShiftId");
-        var ordUserId    = reader.GetOrdinal("UserId");
-        var ordFbUid     = reader.GetOrdinal("FbUid");
-        var ordFirstName = reader.GetOrdinal("FirstName");
-        var ordLastName  = reader.GetOrdinal("LastName");
-        var ordRoleName  = reader.GetOrdinal("RoleName");
-        var ordStatus    = reader.GetOrdinal("Status");
+        var ordShiftId    = reader.GetOrdinal("ShiftId");
+        var ordUserId     = reader.GetOrdinal("UserId");
+        var ordFbUid      = reader.GetOrdinal("FbUid");
+        var ordFirstName  = reader.GetOrdinal("FirstName");
+        var ordLastName   = reader.GetOrdinal("LastName");
+        var ordRoleName   = reader.GetOrdinal("RoleName");
+        var ordStatus     = reader.GetOrdinal("Status");
+        var ordShiftStart = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd   = reader.GetOrdinal("ShiftEnd");
 
         while (await reader.ReadAsync())
         {
             var item = new AssignedWorkerItem
             {
-                ShiftId   = reader.IsDBNull(ordShiftId)   ? "" : reader.GetString(ordShiftId),
-                UserId    = reader.IsDBNull(ordUserId)    ? "" : reader.GetString(ordUserId),
-                FbUid     = reader.IsDBNull(ordFbUid)     ? "" : reader.GetString(ordFbUid),
-                FirstName = reader.IsDBNull(ordFirstName) ? "" : reader.GetString(ordFirstName),
-                LastName  = reader.IsDBNull(ordLastName)  ? "" : reader.GetString(ordLastName),
-                RoleName  = reader.IsDBNull(ordRoleName)  ? "" : reader.GetString(ordRoleName),
-                Status    = reader.IsDBNull(ordStatus)    ? "" : reader.GetString(ordStatus),
+                ShiftId    = reader.IsDBNull(ordShiftId)    ? "" : reader.GetString(ordShiftId),
+                UserId     = reader.IsDBNull(ordUserId)     ? "" : reader.GetString(ordUserId),
+                FbUid      = reader.IsDBNull(ordFbUid)      ? "" : reader.GetString(ordFbUid),
+                FirstName  = reader.IsDBNull(ordFirstName)  ? "" : reader.GetString(ordFirstName),
+                LastName   = reader.IsDBNull(ordLastName)   ? "" : reader.GetString(ordLastName),
+                RoleName   = reader.IsDBNull(ordRoleName)   ? "" : reader.GetString(ordRoleName),
+                Status     = reader.IsDBNull(ordStatus)     ? "" : reader.GetString(ordStatus),
+                ShiftStart = reader.IsDBNull(ordShiftStart) ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd   = reader.IsDBNull(ordShiftEnd)   ? null : reader.GetDateTime(ordShiftEnd),
             };
 
             switch (item.Status)
             {
+                case "manager_offer_sent":         result.Awaiting.Add(item);   break;
                 case "employee_request":           result.Applicants.Add(item); break;
                 case "manager_approved":           result.Approved.Add(item);   break;
                 case "manager_hold":               result.Hold.Add(item);       break;
@@ -1273,5 +1281,70 @@ public class ProjectRepository : IProjectRepository
 
         await conn.OpenAsync();
         await cmd.ExecuteNonQueryAsync(); // idempotent — 0 rows affected is acceptable
+    }
+
+    // ── Employee's own applications (all active statuses except hold/offer) ─
+    public async Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid)
+    {
+        const string sql = """
+            SELECT
+                es.shift_ID     AS ShiftId,
+                es.status       AS Status,
+                r.Roll_name     AS RoleName,
+                e.name          AS EventName,
+                e.location      AS EventLocation,
+                s.start_time    AS ShiftStart,
+                s.end_time      AS ShiftEnd,
+                p.name          AS ProjectName
+            FROM Employee_Shift es
+            INNER JOIN [User]   u  ON u.user_ID  = es.employee_user_ID
+            INNER JOIN Shift    s  ON s.Shift_ID = es.shift_ID
+            INNER JOIN Roll     r  ON r.Roll_ID  = s.roll_ID
+            INNER JOIN Event    e  ON e.event_ID = s.event_ID
+            INNER JOIN Project  p  ON p.Proj_ID  = e.project_ID
+            WHERE u.FBUID    = @firebaseUid
+              AND es.status IN (
+                  'employee_request',
+                  'manager_approved',
+                  'manager_reject',
+                  'manager_approved_canceled'
+              )
+            ORDER BY e.start_time DESC
+            """;
+
+        var results = new List<MyApplicationResponse>();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var ordShiftId       = reader.GetOrdinal("ShiftId");
+        var ordStatus        = reader.GetOrdinal("Status");
+        var ordRoleName      = reader.GetOrdinal("RoleName");
+        var ordEventName     = reader.GetOrdinal("EventName");
+        var ordEventLocation = reader.GetOrdinal("EventLocation");
+        var ordShiftStart    = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd      = reader.GetOrdinal("ShiftEnd");
+        var ordProjectName   = reader.GetOrdinal("ProjectName");
+
+        while (await reader.ReadAsync())
+        {
+            results.Add(new MyApplicationResponse
+            {
+                ShiftId       = reader.IsDBNull(ordShiftId)       ? "" : reader.GetString(ordShiftId),
+                Status        = reader.IsDBNull(ordStatus)        ? "" : reader.GetString(ordStatus),
+                RoleName      = reader.IsDBNull(ordRoleName)      ? "" : reader.GetString(ordRoleName),
+                EventName     = reader.IsDBNull(ordEventName)     ? "" : reader.GetString(ordEventName),
+                EventLocation = reader.IsDBNull(ordEventLocation) ? null : reader.GetString(ordEventLocation),
+                ShiftStart    = reader.IsDBNull(ordShiftStart)    ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd      = reader.IsDBNull(ordShiftEnd)      ? null : reader.GetDateTime(ordShiftEnd),
+                ProjectName   = reader.IsDBNull(ordProjectName)   ? "" : reader.GetString(ordProjectName),
+            });
+        }
+
+        return results;
     }
 }
