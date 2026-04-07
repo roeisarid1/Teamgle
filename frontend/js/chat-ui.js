@@ -67,6 +67,22 @@ export function destroyChat() {
   _companyUsers              = [];
 }
 
+/**
+ * Open a direct chat with any company user by their Firebase UID.
+ * Loads company users on demand if they haven't been fetched yet.
+ */
+export async function openChatWith(otherUid) {
+  if (_companyUsers.length === 0) {
+    try {
+      _companyUsers = await getCompanyUsers(_user.companyId, _user.uid);
+    } catch (err) {
+      console.error("[Chat] Failed to load company users for openChatWith:", err);
+      return;
+    }
+  }
+  _startConversationWith(otherUid);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTML BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────

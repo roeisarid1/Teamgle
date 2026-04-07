@@ -226,7 +226,7 @@ public class CustomerRepository : ICustomerRepository
         {
             checkCmd.Parameters.AddWithValue("@customerId", customerId);
             checkCmd.Parameters.AddWithValue("@companyId",  companyId);
-            if ((int)await checkCmd.ExecuteScalarAsync()! == 0)
+            if (Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) == 0)
                 throw new UnauthorizedAccessException("Customer not found or access denied.");
         }
 
@@ -312,7 +312,7 @@ public class CustomerRepository : ICustomerRepository
         {
             checkCmd.Parameters.AddWithValue("@customerId", customerId);
             checkCmd.Parameters.AddWithValue("@companyId",  companyId);
-            if ((int)await checkCmd.ExecuteScalarAsync()! == 0)
+            if (Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) == 0)
                 throw new KeyNotFoundException("Customer not found.");
         }
 
@@ -429,7 +429,7 @@ public class CustomerRepository : ICustomerRepository
             {
                 checkCmd.Parameters.AddWithValue("@customerId", customerId);
                 checkCmd.Parameters.AddWithValue("@companyId",  companyId);
-                if ((int)await checkCmd.ExecuteScalarAsync()! == 0)
+                if (Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) == 0)
                     throw new KeyNotFoundException("Customer not found.");
             }
 
@@ -439,7 +439,7 @@ public class CustomerRepository : ICustomerRepository
                 await using var checkPrimaryCmd = new SqlCommand(
                     "SELECT COUNT(*) FROM ContactPerson WHERE customer_company_ID = @customerId AND is_primary = 1", conn, tx);
                 checkPrimaryCmd.Parameters.AddWithValue("@customerId", customerId);
-                if ((int)await checkPrimaryCmd.ExecuteScalarAsync()! > 0)
+                if (Convert.ToInt32(await checkPrimaryCmd.ExecuteScalarAsync()) > 0)
                     throw new InvalidOperationException("This customer already has a primary contact. Remove or unset the existing primary first.");
             }
 
@@ -502,7 +502,7 @@ public class CustomerRepository : ICustomerRepository
                 checkCmd.Parameters.AddWithValue("@contactId",  contactId);
                 checkCmd.Parameters.AddWithValue("@customerId", customerId);
                 checkCmd.Parameters.AddWithValue("@companyId",  companyId);
-                if ((int)await checkCmd.ExecuteScalarAsync()! == 0)
+                if (Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) == 0)
                     throw new UnauthorizedAccessException("Contact not found or access denied.");
             }
 
@@ -570,7 +570,7 @@ public class CustomerRepository : ICustomerRepository
             checkCmd.Parameters.AddWithValue("@contactId",  contactId);
             checkCmd.Parameters.AddWithValue("@customerId", customerId);
             checkCmd.Parameters.AddWithValue("@companyId",  companyId);
-            if ((int)await checkCmd.ExecuteScalarAsync()! == 0)
+            if (Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) == 0)
                 throw new UnauthorizedAccessException("Contact not found or access denied.");
         }
 

@@ -46,7 +46,7 @@
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
   <!-- ── Body layout ──────────────────────────────────────────────────────── -->
-  <div class="body-layout employee-chat-mode">
+  <div class="body-layout">
 
     <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
     <aside class="sidebar">
@@ -57,6 +57,15 @@
         </button>
       </div>
       <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-section="offers">
+          <i data-lucide="briefcase"></i>
+          <span>Job Offers</span>
+          <span class="offers-badge" id="offers-badge" style="display:none"></span>
+        </a>
+        <a href="#" class="nav-item" data-section="applications">
+          <i data-lucide="clipboard-list"></i>
+          <span>My Applications</span>
+        </a>
         <a href="#" class="nav-item active" data-section="chats">
           <i data-lucide="message-square"></i>
           <span>Chats</span>
@@ -65,13 +74,36 @@
     </aside>
 
     <!-- ── Page content ─────────────────────────────────────────────────────── -->
-    <div class="page-content chat-mode" id="page-content">
-      <!-- Chat section — fills the whole content area -->
+    <div class="page-content" id="page-content">
+
+      <!-- Offers section -->
+      <div class="page-section" id="section-offers" data-section="offers" style="display:none">
+        <div class="offers-page">
+          <div class="offers-page-header">
+            <h2 class="offers-page-title">Job Offers</h2>
+            <p class="offers-page-subtitle">Shifts waiting for your response</p>
+          </div>
+          <div id="offers-list"></div>
+        </div>
+      </div>
+
+      <!-- Applications section -->
+      <div class="page-section" id="section-applications" data-section="applications" style="display:none">
+        <div class="offers-page">
+          <div class="offers-page-header">
+            <h2 class="offers-page-title">My Applications</h2>
+            <p class="offers-page-subtitle">Shifts you've applied for and their statuses</p>
+          </div>
+          <div id="applications-list"></div>
+        </div>
+      </div>
+
+      <!-- Chat section — fills the whole content area when active -->
       <div class="page-section" id="section-chats" data-section="chats">
         <!-- Chat UI injected here by employee-dashboard.js -->
       </div>
-    </div>
 
+    </div>
   </div>
 
   <script type="module" src="js/employee-dashboard.js"></script>

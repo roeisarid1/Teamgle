@@ -56,7 +56,7 @@ public class EmployeeRepository : IEmployeeRepository
         cmd.Parameters.AddWithValue("@name", roleName);
         cmd.Parameters.AddWithValue("@companyId", companyId);
         await conn.OpenAsync();
-        return (int)await cmd.ExecuteScalarAsync()! > 0;
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
     }
 
     // ── Create a new company-specific role ─────────────────────────────────
@@ -112,7 +112,7 @@ public class EmployeeRepository : IEmployeeRepository
         cmd.Parameters.AddWithValue("@companyId", companyId);
 
         await conn.OpenAsync();
-        var count = (int)await cmd.ExecuteScalarAsync()!;
+        var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
         return count == roleIds.Count;
     }
 
@@ -126,7 +126,7 @@ public class EmployeeRepository : IEmployeeRepository
         cmd.Parameters.AddWithValue("@email", email);
 
         await conn.OpenAsync();
-        var count = (int)await cmd.ExecuteScalarAsync()!;
+        var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
         return count > 0;
     }
 
@@ -311,7 +311,7 @@ public class EmployeeRepository : IEmployeeRepository
             {
                 cmd.Parameters.AddWithValue("@userId",    userId);
                 cmd.Parameters.AddWithValue("@companyId", companyId);
-                if ((int)await cmd.ExecuteScalarAsync()! == 0)
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) == 0)
                     throw new UnauthorizedAccessException("Employee not found or access denied.");
             }
 
@@ -384,7 +384,7 @@ public class EmployeeRepository : IEmployeeRepository
             {
                 cmd.Parameters.AddWithValue("@userId",    userId);
                 cmd.Parameters.AddWithValue("@companyId", companyId);
-                if ((int)await cmd.ExecuteScalarAsync()! == 0)
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) == 0)
                     throw new UnauthorizedAccessException("Employee not found or access denied.");
             }
 
