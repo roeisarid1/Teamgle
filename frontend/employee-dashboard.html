@@ -48,7 +48,7 @@
   <!-- ── Body layout ──────────────────────────────────────────────────────── -->
   <div class="body-layout">
 
-    <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+    <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <p class="sidebar-title">Menu</p>
@@ -57,66 +57,51 @@
         </button>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item" data-section="offers">
-          <i data-lucide="briefcase"></i>
-          <span>Job Offers</span>
-          <span class="offers-badge" id="offers-badge" style="display:none"></span>
+        <a href="#" class="nav-item active" data-section="my-shifts">
+          <i data-lucide="calendar-check"></i>
+          <span>My Shifts</span>
+          <span class="offers-badge" id="shifts-badge" style="display:none"></span>
         </a>
-        <a href="#" class="nav-item" data-section="applications">
-          <i data-lucide="clipboard-list"></i>
-          <span>My Applications</span>
-        </a>
-        <a href="#" class="nav-item" data-section="briefs">
-          <i data-lucide="file-text"></i>
-          <span>Briefs</span>
-          <span class="offers-badge" id="briefs-badge" style="display:none"></span>
-        </a>
-        <a href="#" class="nav-item active" data-section="chats">
+        <a href="#" class="nav-item" data-section="chats">
           <i data-lucide="message-square"></i>
           <span>Chats</span>
         </a>
       </nav>
     </aside>
 
-    <!-- ── Page content ─────────────────────────────────────────────────────── -->
+    <!-- ── Page content ──────────────────────────────────────────────────── -->
     <div class="page-content" id="page-content">
 
-      <!-- Offers section -->
-      <div class="page-section" id="section-offers" data-section="offers" style="display:none">
+      <!-- My Shifts section -->
+      <div class="page-section" id="section-my-shifts" data-section="my-shifts">
         <div class="offers-page">
           <div class="offers-page-header">
-            <h2 class="offers-page-title">Job Offers</h2>
-            <p class="offers-page-subtitle">Shifts waiting for your response</p>
+            <h2 class="offers-page-title">My Shifts</h2>
+            <p class="offers-page-subtitle">All your shifts, offers, and briefings in one place</p>
           </div>
-          <div id="offers-list"></div>
+
+          <!-- Tab bar -->
+          <div class="ms-tab-bar">
+            <button class="ms-tab active" data-mstab="offers">
+              Offers
+              <span class="ms-tab-badge" id="ms-badge-offers" style="display:none"></span>
+            </button>
+            <button class="ms-tab" data-mstab="upcoming">Upcoming</button>
+            <button class="ms-tab" data-mstab="past">Past</button>
+            <button class="ms-tab" data-mstab="other">Other</button>
+          </div>
+
+          <!-- Tab panels -->
+          <div id="ms-panel-offers"  class="ms-panel"></div>
+          <div id="ms-panel-upcoming" class="ms-panel" style="display:none"></div>
+          <div id="ms-panel-past"    class="ms-panel" style="display:none"></div>
+          <div id="ms-panel-other"   class="ms-panel" style="display:none"></div>
         </div>
       </div>
 
-      <!-- Applications section -->
-      <div class="page-section" id="section-applications" data-section="applications" style="display:none">
-        <div class="offers-page">
-          <div class="offers-page-header">
-            <h2 class="offers-page-title">My Applications</h2>
-            <p class="offers-page-subtitle">Shifts you've applied for and their statuses</p>
-          </div>
-          <div id="applications-list"></div>
-        </div>
-      </div>
-
-      <!-- Briefs section -->
-      <div class="page-section" id="section-briefs" data-section="briefs" style="display:none">
-        <div class="offers-page">
-          <div class="offers-page-header">
-            <h2 class="offers-page-title">My Briefs</h2>
-            <p class="offers-page-subtitle">Briefings relevant to your assignments</p>
-          </div>
-          <div id="briefs-list"></div>
-        </div>
-      </div>
-
-      <!-- Chat section — fills the whole content area when active -->
-      <div class="page-section" id="section-chats" data-section="chats">
-        <!-- Chat UI injected here by employee-dashboard.js -->
+      <!-- Chat section -->
+      <div class="page-section" id="section-chats" data-section="chats" style="display:none">
+        <!-- Chat UI injected here -->
       </div>
 
     </div>

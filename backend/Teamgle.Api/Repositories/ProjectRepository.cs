@@ -1288,28 +1288,38 @@ public class ProjectRepository : IProjectRepository
     {
         const string sql = """
             SELECT
-                es.shift_ID     AS ShiftId,
-                es.status       AS Status,
-                r.Roll_name     AS RoleName,
-                e.name          AS EventName,
-                e.location      AS EventLocation,
-                s.start_time    AS ShiftStart,
-                s.end_time      AS ShiftEnd,
-                p.name          AS ProjectName
+                es.shift_ID                AS ShiftId,
+                es.status                  AS Status,
+                r.Roll_name                AS RoleName,
+                e.event_ID                 AS EventId,
+                e.name                     AS EventName,
+                e.location                 AS EventLocation,
+                e.start_time               AS EventStart,
+                e.end_time                 AS EventEnd,
+                s.start_time               AS ShiftStart,
+                s.end_time                 AS ShiftEnd,
+                p.Proj_ID                  AS ProjectId,
+                p.name                     AS ProjectName,
+                es.actual_start_time       AS ActualStart,
+                es.actual_end_time         AS ActualEnd,
+                es.pay_rate_per_hour       AS PayRatePerHour,
+                es.approved_regular_hours  AS ApprovedRegularHours,
+                es.approved_overtime_hours AS ApprovedOvertimeHours,
+                ISNULL(es.payment_status, '') AS PaymentStatus
             FROM Employee_Shift es
             INNER JOIN [User]   u  ON u.user_ID  = es.employee_user_ID
             INNER JOIN Shift    s  ON s.Shift_ID = es.shift_ID
             INNER JOIN Roll     r  ON r.Roll_ID  = s.roll_ID
             INNER JOIN Event    e  ON e.event_ID = s.event_ID
             INNER JOIN Project  p  ON p.Proj_ID  = e.project_ID
-            WHERE u.FBUID    = @firebaseUid
+            WHERE u.FBUID = @firebaseUid
               AND es.status IN (
                   'employee_request',
                   'manager_approved',
                   'manager_reject',
                   'manager_approved_canceled'
               )
-            ORDER BY e.start_time DESC
+            ORDER BY COALESCE(e.start_time, s.start_time) DESC
             """;
 
         var results = new List<MyApplicationResponse>();
@@ -1321,31 +1331,75 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
 
-        var ordShiftId       = reader.GetOrdinal("ShiftId");
-        var ordStatus        = reader.GetOrdinal("Status");
-        var ordRoleName      = reader.GetOrdinal("RoleName");
-        var ordEventName     = reader.GetOrdinal("EventName");
-        var ordEventLocation = reader.GetOrdinal("EventLocation");
-        var ordShiftStart    = reader.GetOrdinal("ShiftStart");
-        var ordShiftEnd      = reader.GetOrdinal("ShiftEnd");
-        var ordProjectName   = reader.GetOrdinal("ProjectName");
+        var ordShiftId               = reader.GetOrdinal("ShiftId");
+        var ordStatus                = reader.GetOrdinal("Status");
+        var ordRoleName              = reader.GetOrdinal("RoleName");
+        var ordEventId               = reader.GetOrdinal("EventId");
+        var ordEventName             = reader.GetOrdinal("EventName");
+        var ordEventLocation         = reader.GetOrdinal("EventLocation");
+        var ordEventStart            = reader.GetOrdinal("EventStart");
+        var ordEventEnd              = reader.GetOrdinal("EventEnd");
+        var ordShiftStart            = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd              = reader.GetOrdinal("ShiftEnd");
+        var ordProjectId             = reader.GetOrdinal("ProjectId");
+        var ordProjectName           = reader.GetOrdinal("ProjectName");
+        var ordActualStart           = reader.GetOrdinal("ActualStart");
+        var ordActualEnd             = reader.GetOrdinal("ActualEnd");
+        var ordPayRate               = reader.GetOrdinal("PayRatePerHour");
+        var ordApprovedRegular       = reader.GetOrdinal("ApprovedRegularHours");
+        var ordApprovedOvertime      = reader.GetOrdinal("ApprovedOvertimeHours");
+        var ordPaymentStatus         = reader.GetOrdinal("PaymentStatus");
 
         while (await reader.ReadAsync())
         {
             results.Add(new MyApplicationResponse
             {
-                ShiftId       = reader.IsDBNull(ordShiftId)       ? "" : reader.GetString(ordShiftId),
-                Status        = reader.IsDBNull(ordStatus)        ? "" : reader.GetString(ordStatus),
-                RoleName      = reader.IsDBNull(ordRoleName)      ? "" : reader.GetString(ordRoleName),
-                EventName     = reader.IsDBNull(ordEventName)     ? "" : reader.GetString(ordEventName),
-                EventLocation = reader.IsDBNull(ordEventLocation) ? null : reader.GetString(ordEventLocation),
-                ShiftStart    = reader.IsDBNull(ordShiftStart)    ? null : reader.GetDateTime(ordShiftStart),
-                ShiftEnd      = reader.IsDBNull(ordShiftEnd)      ? null : reader.GetDateTime(ordShiftEnd),
-                ProjectName   = reader.IsDBNull(ordProjectName)   ? "" : reader.GetString(ordProjectName),
+                ShiftId               = reader.IsDBNull(ordShiftId)          ? "" : reader.GetString(ordShiftId),
+                Status                = reader.IsDBNull(ordStatus)           ? "" : reader.GetString(ordStatus),
+                RoleName              = reader.IsDBNull(ordRoleName)         ? "" : reader.GetString(ordRoleName),
+                EventId               = reader.IsDBNull(ordEventId)          ? "" : reader.GetString(ordEventId),
+                EventName             = reader.IsDBNull(ordEventName)        ? "" : reader.GetString(ordEventName),
+                EventLocation         = reader.IsDBNull(ordEventLocation)    ? null : reader.GetString(ordEventLocation),
+                EventStart            = reader.IsDBNull(ordEventStart)       ? null : reader.GetDateTime(ordEventStart),
+                EventEnd              = reader.IsDBNull(ordEventEnd)         ? null : reader.GetDateTime(ordEventEnd),
+                ShiftStart            = reader.IsDBNull(ordShiftStart)       ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd              = reader.IsDBNull(ordShiftEnd)         ? null : reader.GetDateTime(ordShiftEnd),
+                ProjectId             = reader.IsDBNull(ordProjectId)        ? "" : reader.GetString(ordProjectId),
+                ProjectName           = reader.IsDBNull(ordProjectName)      ? "" : reader.GetString(ordProjectName),
+                ActualStart           = reader.IsDBNull(ordActualStart)      ? null : reader.GetDateTime(ordActualStart),
+                ActualEnd             = reader.IsDBNull(ordActualEnd)        ? null : reader.GetDateTime(ordActualEnd),
+                PayRatePerHour        = reader.IsDBNull(ordPayRate)          ? null : reader.GetDecimal(ordPayRate),
+                ApprovedRegularHours  = reader.IsDBNull(ordApprovedRegular)  ? null : reader.GetDecimal(ordApprovedRegular),
+                ApprovedOvertimeHours = reader.IsDBNull(ordApprovedOvertime) ? null : reader.GetDecimal(ordApprovedOvertime),
+                PaymentStatus         = reader.IsDBNull(ordPaymentStatus)    ? "" : reader.GetString(ordPaymentStatus),
             });
         }
 
         return results;
+    }
+
+    public async Task<bool> ReportHoursAsync(string firebaseUid, string shiftId, DateTime? actualStart, DateTime? actualEnd)
+    {
+        const string sql = """
+            UPDATE Employee_Shift
+            SET    actual_start_time  = @actualStart,
+                   actual_end_time    = @actualEnd,
+                   status_updated_at  = GETUTCDATE()
+            WHERE  shift_ID           = @shiftId
+              AND  employee_user_ID   = (SELECT user_ID FROM [User] WHERE FBUID = @fbuid)
+              AND  status             = 'manager_approved'
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        cmd.Parameters.AddWithValue("@fbuid",        firebaseUid);
+        cmd.Parameters.AddWithValue("@actualStart",  (object?)actualStart ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@actualEnd",    (object?)actualEnd   ?? DBNull.Value);
+
+        await conn.OpenAsync();
+        var rows = await cmd.ExecuteNonQueryAsync();
+        return rows > 0;
     }
 
     // ══════════════════════════════════════════════════════════════════════════

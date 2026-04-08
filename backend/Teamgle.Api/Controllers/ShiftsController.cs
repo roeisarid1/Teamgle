@@ -175,6 +175,27 @@ public class ShiftsController : ControllerBase
         }
     }
 
+    // ── PATCH /api/shifts/{shiftId}/report-hours ──────────────────────────
+    [HttpPatch("{shiftId}/report-hours")]
+    public async Task<IActionResult> ReportHours(string shiftId, [FromBody] ReportHoursRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var updated = await _projectService.ReportHoursAsync(uid, shiftId, request.ActualStart, request.ActualEnd);
+            if (!updated) return NotFound(new { error = "Shift not found or not approved." });
+            return Ok(new { message = "Hours reported." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reporting hours for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── GET /api/shifts/my-applications ───────────────────────────────────
     [HttpGet("my-applications")]
     public async Task<IActionResult> GetMyApplications()

@@ -1,5 +1,4 @@
-// employee-dashboard.js
-// ── Employee dashboard — job offers + chat ───────────────────────────────────
+// employee-dashboard.js — shift-centric employee experience
 
 import { auth }                        from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -8,7 +7,7 @@ import { initChat, destroyChat }       from "./chat-ui.js";
 
 const API_BASE = "http://localhost:5000/api";
 
-// ── DOM references ────────────────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 const navUsername      = document.getElementById("nav-username");
 const infoName         = document.getElementById("info-name");
 const infoRole         = document.getElementById("info-role");
@@ -18,43 +17,30 @@ const btnHamburger     = document.getElementById("btn-hamburger");
 const btnSidebarReopen = document.getElementById("btn-sidebar-reopen");
 const sidebar          = document.querySelector(".sidebar");
 const sidebarBackdrop  = document.getElementById("sidebar-backdrop");
-const pageContent        = document.getElementById("page-content");
-const chatSection        = document.getElementById("section-chats");
-const offersList         = document.getElementById("offers-list");
-const offersBadge        = document.getElementById("offers-badge");
-const applicationsList   = document.getElementById("applications-list");
-const briefsList         = document.getElementById("briefs-list");
-const briefsBadge        = document.getElementById("briefs-badge");
+const pageContent      = document.getElementById("page-content");
+const chatSection      = document.getElementById("section-chats");
+const shiftsBadge      = document.getElementById("shifts-badge");
 
 const MOBILE_BREAKPOINT = 768;
 
-// ── Sidebar toggle ────────────────────────────────────────────────────────────
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
   btnSidebarReopen.classList.toggle("visible", !open);
-  if (sidebarBackdrop) {
+  if (sidebarBackdrop)
     sidebarBackdrop.classList.toggle("visible", open && window.innerWidth <= MOBILE_BREAKPOINT);
-  }
 }
 
 if (window.innerWidth <= MOBILE_BREAKPOINT) setSidebarOpen(false);
-
 window.addEventListener("resize", () => {
-  if (window.innerWidth <= MOBILE_BREAKPOINT) {
-    setSidebarOpen(false);
-  } else {
-    setSidebarOpen(true);
-    sidebarBackdrop?.classList.remove("visible");
-  }
+  if (window.innerWidth <= MOBILE_BREAKPOINT) setSidebarOpen(false);
+  else { setSidebarOpen(true); sidebarBackdrop?.classList.remove("visible"); }
 });
-
 btnHamburger.addEventListener("click",     () => setSidebarOpen(false));
 btnSidebarReopen.addEventListener("click", () => setSidebarOpen(true));
 sidebarBackdrop?.addEventListener("click", () => setSidebarOpen(false));
 
 // ── Section switching ─────────────────────────────────────────────────────────
-let activeSection = "chats";
-
 function showSection(sectionId) {
   document.querySelectorAll(".page-section").forEach(el => {
     el.style.display = el.dataset.section === sectionId ? "" : "none";
@@ -62,19 +48,9 @@ function showSection(sectionId) {
   document.querySelectorAll(".nav-item").forEach(el => {
     el.classList.toggle("active", el.dataset.section === sectionId);
   });
-
-  // chat-mode class makes page-content zero-padding + fixed height for the chat
-  if (sectionId === "chats") {
-    pageContent.classList.add("chat-mode");
-  } else {
-    pageContent.classList.remove("chat-mode");
-  }
-
-  activeSection = sectionId;
+  pageContent.classList.toggle("chat-mode", sectionId === "chats");
   lucide.createIcons();
-
-  if (sectionId === "applications") loadApplications();
-  if (sectionId === "briefs")       loadBriefs();
+  if (sectionId === "my-shifts") loadMyShifts();
 }
 
 document.querySelectorAll(".nav-item[data-section]").forEach(link => {
@@ -92,46 +68,156 @@ async function getToken() {
   return await user.getIdToken(false);
 }
 
-// ── Job Offers ────────────────────────────────────────────────────────────────
-async function loadOffers() {
-  offersList.innerHTML = renderSkeletons(2);
+// ── HTML escape ───────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
-  let offers;
+// ── Date/time helpers ─────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+function fmtDateRange(startIso, endIso) {
+  if (!startIso) return "";
+  const d    = new Date(startIso);
+  const date = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const t1   = fmtTime(startIso);
+  return endIso ? `${date} · ${t1}–${fmtTime(endIso)}` : `${date} · ${t1}`;
+}
+function toDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toISOString().slice(0, 16);
+}
+function isPast(iso) {
+  if (!iso) return false;
+  return new Date(iso) < new Date();
+}
+
+// ── My Shifts state ───────────────────────────────────────────────────────────
+let _msOffers       = null;
+let _msApplications = null;
+let _msBriefs       = null;
+let _msActiveTab    = "offers";
+let _msLoading      = false;
+
+// ── Load all shift data in parallel ──────────────────────────────────────────
+async function loadMyShifts() {
+  if (_msLoading) return;
+  _msLoading = true;
+
+  // Show skeleton on all panels
+  ["offers", "upcoming", "past", "other"].forEach(tab => {
+    const el = document.getElementById(`ms-panel-${tab}`);
+    if (el) el.innerHTML = renderSkeletons(2);
+  });
+  activateMsTab(_msActiveTab, false /* don't re-render yet */);
+
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/shifts/my-offers`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error("Failed to load offers.");
-    offers = await res.json();
+    const [offersRes, appsRes, briefsRes] = await Promise.all([
+      fetch(`${API_BASE}/shifts/my-offers`,       { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/shifts/my-applications`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/events/my-briefs`,        { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+
+    _msOffers       = offersRes.ok       ? await offersRes.json()  : [];
+    _msApplications = appsRes.ok         ? await appsRes.json()    : [];
+    _msBriefs       = briefsRes.ok       ? await briefsRes.json()  : [];
   } catch {
-    offersList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="wifi-off" style="width:40px;height:40px;color:var(--text-muted)"></i>
-        <p>Could not load offers. Please try again.</p>
-      </div>`;
-    lucide.createIcons();
-    return;
+    _msOffers = _msApplications = _msBriefs = [];
+  } finally {
+    _msLoading = false;
   }
 
-  updateBadge(offers.length);
+  // Update nav badge (offers + unread briefs)
+  const unreadBriefs  = (_msBriefs  ?? []).filter(b => !b.isAcknowledged).length;
+  const pendingOffers = (_msOffers  ?? []).length;
+  const totalBadge    = pendingOffers + unreadBriefs;
+  shiftsBadge.textContent  = totalBadge;
+  shiftsBadge.style.display = totalBadge > 0 ? "" : "none";
 
-  if (offers.length === 0) {
-    offersList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="inbox" style="width:48px;height:48px;color:var(--blue-light)"></i>
-        <p>No job offers right now.<br><span>Check back later.</span></p>
-      </div>`;
-    lucide.createIcons();
-    return;
+  // Offers tab badge
+  const offersBadge = document.getElementById("ms-badge-offers");
+  if (offersBadge) {
+    offersBadge.textContent  = pendingOffers;
+    offersBadge.style.display = pendingOffers > 0 ? "" : "none";
   }
 
-  offersList.innerHTML = offers.map(renderOfferCard).join("");
+  renderActiveTab();
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+document.querySelector(".ms-tab-bar").addEventListener("click", e => {
+  const tab = e.target.closest("[data-mstab]");
+  if (!tab) return;
+  activateMsTab(tab.dataset.mstab);
+});
+
+function activateMsTab(name, render = true) {
+  _msActiveTab = name;
+  document.querySelectorAll(".ms-tab").forEach(t => {
+    t.classList.toggle("active", t.dataset.mstab === name);
+  });
+  document.querySelectorAll(".ms-panel").forEach(p => {
+    p.style.display = p.id === `ms-panel-${name}` ? "" : "none";
+  });
+  if (render) renderActiveTab();
+}
+
+function renderActiveTab() {
+  switch (_msActiveTab) {
+    case "offers":   renderOffersTab();   break;
+    case "upcoming": renderUpcomingTab(); break;
+    case "past":     renderPastTab();     break;
+    case "other":    renderOtherTab();    break;
+  }
+}
+
+// ── Empty / error states ──────────────────────────────────────────────────────
+function emptyState(icon, msg, sub = "") {
+  return `<div class="offers-empty">
+    <i data-lucide="${escHtml(icon)}" style="width:48px;height:48px;color:var(--blue-light)"></i>
+    <p>${escHtml(msg)}${sub ? `<br><span>${escHtml(sub)}</span>` : ""}</p>
+  </div>`;
+}
+
+function renderSkeletons(n) {
+  return Array.from({ length: n }, () => `
+    <div class="offer-skeleton">
+      <div class="skel skel-line skel-short"></div>
+      <div class="skel skel-line skel-long"></div>
+      <div class="skel skel-line skel-medium"></div>
+      <div class="skel skel-buttons"></div>
+    </div>`).join("");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  OFFERS TAB
+// ────────────────────────────────────────────────────────────────────────────
+function renderOffersTab() {
+  const panel = document.getElementById("ms-panel-offers");
+  if (!panel) return;
+
+  if (_msOffers === null) { panel.innerHTML = renderSkeletons(2); lucide.createIcons(); return; }
+  if (_msOffers.length === 0) {
+    panel.innerHTML = emptyState("inbox", "No job offers right now.", "Check back later.");
+    lucide.createIcons(); return;
+  }
+
+  panel.innerHTML = _msOffers.map(o => renderOfferCard(o)).join("");
   lucide.createIcons();
 
-  // Attach respond handlers
-  offersList.querySelectorAll(".offer-card").forEach(card => {
-    const shiftId    = card.dataset.shiftId;
+  panel.querySelectorAll(".offer-card[data-shift-id]").forEach(card => {
+    const shiftId = card.dataset.shiftId;
     const btnAccept  = card.querySelector(".offer-btn--accept");
     const btnDecline = card.querySelector(".offer-btn--decline");
 
@@ -140,7 +226,6 @@ async function loadOffers() {
       btnDecline.disabled = true;
       btnAccept.textContent  = accept ? "Saving…" : btnAccept.textContent;
       btnDecline.textContent = !accept ? "Saving…" : btnDecline.textContent;
-
       try {
         const token = await getToken();
         const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(shiftId)}/respond`, {
@@ -149,27 +234,22 @@ async function loadOffers() {
           body:    JSON.stringify({ accept }),
         });
         if (!res.ok) throw new Error();
-
-        card.classList.add("offer-card--fade-out");
-        card.addEventListener("animationend", () => {
-          card.remove();
-          const remaining = offersList.querySelectorAll(".offer-card").length;
-          updateBadge(remaining);
-          if (remaining === 0) {
-            offersList.innerHTML = `
-              <div class="offers-empty">
-                <i data-lucide="check-circle-2" style="width:48px;height:48px;color:var(--green)"></i>
-                <p>You're all caught up!</p>
-              </div>`;
-            lucide.createIcons();
-          }
-        }, { once: true });
+        // Remove from local cache and re-render
+        _msOffers = _msOffers.filter(o => o.shiftId !== shiftId);
+        // Refresh badge
+        const offersBadge = document.getElementById("ms-badge-offers");
+        if (offersBadge) {
+          offersBadge.textContent   = _msOffers.length;
+          offersBadge.style.display = _msOffers.length > 0 ? "" : "none";
+        }
+        // Also invalidate applications cache so Upcoming/Past refresh
+        _msApplications = null;
+        renderOffersTab();
       } catch {
         btnAccept.disabled  = false;
         btnDecline.disabled = false;
         btnAccept.textContent  = "I'm In ✓";
         btnDecline.textContent = "Can't Make It ✗";
-        alert("Failed to respond. Please try again.");
       }
     }
 
@@ -178,82 +258,33 @@ async function loadOffers() {
   });
 }
 
-function updateBadge(count) {
-  if (count > 0) {
-    offersBadge.textContent = count;
-    offersBadge.style.display = "";
-  } else {
-    offersBadge.style.display = "none";
-  }
-}
-
-// ── Event type colors ─────────────────────────────────────────────────────────
-const EVENT_TYPE_COLORS = {
-  wedding:    { bg: "#fdf2f8", color: "#9d174d", border: "#f9a8d4" },
-  corporate:  { bg: "#eff6ff", color: "#1d4ed8", border: "#93c5fd" },
-  party:      { bg: "#f5f3ff", color: "#6d28d9", border: "#c4b5fd" },
-  conference: { bg: "#ecfdf5", color: "#065f46", border: "#6ee7b7" },
-  concert:    { bg: "#fff7ed", color: "#9a3412", border: "#fdba74" },
-  sport:      { bg: "#f0fdf4", color: "#166534", border: "#86efac" },
-  birthday:   { bg: "#fefce8", color: "#854d0e", border: "#fde047" },
-  other:      { bg: "#f8fafc", color: "#475569", border: "#cbd5e1" },
-};
-
-function eventTypeStyle(type) {
-  const key = (type || "other").toLowerCase();
-  return EVENT_TYPE_COLORS[key] || EVENT_TYPE_COLORS.other;
-}
-
-// ── Render helpers ────────────────────────────────────────────────────────────
-function renderOfferCard(offer) {
-  const startDt = offer.plannedStartTime || offer.shiftStartTime;
-  const endDt   = offer.plannedEndTime   || offer.shiftEndTime;
-  const typeStyle = eventTypeStyle(offer.eventType);
-
-  const dateLine  = startDt ? formatDateRange(startDt, endDt) : "";
-  const payLine   = (offer.payRatePerHour && offer.payRatePerHour > 0)
-    ? `<div class="offer-pay">₪${Number(offer.payRatePerHour).toFixed(2)}<span>/hr</span></div>`
-    : "";
-  const attendees = (offer.attendeesCount && offer.attendeesCount > 0)
-    ? `<div class="offer-meta-item"><i data-lucide="users" class="offer-icon"></i><span>${offer.attendeesCount} attendees</span></div>`
-    : "";
-  const notes = offer.notes
-    ? `<blockquote class="offer-notes">${escHtml(offer.notes)}</blockquote>`
-    : "";
-  const location = offer.eventLocation
-    ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(offer.eventLocation)}</span></div>`
-    : "";
+function renderOfferCard(o) {
+  const dateStr = fmtDateRange(o.plannedStartTime || o.shiftStartTime, o.plannedEndTime || o.shiftEndTime);
+  const payLine = o.payRatePerHour > 0
+    ? `<div class="offer-pay">₪${Number(o.payRatePerHour).toFixed(2)}<span>/hr</span></div>` : "";
+  const loc = o.eventLocation
+    ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(o.eventLocation)}</span></div>` : "";
+  const notes = o.notes
+    ? `<blockquote class="offer-notes">${escHtml(o.notes)}</blockquote>` : "";
 
   return `
-    <div class="offer-card" data-shift-id="${escHtml(offer.shiftId)}">
+    <div class="offer-card" data-shift-id="${escHtml(o.shiftId)}">
       <div class="offer-card-header">
-        <div class="offer-project-name">${escHtml(offer.projectName)}</div>
-        ${offer.eventType
-          ? `<span class="offer-event-type-badge"
-               style="background:${typeStyle.bg};color:${typeStyle.color};border-color:${typeStyle.border}">
-               ${capitalize(offer.eventType)}
-             </span>`
-          : ""}
+        <div class="offer-project-name">${escHtml(o.projectName)}</div>
+        ${o.eventType ? `<span class="offer-event-type-badge">${capitalize(o.eventType)}</span>` : ""}
       </div>
-
-      <h3 class="offer-event-name">${escHtml(offer.eventName)}</h3>
-
-      ${dateLine ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${dateLine}</span></div>` : ""}
-
+      <h3 class="offer-event-name">${escHtml(o.eventName)}</h3>
+      ${dateStr ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
       <div class="offer-meta-row">
-        ${location}
+        ${loc}
         <div class="offer-meta-item">
           <i data-lucide="tag" class="offer-icon"></i>
-          <span class="offer-role-chip">${escHtml(offer.roleName)}</span>
+          <span class="offer-role-chip">${escHtml(o.roleName)}</span>
         </div>
-        ${attendees}
       </div>
-
       ${payLine}
       ${notes}
-
-      <div class="offer-by">Offered by: <strong>${escHtml(offer.managerName)}</strong></div>
-
+      <div class="offer-by">Offered by: <strong>${escHtml(o.managerName)}</strong></div>
       <div class="offer-actions">
         <button class="offer-btn offer-btn--accept">I'm In ✓</button>
         <button class="offer-btn offer-btn--decline">Can't Make It ✗</button>
@@ -261,255 +292,416 @@ function renderOfferCard(offer) {
     </div>`;
 }
 
-function renderSkeletons(count) {
-  return Array.from({ length: count }, () => `
-    <div class="offer-skeleton">
-      <div class="skel skel-line skel-short"></div>
-      <div class="skel skel-line skel-long"></div>
-      <div class="skel skel-line skel-medium"></div>
-      <div class="skel skel-line skel-short"></div>
-      <div class="skel skel-buttons"></div>
-    </div>`).join("");
+// ────────────────────────────────────────────────────────────────────────────
+//  UPCOMING TAB
+// ────────────────────────────────────────────────────────────────────────────
+async function renderUpcomingTab() {
+  const panel = document.getElementById("ms-panel-upcoming");
+  if (!panel) return;
+
+  if (_msApplications === null) {
+    panel.innerHTML = renderSkeletons(2);
+    lucide.createIcons();
+    await _fetchApplications();
+  }
+
+  const now     = new Date();
+  const upcoming = (_msApplications ?? []).filter(
+    s => s.status === "manager_approved" && new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now
+  );
+
+  if (upcoming.length === 0) {
+    panel.innerHTML = emptyState("calendar", "No upcoming shifts.", "Your confirmed upcoming shifts will appear here.");
+    lucide.createIcons(); return;
+  }
+
+  panel.innerHTML = upcoming.map(s => renderApprovedShiftCard(s, false)).join("");
+  lucide.createIcons();
+  wireShiftCards(panel);
 }
 
-function formatDateRange(startIso, endIso) {
-  const start = new Date(startIso);
-  const opts = { weekday: "short", month: "short", day: "numeric" };
-  const datePart = start.toLocaleDateString("en-US", opts);
-  const startTime = start.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-  if (!endIso) return `${datePart} · ${startTime}`;
-  const end = new Date(endIso);
-  const endTime = end.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-  return `${datePart} · ${startTime}–${endTime}`;
+// ────────────────────────────────────────────────────────────────────────────
+//  PAST TAB
+// ────────────────────────────────────────────────────────────────────────────
+async function renderPastTab() {
+  const panel = document.getElementById("ms-panel-past");
+  if (!panel) return;
+
+  if (_msApplications === null) {
+    panel.innerHTML = renderSkeletons(2);
+    lucide.createIcons();
+    await _fetchApplications();
+  }
+
+  const now  = new Date();
+  const past = (_msApplications ?? []).filter(
+    s => s.status === "manager_approved" && new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
+  );
+
+  if (past.length === 0) {
+    panel.innerHTML = emptyState("history", "No past shifts.", "Completed shifts will appear here.");
+    lucide.createIcons(); return;
+  }
+
+  panel.innerHTML = past.map(s => renderApprovedShiftCard(s, true)).join("");
+  lucide.createIcons();
+  wireShiftCards(panel);
 }
 
-function capitalize(str) {
-  return str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
-}
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ── My Applications ───────────────────────────────────────────────────────────
-async function loadApplications() {
-  applicationsList.innerHTML = renderSkeletons(2);
-
-  let apps;
+async function _fetchApplications() {
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/shifts/my-applications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error("Failed to load applications.");
-    apps = await res.json();
-  } catch {
-    applicationsList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="wifi-off" style="width:40px;height:40px;color:var(--text-muted)"></i>
-        <p>Could not load applications. Please try again.</p>
-      </div>`;
+    const [appsRes, briefsRes] = await Promise.all([
+      fetch(`${API_BASE}/shifts/my-applications`, { headers: { Authorization: `Bearer ${token}` } }),
+      _msBriefs === null
+        ? fetch(`${API_BASE}/events/my-briefs`,   { headers: { Authorization: `Bearer ${token}` } })
+        : Promise.resolve(null),
+    ]);
+    if (appsRes.ok)           _msApplications = await appsRes.json();
+    if (briefsRes?.ok)        _msBriefs       = await briefsRes.json();
+  } catch { _msApplications = []; }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  OTHER TAB (pending / rejected / canceled)
+// ────────────────────────────────────────────────────────────────────────────
+async function renderOtherTab() {
+  const panel = document.getElementById("ms-panel-other");
+  if (!panel) return;
+
+  if (_msApplications === null) {
+    panel.innerHTML = renderSkeletons(2);
     lucide.createIcons();
-    return;
+    await _fetchApplications();
   }
 
-  if (apps.length === 0) {
-    applicationsList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="clipboard-list" style="width:48px;height:48px;color:var(--blue-light)"></i>
-        <p>No applications yet.<br><span>Accept a job offer to get started.</span></p>
-      </div>`;
-    lucide.createIcons();
-    return;
+  const other = (_msApplications ?? []).filter(s => s.status !== "manager_approved");
+
+  if (other.length === 0) {
+    panel.innerHTML = emptyState("clipboard-list", "Nothing here.", "");
+    lucide.createIcons(); return;
   }
 
-  const approved = apps.filter(a => a.status === "manager_approved");
-  const pending  = apps.filter(a => a.status === "employee_request");
-  const rejected = apps.filter(a => a.status === "manager_reject" || a.status === "manager_approved_canceled");
+  const groups = {
+    employee_request:          { label: "Pending Manager Approval", icon: "clock"          },
+    manager_reject:            { label: "Not Selected",             icon: "x-circle"       },
+    manager_approved_canceled: { label: "Canceled",                 icon: "slash"          },
+  };
 
-  applicationsList.innerHTML = [
-    renderApplicationGroup("approved", "check-circle-2", "Approved Shifts",        approved, "No approved shifts yet."),
-    renderApplicationGroup("pending",  "clock",          "Pending Applications",    pending,  "No pending applications."),
-    renderApplicationGroup("rejected", "x-circle",       "Rejected / Canceled",     rejected, "Nothing here."),
-  ].join("");
+  const byStatus = {};
+  other.forEach(s => {
+    if (!byStatus[s.status]) byStatus[s.status] = [];
+    byStatus[s.status].push(s);
+  });
 
+  panel.innerHTML = Object.entries(byStatus).map(([status, shifts]) => {
+    const g = groups[status] ?? { label: status, icon: "info" };
+    return `
+      <div class="ms-group">
+        <div class="ms-group-header">
+          <i data-lucide="${escHtml(g.icon)}" class="ms-group-icon"></i>
+          <span>${escHtml(g.label)}</span>
+          <span class="ms-group-count">${shifts.length}</span>
+        </div>
+        ${shifts.map(s => renderOtherShiftCard(s)).join("")}
+      </div>`;
+  }).join("");
   lucide.createIcons();
 }
 
-function renderApplicationGroup(type, icon, title, apps, emptyMsg) {
-  const cards = apps.length === 0
-    ? `<p class="app-group-empty">${emptyMsg}</p>`
-    : apps.map(a => renderApplicationCard(a, type)).join("");
+// ────────────────────────────────────────────────────────────────────────────
+//  SHIFT CARD — approved (upcoming + past)
+// ────────────────────────────────────────────────────────────────────────────
+function renderApprovedShiftCard(shift, isPastShift) {
+  const briefs = getBriefsForShift(shift);
+  const dateStr = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
+  const payLine = shift.payRatePerHour
+    ? `<div class="ms-pay-row"><span class="ms-pay-label">Rate</span><span class="ms-pay-value">₪${Number(shift.payRatePerHour).toFixed(2)}/hr</span></div>` : "";
+
+  const shiftTimes = (shift.shiftStart || shift.shiftEnd)
+    ? `<div class="ms-shift-times"><i data-lucide="clock" class="offer-icon"></i><span>${fmtTime(shift.shiftStart)} – ${fmtTime(shift.shiftEnd)}</span></div>` : "";
+
+  // Time reporting section (for past shifts)
+  const timeReport = isPastShift ? renderTimeReportSection(shift) : "";
+
+  // Payroll summary (if manager has set approved hours)
+  const payrollSummary = (shift.approvedRegularHours || shift.approvedOvertimeHours)
+    ? renderPayrollSummary(shift) : "";
+
+  // Briefs section
+  const briefsHtml = briefs.length > 0 ? renderInlineBriefs(briefs) : "";
 
   return `
-    <div class="app-group app-group--${type}">
-      <div class="app-group-header">
-        <i data-lucide="${icon}" class="app-group-icon"></i>
-        <span class="app-group-title">${title}</span>
-        <span class="app-group-count">${apps.length}</span>
+    <div class="ms-shift-card" data-shift-id="${escHtml(shift.shiftId)}"
+         data-event-id="${escHtml(shift.eventId)}" data-project-id="${escHtml(shift.projectId)}">
+      <div class="ms-shift-header">
+        <div class="ms-shift-meta">
+          <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
+          <span class="ms-approved-badge">✓ Approved</span>
+        </div>
+        <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
+        <div class="ms-shift-details">
+          ${dateStr ? `<div class="offer-meta-item"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
+          ${shift.eventLocation ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(shift.eventLocation)}</span></div>` : ""}
+          ${shiftTimes}
+          <div class="offer-meta-item"><i data-lucide="tag" class="offer-icon"></i><span class="offer-role-chip">${escHtml(shift.roleName)}</span></div>
+        </div>
+        ${payLine}
       </div>
-      <div class="app-group-body">${cards}</div>
+      ${timeReport}
+      ${payrollSummary}
+      ${briefsHtml}
     </div>`;
 }
 
-function renderApplicationCard(app, groupType) {
-  const dateLine = (app.shiftStart || app.shiftEnd)
-    ? formatDateRange(app.shiftStart, app.shiftEnd)
-    : "";
-  const location = app.eventLocation
-    ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(app.eventLocation)}</span></div>`
-    : "";
-  const confirmedLabel = groupType === "approved"
-    ? `<div class="app-confirmed-label"><i data-lucide="check" style="width:13px;height:13px"></i> Confirmed shift</div>`
-    : "";
-  const statusBadge = {
-    approved: `<span class="app-status-badge app-status--approved">✓ Approved</span>`,
-    pending:  `<span class="app-status-badge app-status--pending">Pending</span>`,
-    rejected: app.status === "manager_approved_canceled"
-                ? `<span class="app-status-badge app-status--canceled">Canceled</span>`
-                : `<span class="app-status-badge app-status--rejected">Not Selected</span>`,
-  }[groupType] ?? "";
+function renderTimeReportSection(shift) {
+  const hasReported = shift.actualStart || shift.actualEnd;
+  return `
+    <div class="ms-time-report">
+      <div class="ms-time-report-title">
+        <i data-lucide="clock" style="width:14px;height:14px"></i>
+        Hours Reporting
+        ${hasReported ? `<span class="ms-time-reported-badge">Reported</span>` : `<span class="ms-time-pending-badge">Not reported</span>`}
+      </div>
+      <div class="ms-time-report-fields">
+        <div class="ms-time-field">
+          <label class="ms-time-label">Actual Start</label>
+          <input type="datetime-local" class="ms-time-input" name="actualStart"
+                 value="${escHtml(toDatetimeLocal(shift.actualStart))}">
+        </div>
+        <div class="ms-time-field">
+          <label class="ms-time-label">Actual End</label>
+          <input type="datetime-local" class="ms-time-input" name="actualEnd"
+                 value="${escHtml(toDatetimeLocal(shift.actualEnd))}">
+        </div>
+      </div>
+      <button class="ms-time-save-btn">Save Hours</button>
+      <span class="ms-time-save-status" style="display:none"></span>
+    </div>`;
+}
+
+function renderPayrollSummary(shift) {
+  const reg  = shift.approvedRegularHours  ?? 0;
+  const ot   = shift.approvedOvertimeHours ?? 0;
+  const rate = shift.payRatePerHour        ?? 0;
+  const total = reg * rate;
+  const status = shift.paymentStatus || "unpaid";
+  const statusColors = { paid: "ms-pay-status--paid", processing: "ms-pay-status--processing", unpaid: "ms-pay-status--unpaid" };
 
   return `
-    <div class="offer-card app-card app-card--${groupType}">
-      ${confirmedLabel}
-      <div class="offer-card-header">
-        <div class="offer-project-name">${escHtml(app.projectName)}</div>
-        ${statusBadge}
+    <div class="ms-payroll-summary">
+      <div class="ms-payroll-summary-title">Payroll Summary</div>
+      <div class="ms-payroll-summary-row">
+        <span>Approved hours: <strong>${reg}h reg + ${ot}h OT</strong></span>
+        <span>Est. pay: <strong>₪${total.toFixed(2)}</strong></span>
+        <span class="ms-pay-status ${statusColors[status] || ""}">${capitalize(status)}</span>
       </div>
-      <h3 class="offer-event-name app-event-name">${escHtml(app.eventName)}</h3>
-      ${dateLine ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${dateLine}</span></div>` : ""}
-      <div class="offer-meta-row">
-        ${location}
-        <div class="offer-meta-item">
-          <i data-lucide="tag" class="offer-icon"></i>
-          <span class="offer-role-chip">${escHtml(app.roleName)}</span>
+    </div>`;
+}
+
+function renderInlineBriefs(briefs) {
+  const unread = briefs.filter(b => !b.isAcknowledged).length;
+  const summaryLabel = unread > 0
+    ? `<span class="ms-briefs-unread">${unread} unread brief${unread !== 1 ? "s" : ""}</span>`
+    : `<span class="ms-briefs-all-read">All briefs acknowledged</span>`;
+
+  const items = briefs.map(b => {
+    const acked = b.isAcknowledged;
+    const ackedAt = b.acknowledgedAt ? fmtDate(b.acknowledgedAt) : "";
+    return `
+      <div class="ms-brief-item${acked ? " ms-brief-item--acked" : ""}" data-brief-id="${escHtml(b.briefId)}">
+        <div class="ms-brief-item-header">
+          <span class="ms-brief-item-title">${escHtml(b.title)}</span>
+          ${acked
+            ? `<span class="brief-acked-badge">✓ Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
+            : `<span class="brief-unread-dot"></span>`}
+        </div>
+        <div class="ms-brief-item-content">${escHtml(b.content)}</div>
+        ${!acked ? `<button class="brief-ack-btn ms-brief-ack-btn">I acknowledge this brief</button>` : ""}
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="ms-briefs-section">
+      <div class="ms-briefs-toggle" role="button" tabindex="0">
+        <i data-lucide="file-text" style="width:14px;height:14px"></i>
+        <span>Briefings</span>
+        ${summaryLabel}
+        <i data-lucide="chevron-down" class="ms-briefs-chevron" style="width:14px;height:14px;margin-left:auto"></i>
+      </div>
+      <div class="ms-briefs-body" style="display:none">
+        ${items}
+      </div>
+    </div>`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  OTHER SHIFT CARD (pending / rejected / canceled)
+// ────────────────────────────────────────────────────────────────────────────
+function renderOtherShiftCard(shift) {
+  const dateStr = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
+  return `
+    <div class="ms-shift-card ms-shift-card--other">
+      <div class="ms-shift-header">
+        <div class="ms-shift-meta">
+          <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
+        </div>
+        <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
+        <div class="ms-shift-details">
+          ${dateStr ? `<div class="offer-meta-item"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
+          ${shift.eventLocation ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(shift.eventLocation)}</span></div>` : ""}
+          <div class="offer-meta-item"><i data-lucide="tag" class="offer-icon"></i><span class="offer-role-chip">${escHtml(shift.roleName)}</span></div>
         </div>
       </div>
     </div>`;
 }
 
-// ── Briefs ────────────────────────────────────────────────────────────────────
-async function loadBriefs() {
-  briefsList.innerHTML = renderSkeletons(2);
-
-  let briefs;
-  try {
-    const token = await getToken();
-    const res = await fetch(`${API_BASE}/events/my-briefs`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error();
-    briefs = await res.json();
-  } catch {
-    briefsList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="wifi-off" style="width:40px;height:40px;color:var(--text-muted)"></i>
-        <p>Could not load briefs. Please try again.</p>
-      </div>`;
-    lucide.createIcons();
-    return;
-  }
-
-  const unread = briefs.filter((b) => !b.isAcknowledged).length;
-  if (unread > 0) {
-    briefsBadge.textContent  = unread;
-    briefsBadge.style.display = "";
-  } else {
-    briefsBadge.style.display = "none";
-  }
-
-  if (briefs.length === 0) {
-    briefsList.innerHTML = `
-      <div class="offers-empty">
-        <i data-lucide="file-text" style="width:48px;height:48px;color:var(--blue-light)"></i>
-        <p>No briefs right now.<br><span>You'll see briefings here once assigned to shifts.</span></p>
-      </div>`;
-    lucide.createIcons();
-    return;
-  }
-
-  // Group by project name then event name
-  const grouped = {};
-  briefs.forEach((b) => {
-    const projKey = b.projectName || "Project";
-    const evKey   = b.eventName || "Event";
-    if (!grouped[projKey]) grouped[projKey] = {};
-    if (!grouped[projKey][evKey]) grouped[projKey][evKey] = [];
-    grouped[projKey][evKey].push(b);
+// ────────────────────────────────────────────────────────────────────────────
+//  WIRE SHIFT CARD INTERACTIONS
+// ────────────────────────────────────────────────────────────────────────────
+function wireShiftCards(panel) {
+  // Brief toggle expand/collapse
+  panel.querySelectorAll(".ms-briefs-toggle").forEach(toggle => {
+    const body    = toggle.nextElementSibling;
+    const chevron = toggle.querySelector(".ms-briefs-chevron");
+    function doToggle() {
+      const open = body.style.display !== "none";
+      body.style.display  = open ? "none" : "";
+      if (chevron) chevron.style.transform = open ? "" : "rotate(180deg)";
+    }
+    toggle.addEventListener("click", doToggle);
+    toggle.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") doToggle(); });
   });
 
-  briefsList.innerHTML = Object.entries(grouped).map(([proj, events]) => `
-    <div class="brief-project-group">
-      <div class="brief-project-label">${escHtml(proj)}</div>
-      ${Object.entries(events).map(([ev, items]) => `
-        <div class="brief-event-group">
-          <div class="brief-event-label">${escHtml(ev)}</div>
-          ${items.map((b) => renderBriefCard(b)).join("")}
-        </div>`).join("")}
-    </div>`).join("");
-
-  lucide.createIcons();
-
-  briefsList.querySelectorAll(".brief-card[data-brief-id]").forEach((card) => {
-    const btn = card.querySelector(".brief-ack-btn");
-    if (!btn) return;
+  // Brief acknowledge buttons
+  panel.querySelectorAll(".ms-brief-ack-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      btn.disabled = true;
+      const item    = btn.closest("[data-brief-id]");
+      const briefId = item?.dataset.briefId;
+      if (!briefId) return;
+
+      btn.disabled    = true;
       btn.textContent = "Saving…";
       try {
-        const briefId = card.dataset.briefId;
         const token = await getToken();
-        const res = await fetch(`${API_BASE}/events/briefs/${encodeURIComponent(briefId)}/acknowledge`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${API_BASE}/events/briefs/${encodeURIComponent(briefId)}/acknowledge`,
+          { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+        );
         if (!res.ok) throw new Error();
-        card.classList.add("brief-card--acked");
+
+        // Update local brief cache
+        const cached = (_msBriefs ?? []).find(b => b.briefId === briefId);
+        if (cached) { cached.isAcknowledged = true; cached.acknowledgedAt = new Date().toISOString(); }
+
+        // Update UI in-place
+        item.classList.add("ms-brief-item--acked");
         btn.remove();
-        const badgeEl = card.querySelector(".brief-unread-dot");
-        if (badgeEl) badgeEl.remove();
-        // Update nav badge
-        const remaining = briefsList.querySelectorAll(".brief-card:not(.brief-card--acked)").length;
-        if (remaining > 0) {
-          briefsBadge.textContent  = remaining;
-          briefsBadge.style.display = "";
-        } else {
-          briefsBadge.style.display = "none";
+        item.querySelector(".brief-unread-dot")?.remove();
+        const titleRow = item.querySelector(".ms-brief-item-header");
+        if (titleRow) {
+          const badge = document.createElement("span");
+          badge.className = "brief-acked-badge";
+          badge.textContent = "✓ Acknowledged";
+          titleRow.appendChild(badge);
         }
+
+        // Refresh unread count in the briefs toggle
+        const section = item.closest(".ms-briefs-section");
+        if (section) {
+          const remaining = section.querySelectorAll(".ms-brief-item:not(.ms-brief-item--acked)").length;
+          const unreadEl  = section.querySelector(".ms-briefs-unread");
+          const allReadEl = section.querySelector(".ms-briefs-all-read");
+          if (remaining === 0) {
+            if (unreadEl) { unreadEl.className = "ms-briefs-all-read"; unreadEl.textContent = "All briefs acknowledged"; }
+          } else if (unreadEl) {
+            unreadEl.textContent = `${remaining} unread brief${remaining !== 1 ? "s" : ""}`;
+          }
+          if (allReadEl && remaining === 0) allReadEl.textContent = "All briefs acknowledged";
+        }
+
+        // Update nav badge
+        const unreadTotal = (_msBriefs ?? []).filter(b => !b.isAcknowledged).length + (_msOffers?.length ?? 0);
+        shiftsBadge.textContent   = unreadTotal;
+        shiftsBadge.style.display = unreadTotal > 0 ? "" : "none";
+
       } catch {
-        btn.disabled = false;
+        btn.disabled    = false;
         btn.textContent = "I acknowledge this brief";
+      }
+    });
+  });
+
+  // Time report save buttons
+  panel.querySelectorAll(".ms-time-save-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const section  = btn.closest(".ms-time-report");
+      const card     = btn.closest(".ms-shift-card");
+      const shiftId  = card?.dataset.shiftId;
+      if (!shiftId || !section) return;
+
+      const startVal = section.querySelector('[name="actualStart"]').value;
+      const endVal   = section.querySelector('[name="actualEnd"]').value;
+      const statusEl = section.querySelector(".ms-time-save-status");
+
+      btn.disabled    = true;
+      btn.textContent = "Saving…";
+
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/report-hours`,
+          {
+            method:  "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body:    JSON.stringify({
+              actualStart: startVal || null,
+              actualEnd:   endVal   || null,
+            }),
+          },
+        );
+        if (!res.ok) throw new Error();
+
+        // Update cache
+        const cached = (_msApplications ?? []).find(s => s.shiftId === shiftId);
+        if (cached) {
+          cached.actualStart = startVal || null;
+          cached.actualEnd   = endVal   || null;
+        }
+
+        // Update reported badge
+        const titleRow = section.querySelector(".ms-time-report-title");
+        const pendBadge = titleRow?.querySelector(".ms-time-pending-badge");
+        if (pendBadge) { pendBadge.className = "ms-time-reported-badge"; pendBadge.textContent = "Reported"; }
+
+        if (statusEl) { statusEl.textContent = "Saved ✓"; statusEl.style.display = ""; }
+        btn.textContent = "Save Hours";
+        btn.disabled    = false;
+        setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 3000);
+
+      } catch {
+        if (statusEl) { statusEl.textContent = "Failed — try again"; statusEl.style.display = ""; }
+        btn.textContent = "Save Hours";
+        btn.disabled    = false;
       }
     });
   });
 }
 
-function renderBriefCard(brief) {
-  const dateStr = brief.createdAt
-    ? new Date(brief.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : "";
-  const isAcked = brief.isAcknowledged;
-  const ackedAt = brief.acknowledgedAt
-    ? new Date(brief.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : "";
+// ────────────────────────────────────────────────────────────────────────────
+//  BRIEF HELPERS
+// ────────────────────────────────────────────────────────────────────────────
+function getBriefsForShift(shift) {
+  return (_msBriefs ?? []).filter(b =>
+    (b.eventId   && b.eventId   === shift.eventId)   ||
+    (b.projectId && b.projectId === shift.projectId) ||
+    (b.shiftId   && b.shiftId   === shift.shiftId)
+  );
+}
 
-  return `
-    <div class="brief-card${isAcked ? " brief-card--acked" : ""}" data-brief-id="${escHtml(brief.briefId)}">
-      <div class="brief-card-header">
-        <span class="brief-card-title">${escHtml(brief.title)}</span>
-        ${isAcked
-          ? `<span class="brief-acked-badge">&#10003; Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
-          : `<span class="brief-unread-dot"></span>`}
-      </div>
-      ${dateStr ? `<div class="brief-card-date">${escHtml(dateStr)}</div>` : ""}
-      <div class="brief-card-content">${escHtml(brief.content)}</div>
-      ${!isAcked ? `<button class="brief-ack-btn">I acknowledge this brief</button>` : ""}
-    </div>`;
+// ── Utility ───────────────────────────────────────────────────────────────────
+function capitalize(str) {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
 }
 
 // ── Auth gate ─────────────────────────────────────────────────────────────────
@@ -520,7 +712,6 @@ onAuthStateChanged(auth, async user => {
   }
 
   const profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
-
   if (!profile || profile.role !== "Employee") {
     alert("Access denied. Employee accounts only.");
     await signOut(auth);
@@ -528,14 +719,12 @@ onAuthStateChanged(auth, async user => {
     return;
   }
 
-  // Populate navbar
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
   navUsername.textContent = fullName;
   infoName.textContent    = fullName;
   infoRole.textContent    = profile.role;
   infoCompany.textContent = profile.companyId || "—";
 
-  // Write Firestore user profile (so other users can find this employee in chat)
   try {
     await writeUserProfile(user.uid, {
       firstName: profile.firstName,
@@ -544,15 +733,9 @@ onAuthStateChanged(auth, async user => {
       companyId: profile.companyId,
       role:      profile.role,
     });
-  } catch (e) {
-    console.warn("Chat profile write failed:", e);
-  }
+  } catch (e) { console.warn("Chat profile write failed:", e); }
 
-  // Start on Chats (default), then load offers + briefs in background for badges
-  showSection("chats");
-  initChat(chatSection, profile, user.uid);
-  loadOffers();
-  loadBriefs();
+  showSection("my-shifts");
 });
 
 // ── Logout ────────────────────────────────────────────────────────────────────

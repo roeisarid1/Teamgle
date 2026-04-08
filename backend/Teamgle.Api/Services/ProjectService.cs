@@ -216,6 +216,11 @@ public class ProjectService : IProjectService
         return await _projectRepo.GetMyApplicationsAsync(firebaseUid);
     }
 
+    public async Task<bool> ReportHoursAsync(string firebaseUid, string shiftId, DateTime? actualStart, DateTime? actualEnd)
+    {
+        return await _projectRepo.ReportHoursAsync(firebaseUid, shiftId, actualStart, actualEnd);
+    }
+
     // ── Potential Workers ──────────────────────────────────────────────────
     public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId)
     {

@@ -28,6 +28,7 @@ public interface IProjectService
     Task<IEnumerable<JobOfferResponse>> GetMyJobOffersAsync(string firebaseUid);
     Task RespondToJobOfferAsync(string firebaseUid, string shiftId, bool accept);
     Task<IEnumerable<MyApplicationResponse>> GetMyApplicationsAsync(string firebaseUid);
+    Task<bool> ReportHoursAsync(string firebaseUid, string shiftId, DateTime? actualStart, DateTime? actualEnd);
 
     // ── Potential Workers ──────────────────────────────────────────────────
     Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersAsync(string firebaseUid, string projId, string eventId);

@@ -4388,3 +4388,291 @@ tr.expanded-row > td {
 .brief-ack-btn:hover   { opacity: .88; }
 .brief-ack-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ── My Shifts — tab bar ────────────────────────────────────────────────── */
+.ms-tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+.ms-tab {
+  position: relative;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ms-tab:hover  { color: var(--text-primary); }
+.ms-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.ms-tab-badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+.ms-panel { padding-bottom: 32px; }
+
+/* ── Shift card ─────────────────────────────────────────────────────────── */
+.ms-shift-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.ms-shift-card:hover { box-shadow: 0 2px 14px rgba(0,0,0,.07); }
+.ms-shift-card--other { opacity: .75; }
+
+.ms-shift-header { padding: 18px 20px; }
+
+.ms-shift-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.ms-shift-project {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.ms-approved-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.ms-shift-event {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+.ms-shift-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 6px;
+}
+.ms-shift-times {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ms-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.ms-pay-label { color: var(--text-muted); }
+.ms-pay-value { font-weight: 700; color: var(--text-primary); }
+
+/* ── Group header (Other tab) ───────────────────────────────────────────── */
+.ms-group { margin-bottom: 28px; }
+.ms-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.ms-group-icon { width: 16px; height: 16px; }
+.ms-group-count {
+  background: var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 7px;
+  font-weight: 700;
+}
+
+/* ── Time report section ────────────────────────────────────────────────── */
+.ms-time-report {
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.ms-time-report-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 12px;
+}
+.ms-time-reported-badge {
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  text-transform: none;
+}
+.ms-time-pending-badge {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  text-transform: none;
+}
+.ms-time-report-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ms-time-field { display: flex; flex-direction: column; gap: 4px; }
+.ms-time-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ms-time-input {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.ms-time-input:focus { border-color: var(--accent); }
+.ms-time-save-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+.ms-time-save-btn:hover    { opacity: .88; }
+.ms-time-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ms-time-save-status {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Payroll summary ────────────────────────────────────────────────────── */
+.ms-payroll-summary {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.ms-payroll-summary-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.ms-payroll-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  align-items: center;
+}
+.ms-pay-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.ms-pay-status--paid       { background: #d1fae5; color: #065f46; }
+.ms-pay-status--processing { background: #e0e7ff; color: #3730a3; }
+.ms-pay-status--unpaid     { background: #fef3c7; color: #92400e; }
+
+/* ── Inline briefs section ──────────────────────────────────────────────── */
+.ms-briefs-section {
+  border-top: 1px solid var(--border);
+}
+.ms-briefs-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface-2);
+}
+.ms-briefs-toggle:hover { background: var(--border); }
+.ms-briefs-chevron { transition: transform .2s; }
+.ms-briefs-unread   { background: var(--accent); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 7px; }
+.ms-briefs-all-read { color: #065f46; font-size: 11px; font-weight: 600; }
+
+.ms-briefs-body { padding: 12px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.ms-brief-item { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); }
+.ms-brief-item--acked { opacity: .6; background: var(--surface-2); }
+
+.ms-brief-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.ms-brief-item-title { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; }
+.ms-brief-item-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+.ms-brief-ack-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+.ms-brief-ack-btn:hover    { opacity: .88; }
+.ms-brief-ack-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 560px) {
+  .ms-time-report-fields { grid-template-columns: 1fr; }
+  .ms-tab { padding: 8px 12px; font-size: 12px; }
+}
+
