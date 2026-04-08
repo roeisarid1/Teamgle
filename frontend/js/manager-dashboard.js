@@ -1651,6 +1651,7 @@ function activateProjectTab(name) {
   document.querySelectorAll(".pd-panel").forEach((p) => {
     p.style.display = p.dataset.tabPanel === name ? "" : "none";
   });
+  if (name === "dashboard") renderDashboardTab();
   if (name === "schedule") renderScheduleCalendar();
   if (name === "tasks") renderTasksTab();
   if (name === "brief") renderBriefTab();
@@ -1696,10 +1697,108 @@ async function openProjectDetail(projId) {
     currentProjectDetail = project;
     titleEl.textContent = escapeHtml(project.name);
     subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
+    renderDashboardTab();
   } catch {
     titleEl.textContent = "Error loading project";
     subtitleEl.textContent = "";
   }
+}
+
+// ── Dashboard tab — event cards ───────────────────────────────────────────
+
+function renderDashboardTab() {
+  const container = document.getElementById("pd-dashboard-events");
+  if (!container) return;
+
+  const project = currentProjectDetail;
+  if (!project) {
+    container.innerHTML = `<div class="pd-placeholder">Loading…</div>`;
+    return;
+  }
+
+  const events = project.events ?? [];
+  if (!events.length) {
+    container.innerHTML = `
+      <div class="pd-dash-empty">
+        <span class="material-symbols-outlined">event_busy</span>
+        No events in this project yet.
+      </div>`;
+    return;
+  }
+
+  const statusMeta = {
+    planning:  { label: "Planning",  cls: "ev-status--planning"  },
+    active:    { label: "Active",    cls: "ev-status--active"    },
+    completed: { label: "Completed", cls: "ev-status--completed" },
+    canceled:  { label: "Canceled",  cls: "ev-status--canceled"  },
+  };
+  const typeMeta = {
+    conference:  { icon: "groups",         label: "Conference"  },
+    exhibition:  { icon: "store",          label: "Exhibition"  },
+    concert:     { icon: "music_note",     label: "Concert"     },
+    gala:        { icon: "celebration",    label: "Gala"        },
+    corporate:   { icon: "business",       label: "Corporate"   },
+    wedding:     { icon: "favorite",       label: "Wedding"     },
+    workshop:    { icon: "construction",   label: "Workshop"    },
+    seminar:     { icon: "school",         label: "Seminar"     },
+    other:       { icon: "event",          label: "Event"       },
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const fmtTime = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  };
+  const daysBetween = (a, b) => {
+    if (!a || !b) return null;
+    return Math.round((new Date(b) - new Date(a)) / 86400000);
+  };
+
+  const cards = events.map((ev, i) => {
+    const sm = statusMeta[ev.status] ?? { label: ev.status, cls: "ev-status--planning" };
+    const tm = typeMeta[ev.eventType?.toLowerCase()] ?? typeMeta.other;
+    const duration = daysBetween(ev.startTime, ev.endTime);
+    const durationLabel = duration != null
+      ? (duration === 0 ? "Same day" : `${duration} day${duration !== 1 ? "s" : ""}`)
+      : "";
+
+    return `
+      <div class="ev-card" style="--ev-index:${i}">
+        <div class="ev-card-accent"></div>
+        <div class="ev-card-body">
+          <div class="ev-card-top">
+            <div class="ev-card-type">
+              <span class="material-symbols-outlined ev-type-icon">${tm.icon}</span>
+              <span class="ev-type-label">${escapeHtml(tm.label)}</span>
+            </div>
+            <span class="ev-status-badge ${sm.cls}">${sm.label}</span>
+          </div>
+          <h3 class="ev-card-title">${escapeHtml(ev.name || "Untitled Event")}</h3>
+          <div class="ev-card-meta">
+            ${ev.location ? `
+              <div class="ev-meta-row">
+                <span class="material-symbols-outlined ev-meta-icon">location_on</span>
+                <span>${escapeHtml(ev.location)}</span>
+              </div>` : ""}
+            <div class="ev-meta-row">
+              <span class="material-symbols-outlined ev-meta-icon">calendar_today</span>
+              <span>${fmtDate(ev.startTime)}</span>
+            </div>
+            <div class="ev-meta-row">
+              <span class="material-symbols-outlined ev-meta-icon">schedule</span>
+              <span>${fmtTime(ev.startTime)} – ${fmtTime(ev.endTime)}${durationLabel ? ` · ${durationLabel}` : ""}</span>
+            </div>
+          </div>
+        </div>
+        <div class="ev-card-index">${String(i + 1).padStart(2, "0")}</div>
+      </div>`;
+  }).join("");
+
+  container.innerHTML = `<div class="ev-grid">${cards}</div>`;
 }
 
 // ── Load and render the Gantt schedule tab ─────────────────────────────────
