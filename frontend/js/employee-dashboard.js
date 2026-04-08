@@ -549,14 +549,18 @@ function _renderDetailAttendance(shift) {
         Attendance & Hours Reporting
       </div>
       <div class="ms-time-quick-btns">
-        <button class="ms-time-quick-btn ms-time-quick-btn--in" data-quick="start"${isApproved ? " disabled" : ""}>
-          <i data-lucide="log-in" style="width:14px;height:14px"></i>
-          Use current time (arrival)
-        </button>
-        <button class="ms-time-quick-btn ms-time-quick-btn--out" data-quick="end"${isApproved ? " disabled" : ""}>
-          <i data-lucide="log-out" style="width:14px;height:14px"></i>
-          Use current time (departure)
-        </button>
+        <div class="ms-clock-btn-wrap">
+          <button class="ms-clock-btn ms-clock-btn--in" data-quick="start"${isApproved ? " disabled" : ""} title="I Arrived — stamp current time">
+            <i data-lucide="log-in" style="width:22px;height:22px"></i>
+          </button>
+          <span class="ms-clock-btn-label">I Arrived</span>
+        </div>
+        <div class="ms-clock-btn-wrap">
+          <button class="ms-clock-btn ms-clock-btn--out" data-quick="end"${isApproved ? " disabled" : ""} title="I Left — stamp current time">
+            <i data-lucide="log-out" style="width:22px;height:22px"></i>
+          </button>
+          <span class="ms-clock-btn-label">I Left</span>
+        </div>
       </div>
       <div class="ms-time-report-fields">
         <div class="ms-time-field">
