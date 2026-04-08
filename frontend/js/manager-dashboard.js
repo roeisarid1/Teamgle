@@ -5946,6 +5946,10 @@ function _edBuildBriefRow(brief) {
         <button class="pd-form-save-btn" disabled>Save</button>
         <button class="pd-form-cancel-btn">Cancel</button>
       </div>
+      <div class="ed-ack-section">
+        <div class="ed-ack-header">Acknowledgments</div>
+        <div class="ed-brief-ack-list"></div>
+      </div>
     </div>`;
   _edWireBriefRow(row, brief);
   return row;
@@ -5968,6 +5972,33 @@ function _edWireBriefRow(row, brief) {
     _edExpandedRow = row;
     form.classList.add("expanded");
     row.classList.add("pd-row--expanded");
+
+    // Load acknowledgments (once)
+    const ackListEl = form.querySelector(".ed-brief-ack-list");
+    if (ackListEl && ackListEl.innerHTML === "") {
+      ackListEl.innerHTML = '<span class="ed-ack-loading">Loading…</span>';
+      getToken().then(token =>
+        fetch(
+          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(acks => {
+          if (acks.length === 0) {
+            ackListEl.innerHTML = '<span class="ed-ack-empty">No acknowledgments yet.</span>';
+          } else {
+            ackListEl.innerHTML = acks.map(a => `
+              <div class="ed-ack-item${a.isRead ? " ed-ack-item--read" : ""}">
+                <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
+                ${a.isRead
+                  ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
+                  : `<span class="ed-ack-pending">Pending</span>`}
+              </div>`).join("");
+          }
+        })
+        .catch(() => { ackListEl.innerHTML = '<span class="ed-ack-empty">Failed to load.</span>'; })
+      );
+    }
   });
 
   const isDirty = () =>
