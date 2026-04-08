@@ -1469,6 +1469,8 @@ function _initChatSection() {
 
 // ── PROJECTS SECTION ────────────────────────────────────────────────────────
 
+let _allProjects = [];
+
 async function loadProjects() {
   const cols = {
     today: document.getElementById("kanban-today"),
@@ -1487,48 +1489,58 @@ async function loadProjects() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error("Failed to load projects.");
-    const projects = await res.json();
-
-    const buckets = { today: [], upcoming: [], completed: [], draft: [] };
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-
-    for (const p of projects) {
-      const start = new Date(p.startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(p.endDate);
-      end.setHours(0, 0, 0, 0);
-
-      if (p.status === "draft") {
-        buckets.draft.push(p);
-      } else if (
-        p.status === "completed" ||
-        p.status === "canceled" ||
-        (p.endDate && end < todayDate)
-      ) {
-        buckets.completed.push(p);
-      } else if (
-        p.startDate &&
-        p.endDate &&
-        start <= todayDate &&
-        end >= todayDate
-      ) {
-        buckets.today.push(p);
-      } else {
-        buckets.upcoming.push(p);
-      }
-    }
-
-    for (const [key, col] of Object.entries(cols)) {
-      const items = buckets[key];
-      col.innerHTML = items.length
-        ? items.map((p) => renderProjectCard(p)).join("")
-        : `<div class="empty-col">No projects</div>`;
-    }
+    _allProjects = await res.json();
+    _renderProjectKanban(_allProjects);
   } catch {
     Object.values(cols).forEach((col) => {
       col.innerHTML = `<div class="empty-col" style="color:#ef4444">Failed to load.</div>`;
     });
+  }
+}
+
+function _renderProjectKanban(projects) {
+  const cols = {
+    today: document.getElementById("kanban-today"),
+    upcoming: document.getElementById("kanban-upcoming"),
+    completed: document.getElementById("kanban-completed"),
+    draft: document.getElementById("kanban-draft"),
+  };
+
+  const buckets = { today: [], upcoming: [], completed: [], draft: [] };
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  for (const p of projects) {
+    const start = new Date(p.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(p.endDate);
+    end.setHours(0, 0, 0, 0);
+
+    if (p.status === "draft") {
+      buckets.draft.push(p);
+    } else if (
+      p.status === "completed" ||
+      p.status === "canceled" ||
+      (p.endDate && end < todayDate)
+    ) {
+      buckets.completed.push(p);
+    } else if (
+      p.startDate &&
+      p.endDate &&
+      start <= todayDate &&
+      end >= todayDate
+    ) {
+      buckets.today.push(p);
+    } else {
+      buckets.upcoming.push(p);
+    }
+  }
+
+  for (const [key, col] of Object.entries(cols)) {
+    const items = buckets[key];
+    col.innerHTML = items.length
+      ? items.map((p) => renderProjectCard(p)).join("")
+      : `<div class="empty-col">No projects</div>`;
   }
 }
 
@@ -1588,7 +1600,13 @@ function renderProjectCard(project) {
   `;
 }
 
-document.getElementById("search-projects")?.addEventListener("input", () => {});
+document.getElementById("search-projects")?.addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = q
+    ? _allProjects.filter(p => (p.name || "").toLowerCase().includes(q))
+    : _allProjects;
+  _renderProjectKanban(filtered);
+});
 
 document.getElementById("btn-create-project").addEventListener("click", () => {
   activateSection("create-project");
