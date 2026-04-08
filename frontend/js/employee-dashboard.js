@@ -461,8 +461,22 @@ function renderTimeReportSection(shift) {
       <div class="ms-time-report-title">
         <i data-lucide="clock" style="width:14px;height:14px"></i>
         Hours Reporting
-        ${hasReported ? `<span class="ms-time-reported-badge">Reported</span>` : `<span class="ms-time-pending-badge">Not reported</span>`}
+        ${hasReported
+          ? `<span class="ms-time-reported-badge">Reported</span>`
+          : `<span class="ms-time-pending-badge">Not reported</span>`}
       </div>
+
+      <div class="ms-time-quick-btns">
+        <button class="ms-time-quick-btn ms-time-quick-btn--in"  data-quick="start">
+          <i data-lucide="log-in" style="width:14px;height:14px"></i>
+          I Arrived
+        </button>
+        <button class="ms-time-quick-btn ms-time-quick-btn--out" data-quick="end">
+          <i data-lucide="log-out" style="width:14px;height:14px"></i>
+          I Left
+        </button>
+      </div>
+
       <div class="ms-time-report-fields">
         <div class="ms-time-field">
           <label class="ms-time-label">Actual Start</label>
@@ -475,8 +489,11 @@ function renderTimeReportSection(shift) {
                  value="${escHtml(toDatetimeLocal(shift.actualEnd))}">
         </div>
       </div>
-      <button class="ms-time-save-btn">Save Hours</button>
-      <span class="ms-time-save-status" style="display:none"></span>
+
+      <div class="ms-time-actions">
+        <button class="ms-time-save-btn">Save Hours</button>
+        <span class="ms-time-save-status" style="display:none"></span>
+      </div>
     </div>`;
 }
 
@@ -560,6 +577,21 @@ function renderOtherShiftCard(shift) {
 //  WIRE SHIFT CARD INTERACTIONS
 // ────────────────────────────────────────────────────────────────────────────
 function wireShiftCards(panel) {
+  // Quick clock-in / clock-out buttons
+  panel.querySelectorAll("[data-quick]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const section   = btn.closest(".ms-time-report");
+      if (!section) return;
+      const fieldName = btn.dataset.quick === "start" ? "actualStart" : "actualEnd";
+      const input     = section.querySelector(`[name="${fieldName}"]`);
+      if (!input) return;
+      input.value = toDatetimeLocal(new Date().toISOString());
+      // Flash the input so the user sees it was filled
+      input.classList.add("ms-time-input--flash");
+      setTimeout(() => input.classList.remove("ms-time-input--flash"), 600);
+    });
+  });
+
   // Brief toggle expand/collapse
   panel.querySelectorAll(".ms-briefs-toggle").forEach(toggle => {
     const body    = toggle.nextElementSibling;

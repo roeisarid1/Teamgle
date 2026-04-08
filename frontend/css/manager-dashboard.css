@@ -4515,7 +4515,7 @@ tr.expanded-row > td {
 
 /* ── Time report section ────────────────────────────────────────────────── */
 .ms-time-report {
-  padding: 14px 20px 16px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
   background: var(--surface-2);
 }
@@ -4528,7 +4528,7 @@ tr.expanded-row > td {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: .05em;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .ms-time-reported-badge {
   background: #d1fae5;
@@ -4548,11 +4548,43 @@ tr.expanded-row > td {
   border-radius: 999px;
   text-transform: none;
 }
+
+/* Quick clock-in / clock-out buttons */
+.ms-time-quick-btns {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ms-time-quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.ms-time-quick-btn--in {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+.ms-time-quick-btn--in:hover { background: #d1fae5; }
+.ms-time-quick-btn--out {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fdba74;
+}
+.ms-time-quick-btn--out:hover { background: #ffedd5; }
+
 .ms-time-report-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .ms-time-field { display: flex; flex-direction: column; gap: 4px; }
 .ms-time-label {
@@ -4570,10 +4602,18 @@ tr.expanded-row > td {
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
+  transition: border-color .15s, background .15s;
 }
-.ms-time-input:focus { border-color: var(--accent); }
+.ms-time-input:focus       { border-color: var(--accent); }
+.ms-time-input--flash      { border-color: #6ee7b7; background: #ecfdf5; }
+
+.ms-time-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .ms-time-save-btn {
-  padding: 7px 16px;
+  padding: 9px 22px;
   border-radius: 8px;
   background: var(--accent);
   color: #fff;
@@ -4581,12 +4621,12 @@ tr.expanded-row > td {
   font-weight: 600;
   border: none;
   cursor: pointer;
+  transition: opacity .15s;
 }
 .ms-time-save-btn:hover    { opacity: .88; }
 .ms-time-save-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ms-time-save-status {
-  margin-left: 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
