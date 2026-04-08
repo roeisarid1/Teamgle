@@ -51,6 +51,7 @@ function showSection(sectionId) {
   pageContent.classList.toggle("chat-mode", sectionId === "chats");
   lucide.createIcons();
   if (sectionId === "my-shifts") loadMyShifts();
+  if (sectionId === "chats")    _initChatSection();
 }
 
 document.querySelectorAll(".nav-item[data-section]").forEach(link => {
@@ -111,6 +112,19 @@ function _isNeedsAction(s) {
   const hasUnacked = getBriefsForShift(s).some(b => !b.isAcknowledged);
   if (!isPast) return hasUnacked;                               // future: only unacked briefs
   return (!s.actualStart || !s.actualEnd) || hasUnacked;       // past: missing hours OR unacked briefs
+}
+
+// ── Auth state (set once onAuthStateChanged fires) ───────────────────────────
+let _profile            = null;
+let _currentFirebaseUid = null;
+let _chatInitialized    = false;
+
+function _initChatSection() {
+  if (_chatInitialized) return;
+  if (!_profile || !_currentFirebaseUid) return;
+  _chatInitialized = true;
+  const container = document.getElementById("section-chats");
+  initChat(container, _profile, _currentFirebaseUid);
 }
 
 // ── My Shifts state ───────────────────────────────────────────────────────────
@@ -338,7 +352,7 @@ async function renderUpcomingTab() {
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = upcoming.map(s => renderShiftCard(s, { showAttendance: false })).join("");
+  panel.innerHTML = upcoming.map(s => renderShiftCard(s, { showAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -363,11 +377,7 @@ async function renderNeedsActionTab() {
     lucide.createIcons(); return;
   }
 
-  const now2 = new Date();
-  panel.innerHTML = list.map(s => {
-    const isPast = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now2;
-    return renderShiftCard(s, { showAttendance: isPast });
-  }).join("");
+  panel.innerHTML = list.map(s => renderShiftCard(s, { showAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -461,16 +471,16 @@ function _shiftStatus(shift) {
 
 // opts: { showAttendance: bool, compact: bool }
 function renderShiftCard(shift, opts = {}) {
-  const { showAttendance = false, compact = false } = opts;
+  const { compact = false } = opts;
   const briefs      = getBriefsForShift(shift);
   const unackedBriefs = briefs.filter(b => !b.isAcknowledged);
-  const missingHours  = showAttendance && (!shift.actualStart || !shift.actualEnd);
+  const shiftIsPast   = new Date(shift.eventEnd || shift.shiftEnd || shift.eventStart || shift.shiftStart || 0) <= new Date();
+  const missingHours  = shiftIsPast && (!shift.actualStart || !shift.actualEnd);
 
   const dateStr    = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
   const shiftTimes = (shift.shiftStart || shift.shiftEnd)
     ? `${fmtTime(shift.shiftStart)} – ${fmtTime(shift.shiftEnd)}` : "";
 
-  // Action flags (only meaningful when showAttendance)
   const flags = [];
   if (missingHours)          flags.push(`<span class="ms-action-flag ms-action-flag--hours">Hours not reported</span>`);
   if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${unackedBriefs.length} brief${unackedBriefs.length > 1 ? "s" : ""} pending</span>`);
@@ -482,8 +492,7 @@ function renderShiftCard(shift, opts = {}) {
 
   // Detail sections
   const briefsSection     = _renderDetailBriefs(briefs);
-  const attendanceSection = showAttendance ? _renderDetailAttendance(shift)
-    : `<div class="ms-detail-section"><div class="ms-detail-section-title"><i data-lucide="clock" style="width:14px;height:14px"></i> Attendance</div><p class="ms-detail-note">Attendance reporting is available after the event ends.</p></div>`;
+  const attendanceSection = _renderDetailAttendance(shift);
   const statusSection     = _renderDetailStatus(shift);
 
   return `
@@ -547,25 +556,51 @@ function _renderDetailBriefs(briefs) {
 
 function _renderDetailAttendance(shift) {
   const isApproved = shift.approvedRegularHours != null || shift.approvedOvertimeHours != null;
+  const isPast     = new Date(shift.eventEnd || shift.shiftEnd || shift.eventStart || shift.shiftStart || 0) <= new Date();
+
+  // ── Upcoming shift: quick clock buttons only, no manual inputs ──────────
+  if (!isPast) {
+    const arrivedNote = shift.actualStart
+      ? `<span class="ms-clock-recorded">Recorded: ${fmtTime(shift.actualStart)}</span>`
+      : `<span class="ms-clock-hint">Tap when you arrive</span>`;
+    const leftNote = shift.actualEnd
+      ? `<span class="ms-clock-recorded">Recorded: ${fmtTime(shift.actualEnd)}</span>`
+      : `<span class="ms-clock-hint">Tap when you leave</span>`;
+
+    return `
+      <div class="ms-detail-section ms-time-report">
+        <div class="ms-detail-section-title">
+          <i data-lucide="clock" style="width:14px;height:14px"></i>
+          Attendance
+        </div>
+        <div class="ms-time-quick-btns">
+          <div class="ms-clock-btn-wrap">
+            <button class="ms-clock-btn ms-clock-btn--in" data-quick-direct="start"
+                    ${shift.actualStart || isApproved ? " disabled" : ""}>
+              <i data-lucide="log-in" style="width:22px;height:22px"></i>
+            </button>
+            <span class="ms-clock-btn-label">I Arrived</span>
+            ${arrivedNote}
+          </div>
+          <div class="ms-clock-btn-wrap">
+            <button class="ms-clock-btn ms-clock-btn--out" data-quick-direct="end"
+                    ${shift.actualEnd || isApproved ? " disabled" : ""}>
+              <i data-lucide="log-out" style="width:22px;height:22px"></i>
+            </button>
+            <span class="ms-clock-btn-label">I Left</span>
+            ${leftNote}
+          </div>
+        </div>
+        <span class="ms-time-save-status" style="display:none"></span>
+      </div>`;
+  }
+
+  // ── Past shift: manual form only ─────────────────────────────────────────
   return `
     <div class="ms-detail-section ms-time-report">
       <div class="ms-detail-section-title">
         <i data-lucide="clock" style="width:14px;height:14px"></i>
         Attendance & Hours Reporting
-      </div>
-      <div class="ms-time-quick-btns">
-        <div class="ms-clock-btn-wrap">
-          <button class="ms-clock-btn ms-clock-btn--in" data-quick="start"${isApproved ? " disabled" : ""} title="I Arrived — stamp current time">
-            <i data-lucide="log-in" style="width:22px;height:22px"></i>
-          </button>
-          <span class="ms-clock-btn-label">I Arrived</span>
-        </div>
-        <div class="ms-clock-btn-wrap">
-          <button class="ms-clock-btn ms-clock-btn--out" data-quick="end"${isApproved ? " disabled" : ""} title="I Left — stamp current time">
-            <i data-lucide="log-out" style="width:22px;height:22px"></i>
-          </button>
-          <span class="ms-clock-btn-label">I Left</span>
-        </div>
       </div>
       <div class="ms-time-report-fields">
         <div class="ms-time-field">
@@ -632,7 +667,7 @@ function wireShiftCards(panel) {
     });
   });
 
-  // Quick clock-in / clock-out buttons
+  // Quick clock-in / clock-out (past shifts — fills the datetime input)
   panel.querySelectorAll("[data-quick]").forEach(btn => {
     btn.addEventListener("click", () => {
       const section   = btn.closest(".ms-time-report");
@@ -643,6 +678,58 @@ function wireShiftCards(panel) {
       input.value = toDatetimeLocal(new Date().toISOString());
       input.classList.add("ms-time-input--flash");
       setTimeout(() => input.classList.remove("ms-time-input--flash"), 600);
+    });
+  });
+
+  // Quick clock-in / clock-out (upcoming shifts — saves directly to API)
+  panel.querySelectorAll("[data-quick-direct]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const section  = btn.closest(".ms-time-report");
+      const card     = btn.closest(".ms-shift-card");
+      const shiftId  = card?.dataset.shiftId;
+      if (!shiftId || !section) return;
+
+      const field    = btn.dataset.quickDirect === "start" ? "actualStart" : "actualEnd";
+      const nowIso   = new Date().toISOString();
+      const statusEl = section.querySelector(".ms-time-save-status");
+
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = "Saving…"; statusEl.style.display = ""; }
+
+      try {
+        const token = await getToken();
+        const body  = { [field]: nowIso };
+        // Preserve existing value for the other field
+        const cached = (_msApplications ?? []).find(s => s.shiftId === shiftId);
+        if (cached) {
+          body.actualStart = field === "actualStart" ? nowIso : (cached.actualStart || null);
+          body.actualEnd   = field === "actualEnd"   ? nowIso : (cached.actualEnd   || null);
+        }
+        const res = await fetch(
+          `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/report-hours`,
+          {
+            method:  "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body:    JSON.stringify(body),
+          },
+        );
+        if (!res.ok) throw new Error();
+
+        // Update cache + UI
+        if (cached) cached[field] = nowIso;
+        const noteEl = btn.closest(".ms-clock-btn-wrap")?.querySelector(".ms-clock-recorded, .ms-clock-hint");
+        if (noteEl) {
+          noteEl.className = "ms-clock-recorded";
+          noteEl.textContent = `Recorded: ${fmtTime(nowIso)}`;
+        }
+        if (statusEl) { statusEl.textContent = "Saved ✓"; }
+        setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 2500);
+
+      } catch {
+        btn.disabled = false;
+        if (statusEl) { statusEl.textContent = "Failed — try again"; }
+        setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 3000);
+      }
     });
   });
 
@@ -784,26 +871,27 @@ onAuthStateChanged(auth, async user => {
     return;
   }
 
-  const profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
-  if (!profile || profile.role !== "Employee") {
+  _profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
+  if (!_profile || _profile.role !== "Employee") {
     alert("Access denied. Employee accounts only.");
     await signOut(auth);
     window.location.href = "/frontend/auth.html";
     return;
   }
+  _currentFirebaseUid = user.uid;
 
-  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+  const fullName = `${_profile.firstName} ${_profile.lastName}`.trim();
   navUsername.textContent = fullName;
   infoName.textContent    = fullName;
-  infoRole.textContent    = profile.role;
-  infoCompany.textContent = profile.companyId || "—";
+  infoRole.textContent    = _profile.role;
+  infoCompany.textContent = _profile.companyId || "—";
 
   try {
     await writeUserProfile(user.uid, {
-      firstName: profile.firstName,
-      lastName:  profile.lastName,
-      email:     profile.email || "",
-      companyId: profile.companyId,
+      firstName: _profile.firstName,
+      lastName:  _profile.lastName,
+      email:     _profile.email || "",
+      companyId: _profile.companyId,
       role:      profile.role,
     });
   } catch (e) { console.warn("Chat profile write failed:", e); }

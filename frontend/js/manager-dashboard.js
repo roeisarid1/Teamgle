@@ -5540,6 +5540,17 @@ async function renderEdWorkersTab() {
   }
 }
 
+function _workerStatusLabel(status) {
+  const map = {
+    manager_approved:   "Approved",
+    manager_offer_sent: "Offer Sent",
+    employee_request:   "Applied",
+    manager_hold:       "On Hold",
+    manager_reject:     "Rejected",
+  };
+  return map[status] ?? status;
+}
+
 function _buildEdWorkersHTML(data) {
   const sections = [
     { key: "approved",   label: "Approved",         color: "approved" },
@@ -5563,7 +5574,7 @@ function _buildEdWorkersHTML(data) {
         <td>${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</td>
         <td>${escapeHtml(w.roleName)}</td>
         <td>${fmtTime(w.shiftStart)} – ${fmtTime(w.shiftEnd)}</td>
-        <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(w.status)}</span></td>
+        <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(_workerStatusLabel(w.status))}</span></td>
       </tr>`).join("");
     return `
       <div class="ed-worker-section">
