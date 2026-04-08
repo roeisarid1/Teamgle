@@ -701,12 +701,24 @@ public class ProjectRepository : IProjectRepository
         CreatedAt            = r.IsDBNull(r.GetOrdinal("created_at"))   ? (DateTime?)null : r.GetDateTime(r.GetOrdinal("created_at")),
         CreatedByManagerId   = r.IsDBNull(r.GetOrdinal("created_by_manager_user_ID")) ? string.Empty : r.GetString(r.GetOrdinal("created_by_manager_user_ID")),
         CreatedByManagerName = r.IsDBNull(r.GetOrdinal("manager_name")) ? null : r.GetString(r.GetOrdinal("manager_name")),
+        AckCount             = r.IsDBNull(r.GetOrdinal("ack_count"))     ? 0 : r.GetInt32(r.GetOrdinal("ack_count")),
+        TotalRelevant        = r.IsDBNull(r.GetOrdinal("total_relevant")) ? 0 : r.GetInt32(r.GetOrdinal("total_relevant")),
     };
 
     private const string BriefSelectSql = """
         SELECT b.brief_ID, b.title, b.content, b.created_at,
                b.created_by_manager_user_ID,
-               u.firstName + ' ' + u.lastName AS manager_name
+               u.firstName + ' ' + u.lastName AS manager_name,
+               (SELECT COUNT(*) FROM Brief_Acknowledgment ba
+                WHERE ba.brief_ID = b.brief_ID AND ba.is_read = 1) AS ack_count,
+               (SELECT COUNT(DISTINCT es.employee_user_ID)
+                FROM   Employee_Shift es
+                INNER JOIN Shift    s  ON s.Shift_ID  = es.shift_ID
+                LEFT  JOIN Event    ev ON ev.event_ID = s.event_ID
+                WHERE (b.shift_ID   IS NOT NULL AND es.shift_ID  = b.shift_ID)
+                   OR (b.event_ID   IS NOT NULL AND s.event_ID   = b.event_ID)
+                   OR (b.project_ID IS NOT NULL AND ev.project_ID = b.project_ID)
+               ) AS total_relevant
         FROM   Brief b
         LEFT JOIN [User] u ON u.user_ID = b.created_by_manager_user_ID
         """;
@@ -1908,24 +1920,79 @@ public class ProjectRepository : IProjectRepository
             if (await ac.ExecuteScalarAsync() == null) return null;
         }
 
-        const string sql = """
-            SELECT u.user_ID AS EmployeeUserId, u.firstName AS FirstName, u.lastName AS LastName,
-                   COALESCE(ba.is_read, 0) AS IsRead, ba.read_at AS ReadAt
-            FROM   Brief_Acknowledgment ba
-            INNER JOIN [User] u ON u.user_ID = ba.employee_user_ID
-            WHERE  ba.brief_ID = @briefId
-            ORDER  BY u.lastName, u.firstName
-            """;
+        // Determine brief scope (project / event / shift)
+        string? scopeProjectId = null, scopeEventId = null, scopeShiftId = null;
+        const string scopeSql = "SELECT project_ID, event_ID, shift_ID FROM Brief WHERE brief_ID = @briefId";
+        await using (var sc = new SqlCommand(scopeSql, conn))
+        {
+            sc.Parameters.AddWithValue("@briefId", briefId);
+            await using var sr = await sc.ExecuteReaderAsync();
+            if (!await sr.ReadAsync()) return null;
+            scopeProjectId = sr.IsDBNull(sr.GetOrdinal("project_ID")) ? null : sr.GetString(sr.GetOrdinal("project_ID"));
+            scopeEventId   = sr.IsDBNull(sr.GetOrdinal("event_ID"))   ? null : sr.GetString(sr.GetOrdinal("event_ID"));
+            scopeShiftId   = sr.IsDBNull(sr.GetOrdinal("shift_ID"))   ? null : sr.GetString(sr.GetOrdinal("shift_ID"));
+        }
+
+        // Select ALL relevant employees for this brief scope with their ack status
+        string sql;
+        string scopeId;
+        if (scopeShiftId != null)
+        {
+            scopeId = scopeShiftId;
+            sql = """
+                SELECT DISTINCT u.user_ID AS EmployeeUserId, u.firstName AS FirstName, u.lastName AS LastName,
+                       CAST(COALESCE(ba.is_read, 0) AS bit) AS IsRead, ba.read_at AS ReadAt
+                FROM   Employee_Shift es
+                INNER JOIN [User] u ON u.user_ID = es.employee_user_ID
+                LEFT  JOIN Brief_Acknowledgment ba
+                       ON ba.employee_user_ID = es.employee_user_ID AND ba.brief_ID = @briefId
+                WHERE  es.shift_ID = @scopeId
+                ORDER  BY u.lastName, u.firstName
+                """;
+        }
+        else if (scopeEventId != null)
+        {
+            scopeId = scopeEventId;
+            sql = """
+                SELECT DISTINCT u.user_ID AS EmployeeUserId, u.firstName AS FirstName, u.lastName AS LastName,
+                       CAST(COALESCE(ba.is_read, 0) AS bit) AS IsRead, ba.read_at AS ReadAt
+                FROM   Employee_Shift es
+                INNER JOIN Shift s ON s.Shift_ID = es.shift_ID
+                INNER JOIN [User] u ON u.user_ID = es.employee_user_ID
+                LEFT  JOIN Brief_Acknowledgment ba
+                       ON ba.employee_user_ID = es.employee_user_ID AND ba.brief_ID = @briefId
+                WHERE  s.event_ID = @scopeId
+                ORDER  BY u.lastName, u.firstName
+                """;
+        }
+        else
+        {
+            scopeId = scopeProjectId ?? "";
+            sql = """
+                SELECT DISTINCT u.user_ID AS EmployeeUserId, u.firstName AS FirstName, u.lastName AS LastName,
+                       CAST(COALESCE(ba.is_read, 0) AS bit) AS IsRead, ba.read_at AS ReadAt
+                FROM   Employee_Shift es
+                INNER JOIN Shift s  ON s.Shift_ID  = es.shift_ID
+                INNER JOIN Event e  ON e.event_ID  = s.event_ID
+                INNER JOIN [User] u ON u.user_ID   = es.employee_user_ID
+                LEFT  JOIN Brief_Acknowledgment ba
+                       ON ba.employee_user_ID = es.employee_user_ID AND ba.brief_ID = @briefId
+                WHERE  e.project_ID = @scopeId
+                ORDER  BY u.lastName, u.firstName
+                """;
+        }
+
         var list = new List<AcknowledgmentItem>();
-        await using var cmd    = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@briefId", briefId);
+        cmd.Parameters.AddWithValue("@scopeId", scopeId);
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             list.Add(new AcknowledgmentItem
             {
                 EmployeeUserId = reader.GetString(reader.GetOrdinal("EmployeeUserId")),
-                FirstName      = reader.GetString(reader.GetOrdinal("FirstName")),
-                LastName       = reader.GetString(reader.GetOrdinal("LastName")),
+                FirstName      = reader.IsDBNull(reader.GetOrdinal("FirstName")) ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
+                LastName       = reader.IsDBNull(reader.GetOrdinal("LastName"))  ? "" : reader.GetString(reader.GetOrdinal("LastName")),
                 IsRead         = reader.GetBoolean(reader.GetOrdinal("IsRead")),
                 ReadAt         = reader.IsDBNull(reader.GetOrdinal("ReadAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ReadAt")),
             });

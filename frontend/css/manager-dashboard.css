@@ -4127,10 +4127,14 @@ tr.expanded-row > td {
   margin-left: 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #065f46;
-  background: #d1fae5;
+  color: #92400e;
+  background: #fef3c7;
   padding: 1px 7px;
   border-radius: 999px;
+}
+.ed-brief-ack--all {
+  color: #065f46;
+  background: #d1fae5;
 }
 
 /* ── Brief acknowledgment list (expanded form) ───────────────────────────── */
@@ -4935,7 +4939,6 @@ tr.expanded-row > td {
 .ed-pr-time-summary { color: var(--text-primary); font-weight: 500; }
 .ed-pr-not-reported { color: var(--text-muted); font-style: italic; }
 
-.ed-pr-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Shared badge */
 .ed-badge {
@@ -4982,6 +4985,28 @@ tr.expanded-row > td {
   letter-spacing: .06em;
   color: var(--text-muted);
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ed-pr-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ed-pr-empty-state {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 6px 0 4px;
 }
 
 .ed-pr-fields-row {

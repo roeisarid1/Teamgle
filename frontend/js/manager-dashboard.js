@@ -5923,9 +5923,9 @@ function _edBuildBriefRow(brief) {
   const dateStr    = brief.createdAt ? formatBriefDate(brief.createdAt) : "";
   const preview    = brief.content.length > 120 ? brief.content.slice(0, 120) + "…" : brief.content;
 
-  // Acknowledgment indicator (shown if ackCount present)
-  const ackHtml = brief.ackCount != null
-    ? `<span class="ed-brief-ack" title="${brief.ackCount} acknowledged">&#10003; ${brief.ackCount}</span>`
+  // Acknowledgment summary — always shown, X / Y format
+  const ackHtml = brief.totalRelevant > 0
+    ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
     : "";
 
   row.innerHTML = `
@@ -5985,8 +5985,14 @@ function _edWireBriefRow(row, brief) {
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(acks => {
           if (acks.length === 0) {
-            ackListEl.innerHTML = '<span class="ed-ack-empty">No acknowledgments yet.</span>';
+            ackListEl.innerHTML = '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
           } else {
+            const readCount = acks.filter(a => a.isRead).length;
+            const total     = acks.length;
+            const headerEl  = form.querySelector(".ed-ack-header");
+            if (headerEl) {
+              headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
+            }
             ackListEl.innerHTML = acks.map(a => `
               <div class="ed-ack-item${a.isRead ? " ed-ack-item--read" : ""}">
                 <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
@@ -6512,14 +6518,40 @@ function _edBuildPayrollHTML(items) {
     const hasReported  = item.actualStart || item.actualEnd;
     const duration     = _fmtDuration(item.actualStart, item.actualEnd);
     const payStatus    = item.paymentStatus || "unpaid";
-    const approvalBadgeHtml = hasApproved
-      ? `<span class="ed-badge ed-badge--approved">✓ Approved</span>`
-      : `<span class="ed-badge ed-badge--pending">Pending</span>`;
-    const paymentBadgeHtml  = `<span class="ed-badge ${_payStatusClass(payStatus)}">${capitalize(payStatus)}</span>`;
     const _t = iso => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+
+    // Status label in header: Not Reported / Submitted / Approved / Paid
+    let statusLabel, statusBadgeClass;
+    if (payStatus === "paid") {
+      statusLabel = "Paid"; statusBadgeClass = "ed-badge--paid";
+    } else if (payStatus === "processing") {
+      statusLabel = "Processing"; statusBadgeClass = "ed-badge--processing";
+    } else if (hasApproved) {
+      statusLabel = "Approved"; statusBadgeClass = "ed-badge--approved";
+    } else if (hasReported) {
+      statusLabel = "Submitted"; statusBadgeClass = "ed-badge--pending";
+    } else {
+      statusLabel = "Not Reported"; statusBadgeClass = "ed-badge--unpaid";
+    }
+
     const reportedHtml = hasReported
       ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
       : `<span class="ed-pr-not-reported">Not reported</span>`;
+
+    // Section A: employee report — show empty state if nothing reported
+    const sectionAContent = hasReported
+      ? `<div class="ed-pr-fields-row">
+          <div class="ed-pr-field">
+            <label class="ed-pr-field-label">Actual Arrival</label>
+            <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+          </div>
+          <div class="ed-pr-field">
+            <label class="ed-pr-field-label">Actual Departure</label>
+            <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+          </div>
+          ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
+        </div>`
+      : `<p class="ed-pr-empty-state">Employee has not reported hours yet.</p>`;
 
     return `
       <div class="ed-pr-employee-row" data-idx="${idx}">
@@ -6529,30 +6561,20 @@ function _edBuildPayrollHTML(items) {
             <span class="ed-pr-role">${escapeHtml(item.roleName)}</span>
           </div>
           <div class="ed-pr-reported">${reportedHtml}</div>
-          <div class="ed-pr-badges">${approvalBadgeHtml}${paymentBadgeHtml}</div>
+          <span class="ed-badge ${statusBadgeClass}">${statusLabel}</span>
           <button class="ed-pr-review-btn">Review</button>
         </div>
         <div class="ed-pr-panel" hidden>
 
-          <!-- A. Reported by Employee -->
+          <!-- Step 1: Reported by Employee -->
           <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title">Reported by Employee</div>
-            <div class="ed-pr-fields-row">
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Actual Arrival</label>
-                <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Actual Departure</label>
-                <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
-              </div>
-              ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
-            </div>
+            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> Employee Report</div>
+            ${sectionAContent}
           </div>
 
-          <!-- B. Manager Approval -->
+          <!-- Step 2: Manager Approval -->
           <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title">Manager Approval</div>
+            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">2</span> Manager Approval</div>
             <div class="ed-pr-fields-row">
               <div class="ed-pr-field">
                 <label class="ed-pr-field-label">Regular Hours</label>
@@ -6568,9 +6590,9 @@ function _edBuildPayrollHTML(items) {
             <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
           </div>
 
-          <!-- C. Payroll -->
+          <!-- Step 3: Payroll -->
           <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title">Payroll</div>
+            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">3</span> Payroll</div>
             <div class="ed-pr-fields-row">
               <div class="ed-pr-field">
                 <label class="ed-pr-field-label">Rate/hr (₪)</label>

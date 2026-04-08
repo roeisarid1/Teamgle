@@ -102,6 +102,17 @@ function isPast(iso) {
   return new Date(iso) < new Date();
 }
 
+// ── Needs-action predicate (single source of truth) ──────────────────────────
+// Returns true if this approved shift still requires employee action.
+function _isNeedsAction(s) {
+  if (s.status !== "manager_approved") return false;
+  const now    = new Date();
+  const isPast = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now;
+  const hasUnacked = getBriefsForShift(s).some(b => !b.isAcknowledged);
+  if (!isPast) return hasUnacked;                               // future: only unacked briefs
+  return (!s.actualStart || !s.actualEnd) || hasUnacked;       // past: missing hours OR unacked briefs
+}
+
 // ── My Shifts state ───────────────────────────────────────────────────────────
 let _msOffers       = null;
 let _msApplications = null;
@@ -138,15 +149,8 @@ async function loadMyShifts() {
     _msLoading = false;
   }
 
-  // Compute needs-action count
-  const now = new Date();
-  const needsActionCount = (_msApplications ?? []).filter(s => {
-    if (s.status !== "manager_approved") return false;
-    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
-    const missingHours = !s.actualStart || !s.actualEnd;
-    const hasUnacked   = getBriefsForShift(s).some(b => !b.isAcknowledged);
-    return missingHours || hasUnacked;
-  }).length;
+  // Compute needs-action count (uses shared predicate, works once briefs are loaded)
+  const needsActionCount = (_msApplications ?? []).filter(_isNeedsAction).length;
 
   // Update nav badge (offers + needs-action)
   const pendingOffers = (_msOffers ?? []).length;
@@ -323,9 +327,11 @@ async function renderUpcomingTab() {
   }
 
   const now     = new Date();
-  const upcoming = (_msApplications ?? []).filter(
-    s => s.status === "manager_approved" && new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now
-  );
+  const upcoming = (_msApplications ?? []).filter(s => {
+    if (s.status !== "manager_approved") return false;
+    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now) return false;
+    return !_isNeedsAction(s); // future shifts with unacked briefs go to Needs Action instead
+  });
 
   if (upcoming.length === 0) {
     panel.innerHTML = emptyState("calendar", "No upcoming shifts.", "Your confirmed upcoming shifts will appear here.");
@@ -350,19 +356,18 @@ async function renderNeedsActionTab() {
     await _fetchApplications();
   }
 
-  const now  = new Date();
-  const list = (_msApplications ?? []).filter(s => {
-    if (s.status !== "manager_approved") return false;
-    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
-    return (!s.actualStart || !s.actualEnd) || getBriefsForShift(s).some(b => !b.isAcknowledged);
-  });
+  const list = (_msApplications ?? []).filter(_isNeedsAction);
 
   if (list.length === 0) {
     panel.innerHTML = emptyState("check-circle", "All done!", "No shifts are waiting for your input.");
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = list.map(s => renderShiftCard(s, { showAttendance: true })).join("");
+  const now2 = new Date();
+  panel.innerHTML = list.map(s => {
+    const isPast = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now2;
+    return renderShiftCard(s, { showAttendance: isPast });
+  }).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -396,12 +401,12 @@ async function renderHistoryTab() {
 
   const now = new Date();
 
-  // Past approved shifts that no longer need action (completed)
-  const completed = (_msApplications ?? []).filter(s => {
-    if (s.status !== "manager_approved") return false;
-    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
-    return (s.actualStart && s.actualEnd) && !getBriefsForShift(s).some(b => !b.isAcknowledged);
-  });
+  // Approved past shifts that no longer need any action
+  const completed = (_msApplications ?? []).filter(s =>
+    s.status === "manager_approved" &&
+    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now &&
+    !_isNeedsAction(s)
+  );
 
   // Non-approved shifts (pending / rejected / canceled)
   const other = (_msApplications ?? []).filter(s => s.status !== "manager_approved");
