@@ -151,6 +151,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   await Promise.all([loadRoles(), loadEmployees()]);
+  activateSection("projects");
 });
 
 // ── Token helper (auto-refresh) ────────────────────────────────────────────
