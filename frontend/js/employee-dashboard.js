@@ -397,7 +397,7 @@ async function _fetchApplications() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  HISTORY TAB — completed shifts + rejected / canceled / pending approval
+//  HISTORY TAB — past approved shifts where hours have been reported
 // ────────────────────────────────────────────────────────────────────────────
 async function renderHistoryTab() {
   const panel = document.getElementById("ms-panel-history");
@@ -411,48 +411,20 @@ async function renderHistoryTab() {
 
   const now = new Date();
 
-  // Approved past shifts that no longer need any action
+  // Only: approved + past + hours reported + no pending action
   const completed = (_msApplications ?? []).filter(s =>
     s.status === "manager_approved" &&
     new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now &&
+    s.actualStart && s.actualEnd &&
     !_isNeedsAction(s)
   );
 
-  // Non-approved shifts (pending / rejected / canceled)
-  const other = (_msApplications ?? []).filter(s => s.status !== "manager_approved");
-
-  if (completed.length === 0 && other.length === 0) {
-    panel.innerHTML = emptyState("archive", "No history yet.", "Completed and past shifts will appear here.");
+  if (completed.length === 0) {
+    panel.innerHTML = emptyState("archive", "No history yet.", "Shifts appear here once they're complete and hours have been reported.");
     lucide.createIcons(); return;
   }
 
-  const groups = [];
-
-  if (completed.length > 0) {
-    groups.push({ label: "Completed", icon: "check-circle", items: completed, showAttendance: true });
-  }
-
-  const statusGroups = {
-    employee_request:          { label: "Pending Manager Approval", icon: "clock"    },
-    manager_reject:            { label: "Not Selected",             icon: "x-circle" },
-    manager_approved_canceled: { label: "Canceled",                 icon: "slash"    },
-  };
-  const byStatus = {};
-  other.forEach(s => { (byStatus[s.status] ??= []).push(s); });
-  Object.entries(byStatus).forEach(([status, shifts]) => {
-    const g = statusGroups[status] ?? { label: status, icon: "info" };
-    groups.push({ label: g.label, icon: g.icon, items: shifts, showAttendance: false });
-  });
-
-  panel.innerHTML = groups.map(g => `
-    <div class="ms-group">
-      <div class="ms-group-header">
-        <i data-lucide="${escHtml(g.icon)}" class="ms-group-icon"></i>
-        <span>${escHtml(g.label)}</span>
-        <span class="ms-group-count">${g.items.length}</span>
-      </div>
-      ${g.items.map(s => renderShiftCard(s, { showAttendance: g.showAttendance, compact: !g.showAttendance })).join("")}
-    </div>`).join("");
+  panel.innerHTML = completed.map(s => renderShiftCard(s, { hideAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -471,7 +443,7 @@ function _shiftStatus(shift) {
 
 // opts: { showAttendance: bool, compact: bool }
 function renderShiftCard(shift, opts = {}) {
-  const { compact = false } = opts;
+  const { compact = false, hideAttendance = false } = opts;
   const briefs      = getBriefsForShift(shift);
   const unackedBriefs = briefs.filter(b => !b.isAcknowledged);
   const shiftIsPast   = new Date(shift.eventEnd || shift.shiftEnd || shift.eventStart || shift.shiftStart || 0) <= new Date();
@@ -492,7 +464,7 @@ function renderShiftCard(shift, opts = {}) {
 
   // Detail sections
   const briefsSection     = _renderDetailBriefs(briefs);
-  const attendanceSection = _renderDetailAttendance(shift);
+  const attendanceSection = hideAttendance ? "" : _renderDetailAttendance(shift);
   const statusSection     = _renderDetailStatus(shift);
 
   return `
