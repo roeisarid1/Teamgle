@@ -1918,7 +1918,7 @@ public class ProjectRepository : IProjectRepository
                 b.project_ID, b.event_ID, b.shift_ID,
                 p.name   AS ProjectName,
                 e.name   AS EventName,
-                COALESCE(ba.is_read, 0) AS IsAcknowledged,
+                CAST(COALESCE(ba.is_read, 0) AS bit) AS IsAcknowledged,
                 ba.read_at              AS AcknowledgedAt
             FROM Brief b
             -- Employee relevant if brief is for a project they work in
