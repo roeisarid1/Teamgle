@@ -4772,3 +4772,265 @@ tr.expanded-row > td {
   .ms-tab { padding: 8px 12px; font-size: 12px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLLAPSIBLE SHIFT CARD (employee dashboard)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Card header row */
+.ms-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+.ms-shift-info { flex: 1; min-width: 0; }
+
+/* "Open Shift" button */
+.ms-open-shift-btn {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.ms-open-shift-btn:hover { opacity: .88; }
+
+/* Action flags */
+.ms-action-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ms-action-flag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid;
+}
+.ms-action-flag--hours  { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+.ms-action-flag--briefs { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+
+/* Expanded body */
+.ms-card-body { border-top: 1px solid var(--border); }
+
+/* Detail section */
+.ms-detail-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.ms-detail-section:last-child { border-bottom: none; }
+
+.ms-detail-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Note / helper text */
+.ms-detail-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.ms-detail-note--approved {
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 500;
+}
+
+/* Attendance section inherits .ms-time-report styles — just remove extra border */
+.ms-detail-section.ms-time-report {
+  border-top: none;
+  border-radius: 0;
+  background: var(--surface-2);
+}
+
+/* Status tracker */
+.ms-status-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.ms-status-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ms-status-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.ms-status-step--done  .ms-status-dot  { background: #6ee7b7; border-color: #6ee7b7; }
+.ms-status-step--current .ms-status-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,123,240,.2); }
+.ms-status-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
+}
+.ms-status-step--done    .ms-status-label { color: #065f46; font-weight: 600; }
+.ms-status-step--current .ms-status-label { color: var(--accent); font-weight: 700; }
+.ms-status-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin-bottom: 22px;
+  max-width: 40px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MANAGER PAYROLL — COLLAPSIBLE ROWS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.ed-pr-list { display: flex; flex-direction: column; gap: 10px; }
+
+.ed-pr-employee-row {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.ed-pr-row-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.ed-pr-identity { flex: 1; min-width: 120px; }
+.ed-pr-name     { display: block; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.ed-pr-role     { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+.ed-pr-reported { font-size: 13px; min-width: 140px; }
+.ed-pr-time-summary { color: var(--text-primary); font-weight: 500; }
+.ed-pr-not-reported { color: var(--text-muted); font-style: italic; }
+
+.ed-pr-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Shared badge */
+.ed-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ed-badge--approved   { background: #d1fae5; color: #065f46; }
+.ed-badge--pending    { background: #fef3c7; color: #92400e; }
+.ed-badge--paid       { background: #d1fae5; color: #065f46; }
+.ed-badge--processing { background: #e0e7ff; color: #3730a3; }
+.ed-badge--unpaid     { background: #fee2e2; color: #991b1b; }
+
+.ed-pr-review-btn {
+  padding: 7px 16px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity .15s;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.ed-pr-review-btn:hover { opacity: .88; }
+
+/* Expanded panel */
+.ed-pr-panel { border-top: 1px solid var(--border); background: var(--surface-2); }
+
+.ed-pr-panel-section {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.ed-pr-panel-section:last-child { border-bottom: none; }
+
+.ed-pr-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.ed-pr-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ed-pr-field { display: flex; flex-direction: column; gap: 4px; }
+.ed-pr-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ed-pr-field-val { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.ed-pr-field-val--strong { font-weight: 700; }
+
+.ed-pr-approve-btn {
+  padding: 8px 20px;
+  background: #059669;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.ed-pr-approve-btn:hover    { opacity: .88; }
+.ed-pr-approve-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.ed-pr-save-btn {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.ed-pr-save-btn:hover    { opacity: .88; }
+.ed-pr-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Compact card variant (History/Other groups) */
+.ms-shift-card--compact .ms-card-header { padding: 14px 20px; }
+.ms-shift-card--compact .ms-shift-event { font-size: 14px; }
+
+@media (max-width: 560px) {
+  .ms-card-header { flex-direction: column; gap: 10px; }
+  .ms-open-shift-btn { width: 100%; }
+  .ed-pr-row-header  { flex-direction: column; align-items: flex-start; }
+  .ed-pr-review-btn  { width: 100%; margin-left: 0; }
+  .ms-status-track { gap: 0; }
+}
+

@@ -6491,96 +6491,205 @@ function _fmtDateTime(iso) {
   return `${date}T${time}`;
 }
 
+function _fmtDuration(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  const mins = Math.round((new Date(endIso) - new Date(startIso)) / 60000);
+  if (isNaN(mins) || mins < 0) return null;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function _payStatusClass(status) {
+  return status === "paid" ? "ed-badge--paid" : status === "processing" ? "ed-badge--processing" : "ed-badge--unpaid";
+}
+
 function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
     return '<div class="pd-empty-state">No approved workers for payroll.</div>';
   }
 
-  const rows = items.map((item, idx) => `
-    <tr class="ed-pr-row" data-idx="${idx}">
-      <td class="ed-pr-name">${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}</td>
-      <td>${escapeHtml(item.roleName)}</td>
-      <td><input type="datetime-local" class="ed-pr-input" name="actualStart" value="${_fmtDateTime(item.actualStart)}"></td>
-      <td><input type="datetime-local" class="ed-pr-input" name="actualEnd" value="${_fmtDateTime(item.actualEnd)}"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours" value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours" value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour" value="${item.payRatePerHour ?? ""}" min="0" step="0.01" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour" value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund" value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount" value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—"></td>
-      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount" value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—"></td>
-      <td>
-        <select class="ed-pr-select" name="paymentStatus">
-          ${["unpaid","processing","paid"].map(
-            (s) => `<option value="${s}"${item.paymentStatus===s?" selected":""}>${s}</option>`
-          ).join("")}
-        </select>
-      </td>
-      <td><button class="ed-pr-save-btn" data-idx="${idx}">Save</button></td>
-    </tr>`).join("");
+  const rows = items.map((item, idx) => {
+    const hasApproved  = item.approvedRegularHours != null || item.approvedOvertimeHours != null;
+    const hasReported  = item.actualStart || item.actualEnd;
+    const duration     = _fmtDuration(item.actualStart, item.actualEnd);
+    const payStatus    = item.paymentStatus || "unpaid";
+    const approvalBadgeHtml = hasApproved
+      ? `<span class="ed-badge ed-badge--approved">✓ Approved</span>`
+      : `<span class="ed-badge ed-badge--pending">Pending</span>`;
+    const paymentBadgeHtml  = `<span class="ed-badge ${_payStatusClass(payStatus)}">${capitalize(payStatus)}</span>`;
+    const _t = iso => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+    const reportedHtml = hasReported
+      ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
+      : `<span class="ed-pr-not-reported">Not reported</span>`;
 
-  return `
-    <div class="ed-payroll-wrap">
-      <table class="ed-payroll-table">
-        <thead>
-          <tr>
-            <th>Employee</th><th>Role</th>
-            <th>Actual Start</th><th>Actual End</th>
-            <th>Reg. Hours</th><th>OT Hours</th>
-            <th>Rate/h</th><th>OT Rate/h</th>
-            <th>Travel</th><th>Bonus</th><th>Penalty</th>
-            <th>Payment</th><th></th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    return `
+      <div class="ed-pr-employee-row" data-idx="${idx}">
+        <div class="ed-pr-row-header">
+          <div class="ed-pr-identity">
+            <span class="ed-pr-name">${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}</span>
+            <span class="ed-pr-role">${escapeHtml(item.roleName)}</span>
+          </div>
+          <div class="ed-pr-reported">${reportedHtml}</div>
+          <div class="ed-pr-badges">${approvalBadgeHtml}${paymentBadgeHtml}</div>
+          <button class="ed-pr-review-btn">Review</button>
+        </div>
+        <div class="ed-pr-panel" hidden>
+
+          <!-- A. Reported by Employee -->
+          <div class="ed-pr-panel-section">
+            <div class="ed-pr-panel-title">Reported by Employee</div>
+            <div class="ed-pr-fields-row">
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Actual Arrival</label>
+                <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Actual Departure</label>
+                <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+              </div>
+              ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
+            </div>
+          </div>
+
+          <!-- B. Manager Approval -->
+          <div class="ed-pr-panel-section">
+            <div class="ed-pr-panel-title">Manager Approval</div>
+            <div class="ed-pr-fields-row">
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Regular Hours</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours"
+                       value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Overtime Hours</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours"
+                       value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—">
+              </div>
+            </div>
+            <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
+          </div>
+
+          <!-- C. Payroll -->
+          <div class="ed-pr-panel-section">
+            <div class="ed-pr-panel-title">Payroll</div>
+            <div class="ed-pr-fields-row">
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Rate/hr (₪)</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour"
+                       value="${item.payRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">OT Rate/hr (₪)</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour"
+                       value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Travel Refund (₪)</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund"
+                       value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Bonus (₪)</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount"
+                       value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Penalty (₪)</label>
+                <input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount"
+                       value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—">
+              </div>
+              <div class="ed-pr-field">
+                <label class="ed-pr-field-label">Payment Status</label>
+                <select class="ed-pr-input ed-pr-select" name="paymentStatus">
+                  ${["unpaid","processing","paid"].map(
+                    s => `<option value="${s}"${item.paymentStatus === s ? " selected" : ""}>${capitalize(s)}</option>`
+                  ).join("")}
+                </select>
+              </div>
+            </div>
+            <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">Save Payroll</button>
+          </div>
+
+        </div>
+      </div>`;
+  }).join("");
+
+  return `<div class="ed-pr-list">${rows}</div>`;
 }
 
 function _edWirePayrollSaveBtns() {
-  document.querySelectorAll(".ed-pr-save-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const idx  = parseInt(btn.dataset.idx, 10);
-      const item = _edPayrollData[idx];
-      const row  = btn.closest("tr");
-      const val  = (name) => row.querySelector(`[name="${name}"]`).value;
-      const num  = (name) => val(name) !== "" ? parseFloat(val(name)) : null;
+  const root = document.getElementById("ed-payroll-root");
+  if (!root) return;
 
-      const body = {
-        actualStart:           val("actualStart") || null,
-        actualEnd:             val("actualEnd") || null,
-        approvedRegularHours:  num("approvedRegularHours"),
-        approvedOvertimeHours: num("approvedOvertimeHours"),
-        payRatePerHour:        num("payRatePerHour"),
-        overtimeRatePerHour:   num("overtimeRatePerHour"),
-        travelRefund:          num("travelRefund"),
-        bonusAmount:           num("bonusAmount"),
-        penaltyAmount:         num("penaltyAmount"),
-        paymentStatus:         val("paymentStatus"),
-      };
+  // Toggle expand/collapse on row header click
+  root.addEventListener("click", async (e) => {
+    // Review button toggle
+    if (e.target.closest(".ed-pr-review-btn")) {
+      const row   = e.target.closest(".ed-pr-employee-row");
+      const panel = row?.querySelector(".ed-pr-panel");
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      e.target.closest(".ed-pr-review-btn").textContent = panel.hidden ? "Review" : "Close";
+      return;
+    }
 
-      btn.disabled = true;
-      btn.textContent = "Saving…";
-      try {
-        const token = await getToken();
-        const res = await fetch(
-          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}`,
-          {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          },
-        );
-        if (!res.ok) throw new Error();
-        const updated = await res.json();
-        _edPayrollData[idx] = updated;
-        btn.textContent = "Saved ✓";
-        setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
-      } catch {
-        btn.textContent = "Save";
-        btn.disabled = false;
+    // Approve or Save buttons
+    const actionBtn = e.target.closest("[data-action]");
+    if (!actionBtn) return;
+
+    const idx    = parseInt(actionBtn.dataset.idx, 10);
+    const item   = _edPayrollData[idx];
+    const panel  = actionBtn.closest(".ed-pr-panel");
+    const val    = (name) => panel.querySelector(`[name="${name}"]`)?.value ?? "";
+    const num    = (name) => val(name) !== "" ? parseFloat(val(name)) : null;
+    const action = actionBtn.dataset.action;
+
+    // Build body — always send all fields to avoid overwriting existing data
+    const body = {
+      actualStart:           item.actualStart  ? _fmtDateTime(item.actualStart)  : null,
+      actualEnd:             item.actualEnd    ? _fmtDateTime(item.actualEnd)    : null,
+      approvedRegularHours:  num("approvedRegularHours"),
+      approvedOvertimeHours: num("approvedOvertimeHours"),
+      payRatePerHour:        num("payRatePerHour"),
+      overtimeRatePerHour:   num("overtimeRatePerHour"),
+      travelRefund:          num("travelRefund"),
+      bonusAmount:           num("bonusAmount"),
+      penaltyAmount:         num("penaltyAmount"),
+      paymentStatus:         val("paymentStatus") || "unpaid",
+    };
+
+    actionBtn.disabled     = true;
+    actionBtn.textContent  = "Saving…";
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      _edPayrollData[idx] = updated;
+
+      // Update approval badge in row header
+      const row = actionBtn.closest(".ed-pr-employee-row");
+      if (action === "approve") {
+        const badge = row.querySelector(".ed-badge--pending");
+        if (badge) { badge.className = "ed-badge ed-badge--approved"; badge.textContent = "✓ Approved"; }
+        actionBtn.textContent = "Approved ✓";
+        setTimeout(() => { actionBtn.textContent = "Approve Hours"; actionBtn.disabled = false; }, 2000);
+      } else {
+        // Update payment badge
+        const payBadge = row.querySelector(`.ed-badge--unpaid, .ed-badge--paid, .ed-badge--processing`);
+        if (payBadge) {
+          payBadge.className   = `ed-badge ${_payStatusClass(body.paymentStatus)}`;
+          payBadge.textContent = capitalize(body.paymentStatus);
+        }
+        actionBtn.textContent = "Saved ✓";
+        setTimeout(() => { actionBtn.textContent = "Save Payroll"; actionBtn.disabled = false; }, 2000);
       }
-    });
+    } catch {
+      actionBtn.textContent = action === "approve" ? "Approve Hours" : "Save Payroll";
+      actionBtn.disabled    = false;
+    }
   });
 }
 

@@ -115,7 +115,7 @@ async function loadMyShifts() {
   _msLoading = true;
 
   // Show skeleton on all panels
-  ["offers", "upcoming", "past", "other"].forEach(tab => {
+  ["offers", "upcoming", "needs-action", "history"].forEach(tab => {
     const el = document.getElementById(`ms-panel-${tab}`);
     if (el) el.innerHTML = renderSkeletons(2);
   });
@@ -138,18 +138,34 @@ async function loadMyShifts() {
     _msLoading = false;
   }
 
-  // Update nav badge (offers + unread briefs)
-  const unreadBriefs  = (_msBriefs  ?? []).filter(b => !b.isAcknowledged).length;
-  const pendingOffers = (_msOffers  ?? []).length;
-  const totalBadge    = pendingOffers + unreadBriefs;
-  shiftsBadge.textContent  = totalBadge;
+  // Compute needs-action count
+  const now = new Date();
+  const needsActionCount = (_msApplications ?? []).filter(s => {
+    if (s.status !== "manager_approved") return false;
+    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
+    const missingHours = !s.actualStart || !s.actualEnd;
+    const hasUnacked   = getBriefsForShift(s).some(b => !b.isAcknowledged);
+    return missingHours || hasUnacked;
+  }).length;
+
+  // Update nav badge (offers + needs-action)
+  const pendingOffers = (_msOffers ?? []).length;
+  const totalBadge    = pendingOffers + needsActionCount;
+  shiftsBadge.textContent   = totalBadge;
   shiftsBadge.style.display = totalBadge > 0 ? "" : "none";
 
   // Offers tab badge
   const offersBadge = document.getElementById("ms-badge-offers");
   if (offersBadge) {
-    offersBadge.textContent  = pendingOffers;
+    offersBadge.textContent   = pendingOffers;
     offersBadge.style.display = pendingOffers > 0 ? "" : "none";
+  }
+
+  // Needs Action tab badge
+  const naBadge = document.getElementById("ms-badge-needs-action");
+  if (naBadge) {
+    naBadge.textContent   = needsActionCount;
+    naBadge.style.display = needsActionCount > 0 ? "" : "none";
   }
 
   renderActiveTab();
@@ -175,10 +191,11 @@ function activateMsTab(name, render = true) {
 
 function renderActiveTab() {
   switch (_msActiveTab) {
-    case "offers":   renderOffersTab();   break;
-    case "upcoming": renderUpcomingTab(); break;
-    case "past":     renderPastTab();     break;
-    case "other":    renderOtherTab();    break;
+    case "offers":       renderOffersTab();       break;
+    case "upcoming":     renderUpcomingTab();     break;
+    case "needs-action": renderNeedsActionTab();  break;
+    case "history":      renderHistoryTab();      break;
+    default: break;
   }
 }
 
@@ -315,16 +332,16 @@ async function renderUpcomingTab() {
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = upcoming.map(s => renderApprovedShiftCard(s, false)).join("");
+  panel.innerHTML = upcoming.map(s => renderShiftCard(s, { showAttendance: false })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  PAST TAB
+//  NEEDS ACTION TAB — past approved shifts still requiring employee input
 // ────────────────────────────────────────────────────────────────────────────
-async function renderPastTab() {
-  const panel = document.getElementById("ms-panel-past");
+async function renderNeedsActionTab() {
+  const panel = document.getElementById("ms-panel-needs-action");
   if (!panel) return;
 
   if (_msApplications === null) {
@@ -334,16 +351,18 @@ async function renderPastTab() {
   }
 
   const now  = new Date();
-  const past = (_msApplications ?? []).filter(
-    s => s.status === "manager_approved" && new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
-  );
+  const list = (_msApplications ?? []).filter(s => {
+    if (s.status !== "manager_approved") return false;
+    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
+    return (!s.actualStart || !s.actualEnd) || getBriefsForShift(s).some(b => !b.isAcknowledged);
+  });
 
-  if (past.length === 0) {
-    panel.innerHTML = emptyState("history", "No past shifts.", "Completed shifts will appear here.");
+  if (list.length === 0) {
+    panel.innerHTML = emptyState("check-circle", "All done!", "No shifts are waiting for your input.");
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = past.map(s => renderApprovedShiftCard(s, true)).join("");
+  panel.innerHTML = list.map(s => renderShiftCard(s, { showAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -363,10 +382,10 @@ async function _fetchApplications() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  OTHER TAB (pending / rejected / canceled)
+//  HISTORY TAB — completed shifts + rejected / canceled / pending approval
 // ────────────────────────────────────────────────────────────────────────────
-async function renderOtherTab() {
-  const panel = document.getElementById("ms-panel-other");
+async function renderHistoryTab() {
+  const panel = document.getElementById("ms-panel-history");
   if (!panel) return;
 
   if (_msApplications === null) {
@@ -375,201 +394,214 @@ async function renderOtherTab() {
     await _fetchApplications();
   }
 
+  const now = new Date();
+
+  // Past approved shifts that no longer need action (completed)
+  const completed = (_msApplications ?? []).filter(s => {
+    if (s.status !== "manager_approved") return false;
+    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now) return false;
+    return (s.actualStart && s.actualEnd) && !getBriefsForShift(s).some(b => !b.isAcknowledged);
+  });
+
+  // Non-approved shifts (pending / rejected / canceled)
   const other = (_msApplications ?? []).filter(s => s.status !== "manager_approved");
 
-  if (other.length === 0) {
-    panel.innerHTML = emptyState("clipboard-list", "Nothing here.", "");
+  if (completed.length === 0 && other.length === 0) {
+    panel.innerHTML = emptyState("archive", "No history yet.", "Completed and past shifts will appear here.");
     lucide.createIcons(); return;
   }
 
-  const groups = {
-    employee_request:          { label: "Pending Manager Approval", icon: "clock"          },
-    manager_reject:            { label: "Not Selected",             icon: "x-circle"       },
-    manager_approved_canceled: { label: "Canceled",                 icon: "slash"          },
-  };
+  const groups = [];
 
+  if (completed.length > 0) {
+    groups.push({ label: "Completed", icon: "check-circle", items: completed, showAttendance: true });
+  }
+
+  const statusGroups = {
+    employee_request:          { label: "Pending Manager Approval", icon: "clock"    },
+    manager_reject:            { label: "Not Selected",             icon: "x-circle" },
+    manager_approved_canceled: { label: "Canceled",                 icon: "slash"    },
+  };
   const byStatus = {};
-  other.forEach(s => {
-    if (!byStatus[s.status]) byStatus[s.status] = [];
-    byStatus[s.status].push(s);
+  other.forEach(s => { (byStatus[s.status] ??= []).push(s); });
+  Object.entries(byStatus).forEach(([status, shifts]) => {
+    const g = statusGroups[status] ?? { label: status, icon: "info" };
+    groups.push({ label: g.label, icon: g.icon, items: shifts, showAttendance: false });
   });
 
-  panel.innerHTML = Object.entries(byStatus).map(([status, shifts]) => {
-    const g = groups[status] ?? { label: status, icon: "info" };
-    return `
-      <div class="ms-group">
-        <div class="ms-group-header">
-          <i data-lucide="${escHtml(g.icon)}" class="ms-group-icon"></i>
-          <span>${escHtml(g.label)}</span>
-          <span class="ms-group-count">${shifts.length}</span>
-        </div>
-        ${shifts.map(s => renderOtherShiftCard(s)).join("")}
-      </div>`;
-  }).join("");
+  panel.innerHTML = groups.map(g => `
+    <div class="ms-group">
+      <div class="ms-group-header">
+        <i data-lucide="${escHtml(g.icon)}" class="ms-group-icon"></i>
+        <span>${escHtml(g.label)}</span>
+        <span class="ms-group-count">${g.items.length}</span>
+      </div>
+      ${g.items.map(s => renderShiftCard(s, { showAttendance: g.showAttendance, compact: !g.showAttendance })).join("")}
+    </div>`).join("");
   lucide.createIcons();
+  wireShiftCards(panel);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  SHIFT CARD — approved (upcoming + past)
+//  COLLAPSIBLE SHIFT CARD — unified card for all tabs
 // ────────────────────────────────────────────────────────────────────────────
-function renderApprovedShiftCard(shift, isPastShift) {
-  const briefs = getBriefsForShift(shift);
-  const dateStr = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
-  const payLine = shift.payRatePerHour
-    ? `<div class="ms-pay-row"><span class="ms-pay-label">Rate</span><span class="ms-pay-value">₪${Number(shift.payRatePerHour).toFixed(2)}/hr</span></div>` : "";
 
+// Derive reporting status from shift data
+function _shiftStatus(shift) {
+  if (shift.paymentStatus === "paid")    return "paid";
+  if (shift.approvedRegularHours != null || shift.approvedOvertimeHours != null) return "approved";
+  if (shift.actualStart || shift.actualEnd) return "submitted";
+  return "not-reported";
+}
+
+// opts: { showAttendance: bool, compact: bool }
+function renderShiftCard(shift, opts = {}) {
+  const { showAttendance = false, compact = false } = opts;
+  const briefs      = getBriefsForShift(shift);
+  const unackedBriefs = briefs.filter(b => !b.isAcknowledged);
+  const missingHours  = showAttendance && (!shift.actualStart || !shift.actualEnd);
+
+  const dateStr    = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
   const shiftTimes = (shift.shiftStart || shift.shiftEnd)
-    ? `<div class="ms-shift-times"><i data-lucide="clock" class="offer-icon"></i><span>${fmtTime(shift.shiftStart)} – ${fmtTime(shift.shiftEnd)}</span></div>` : "";
+    ? `${fmtTime(shift.shiftStart)} – ${fmtTime(shift.shiftEnd)}` : "";
 
-  // Time reporting section (for past shifts)
-  const timeReport = isPastShift ? renderTimeReportSection(shift) : "";
+  // Action flags (only meaningful when showAttendance)
+  const flags = [];
+  if (missingHours)          flags.push(`<span class="ms-action-flag ms-action-flag--hours">Hours not reported</span>`);
+  if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${unackedBriefs.length} brief${unackedBriefs.length > 1 ? "s" : ""} pending</span>`);
+  const flagsHtml = flags.length ? `<div class="ms-action-flags">${flags.join("")}</div>` : "";
 
-  // Payroll summary (if manager has set approved hours)
-  const payrollSummary = (shift.approvedRegularHours || shift.approvedOvertimeHours)
-    ? renderPayrollSummary(shift) : "";
+  // Status badge for header
+  const statusBadge = shift.status === "manager_approved"
+    ? `<span class="ms-approved-badge">✓ Approved</span>` : "";
 
-  // Briefs section
-  const briefsHtml = briefs.length > 0 ? renderInlineBriefs(briefs) : "";
+  // Detail sections
+  const briefsSection     = _renderDetailBriefs(briefs);
+  const attendanceSection = showAttendance ? _renderDetailAttendance(shift)
+    : `<div class="ms-detail-section"><div class="ms-detail-section-title"><i data-lucide="clock" style="width:14px;height:14px"></i> Attendance</div><p class="ms-detail-note">Attendance reporting is available after the event ends.</p></div>`;
+  const statusSection     = _renderDetailStatus(shift);
 
   return `
-    <div class="ms-shift-card" data-shift-id="${escHtml(shift.shiftId)}"
-         data-event-id="${escHtml(shift.eventId)}" data-project-id="${escHtml(shift.projectId)}">
-      <div class="ms-shift-header">
-        <div class="ms-shift-meta">
-          <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
-          <span class="ms-approved-badge">✓ Approved</span>
+    <div class="ms-shift-card${compact ? " ms-shift-card--compact" : ""}"
+         data-shift-id="${escHtml(shift.shiftId)}"
+         data-event-id="${escHtml(shift.eventId ?? "")}"
+         data-project-id="${escHtml(shift.projectId ?? "")}">
+      <div class="ms-card-header">
+        <div class="ms-shift-info">
+          <div class="ms-shift-meta">
+            <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
+            ${statusBadge}
+          </div>
+          <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
+          <div class="ms-shift-details">
+            ${dateStr ? `<div class="offer-meta-item"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
+            ${shift.eventLocation ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(shift.eventLocation)}</span></div>` : ""}
+            ${shiftTimes ? `<div class="offer-meta-item"><i data-lucide="clock" class="offer-icon"></i><span>${escHtml(shiftTimes)}</span></div>` : ""}
+            <div class="offer-meta-item"><i data-lucide="tag" class="offer-icon"></i><span class="offer-role-chip">${escHtml(shift.roleName)}</span></div>
+          </div>
+          ${flagsHtml}
         </div>
-        <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
-        <div class="ms-shift-details">
-          ${dateStr ? `<div class="offer-meta-item"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
-          ${shift.eventLocation ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(shift.eventLocation)}</span></div>` : ""}
-          ${shiftTimes}
-          <div class="offer-meta-item"><i data-lucide="tag" class="offer-icon"></i><span class="offer-role-chip">${escHtml(shift.roleName)}</span></div>
-        </div>
-        ${payLine}
+        <button class="ms-open-shift-btn" aria-expanded="false">Open Shift</button>
       </div>
-      ${timeReport}
-      ${payrollSummary}
-      ${briefsHtml}
+      <div class="ms-card-body" hidden>
+        ${briefsSection}
+        ${attendanceSection}
+        ${statusSection}
+      </div>
     </div>`;
 }
 
-function renderTimeReportSection(shift) {
-  const hasReported = shift.actualStart || shift.actualEnd;
+function _renderDetailBriefs(briefs) {
+  const items = briefs.length === 0
+    ? `<p class="ms-detail-note">No briefings for this shift.</p>`
+    : briefs.map(b => {
+        const acked  = b.isAcknowledged;
+        const ackedAt = b.acknowledgedAt ? fmtDate(b.acknowledgedAt) : "";
+        return `
+          <div class="ms-brief-item${acked ? " ms-brief-item--acked" : ""}" data-brief-id="${escHtml(b.briefId)}">
+            <div class="ms-brief-item-header">
+              <span class="ms-brief-item-title">${escHtml(b.title)}</span>
+              ${acked
+                ? `<span class="brief-acked-badge">✓ Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
+                : `<span class="brief-unread-dot"></span>`}
+            </div>
+            <div class="ms-brief-item-content">${escHtml(b.content)}</div>
+            ${!acked ? `<button class="ms-brief-ack-btn">I have read and acknowledge</button>` : ""}
+          </div>`;
+      }).join("");
+
   return `
-    <div class="ms-time-report">
-      <div class="ms-time-report-title">
+    <div class="ms-detail-section">
+      <div class="ms-detail-section-title">
+        <i data-lucide="file-text" style="width:14px;height:14px"></i>
+        Briefings
+      </div>
+      ${items}
+    </div>`;
+}
+
+function _renderDetailAttendance(shift) {
+  const isApproved = shift.approvedRegularHours != null || shift.approvedOvertimeHours != null;
+  return `
+    <div class="ms-detail-section ms-time-report">
+      <div class="ms-detail-section-title">
         <i data-lucide="clock" style="width:14px;height:14px"></i>
-        Hours Reporting
-        ${hasReported
-          ? `<span class="ms-time-reported-badge">Reported</span>`
-          : `<span class="ms-time-pending-badge">Not reported</span>`}
+        Attendance & Hours Reporting
       </div>
-
       <div class="ms-time-quick-btns">
-        <button class="ms-time-quick-btn ms-time-quick-btn--in"  data-quick="start">
+        <button class="ms-time-quick-btn ms-time-quick-btn--in" data-quick="start"${isApproved ? " disabled" : ""}>
           <i data-lucide="log-in" style="width:14px;height:14px"></i>
-          I Arrived
+          Use current time (arrival)
         </button>
-        <button class="ms-time-quick-btn ms-time-quick-btn--out" data-quick="end">
+        <button class="ms-time-quick-btn ms-time-quick-btn--out" data-quick="end"${isApproved ? " disabled" : ""}>
           <i data-lucide="log-out" style="width:14px;height:14px"></i>
-          I Left
+          Use current time (departure)
         </button>
       </div>
-
       <div class="ms-time-report-fields">
         <div class="ms-time-field">
-          <label class="ms-time-label">Actual Start</label>
+          <label class="ms-time-label">Actual Arrival</label>
           <input type="datetime-local" class="ms-time-input" name="actualStart"
-                 value="${escHtml(toDatetimeLocal(shift.actualStart))}">
+                 value="${escHtml(toDatetimeLocal(shift.actualStart))}"${isApproved ? " readonly" : ""}>
         </div>
         <div class="ms-time-field">
-          <label class="ms-time-label">Actual End</label>
+          <label class="ms-time-label">Actual Departure</label>
           <input type="datetime-local" class="ms-time-input" name="actualEnd"
-                 value="${escHtml(toDatetimeLocal(shift.actualEnd))}">
+                 value="${escHtml(toDatetimeLocal(shift.actualEnd))}"${isApproved ? " readonly" : ""}>
         </div>
       </div>
-
-      <div class="ms-time-actions">
-        <button class="ms-time-save-btn">Save Hours</button>
-        <span class="ms-time-save-status" style="display:none"></span>
-      </div>
+      ${isApproved
+        ? `<p class="ms-detail-note ms-detail-note--approved">✓ Hours approved by manager — contact manager to request changes.</p>`
+        : `<div class="ms-time-actions">
+             <button class="ms-time-save-btn">Save Hours</button>
+             <span class="ms-time-save-status" style="display:none"></span>
+           </div>`}
     </div>`;
 }
 
-function renderPayrollSummary(shift) {
-  const reg  = shift.approvedRegularHours  ?? 0;
-  const ot   = shift.approvedOvertimeHours ?? 0;
-  const rate = shift.payRatePerHour        ?? 0;
-  const total = reg * rate;
-  const status = shift.paymentStatus || "unpaid";
-  const statusColors = { paid: "ms-pay-status--paid", processing: "ms-pay-status--processing", unpaid: "ms-pay-status--unpaid" };
+function _renderDetailStatus(shift) {
+  const status   = _shiftStatus(shift);
+  const steps    = [
+    { key: "not-reported", label: "Not Reported" },
+    { key: "submitted",    label: "Submitted"    },
+    { key: "approved",     label: "Approved"     },
+    { key: "paid",         label: "Paid"         },
+  ];
+  const currentIdx = steps.findIndex(s => s.key === status);
+
+  const stepsHtml = steps.map((step, i) => `
+    <div class="ms-status-step${i < currentIdx ? " ms-status-step--done" : ""}${i === currentIdx ? " ms-status-step--current" : ""}">
+      <div class="ms-status-dot"></div>
+      <span class="ms-status-label">${escHtml(step.label)}</span>
+    </div>`).join(`<div class="ms-status-connector"></div>`);
 
   return `
-    <div class="ms-payroll-summary">
-      <div class="ms-payroll-summary-title">Payroll Summary</div>
-      <div class="ms-payroll-summary-row">
-        <span>Approved hours: <strong>${reg}h reg + ${ot}h OT</strong></span>
-        <span>Est. pay: <strong>₪${total.toFixed(2)}</strong></span>
-        <span class="ms-pay-status ${statusColors[status] || ""}">${capitalize(status)}</span>
+    <div class="ms-detail-section">
+      <div class="ms-detail-section-title">
+        <i data-lucide="activity" style="width:14px;height:14px"></i>
+        Status
       </div>
-    </div>`;
-}
-
-function renderInlineBriefs(briefs) {
-  const unread = briefs.filter(b => !b.isAcknowledged).length;
-  const summaryLabel = unread > 0
-    ? `<span class="ms-briefs-unread">${unread} unread brief${unread !== 1 ? "s" : ""}</span>`
-    : `<span class="ms-briefs-all-read">All briefs acknowledged</span>`;
-
-  const items = briefs.map(b => {
-    const acked = b.isAcknowledged;
-    const ackedAt = b.acknowledgedAt ? fmtDate(b.acknowledgedAt) : "";
-    return `
-      <div class="ms-brief-item${acked ? " ms-brief-item--acked" : ""}" data-brief-id="${escHtml(b.briefId)}">
-        <div class="ms-brief-item-header">
-          <span class="ms-brief-item-title">${escHtml(b.title)}</span>
-          ${acked
-            ? `<span class="brief-acked-badge">✓ Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
-            : `<span class="brief-unread-dot"></span>`}
-        </div>
-        <div class="ms-brief-item-content">${escHtml(b.content)}</div>
-        ${!acked ? `<button class="brief-ack-btn ms-brief-ack-btn">I acknowledge this brief</button>` : ""}
-      </div>`;
-  }).join("");
-
-  return `
-    <div class="ms-briefs-section">
-      <div class="ms-briefs-toggle" role="button" tabindex="0">
-        <i data-lucide="file-text" style="width:14px;height:14px"></i>
-        <span>Briefings</span>
-        ${summaryLabel}
-        <i data-lucide="chevron-down" class="ms-briefs-chevron" style="width:14px;height:14px;margin-left:auto"></i>
-      </div>
-      <div class="ms-briefs-body" style="display:none">
-        ${items}
-      </div>
-    </div>`;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  OTHER SHIFT CARD (pending / rejected / canceled)
-// ────────────────────────────────────────────────────────────────────────────
-function renderOtherShiftCard(shift) {
-  const dateStr = fmtDateRange(shift.eventStart || shift.shiftStart, shift.eventEnd || shift.shiftEnd);
-  return `
-    <div class="ms-shift-card ms-shift-card--other">
-      <div class="ms-shift-header">
-        <div class="ms-shift-meta">
-          <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
-        </div>
-        <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
-        <div class="ms-shift-details">
-          ${dateStr ? `<div class="offer-meta-item"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
-          ${shift.eventLocation ? `<div class="offer-meta-item"><i data-lucide="map-pin" class="offer-icon"></i><span>${escHtml(shift.eventLocation)}</span></div>` : ""}
-          <div class="offer-meta-item"><i data-lucide="tag" class="offer-icon"></i><span class="offer-role-chip">${escHtml(shift.roleName)}</span></div>
-        </div>
-      </div>
+      <div class="ms-status-track">${stepsHtml}</div>
     </div>`;
 }
 
@@ -577,6 +609,20 @@ function renderOtherShiftCard(shift) {
 //  WIRE SHIFT CARD INTERACTIONS
 // ────────────────────────────────────────────────────────────────────────────
 function wireShiftCards(panel) {
+  // "Open Shift" / "Close Shift" toggle
+  panel.querySelectorAll(".ms-open-shift-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".ms-shift-card");
+      const body = card?.querySelector(".ms-card-body");
+      if (!body) return;
+      const opening = body.hidden;
+      body.hidden = !opening;
+      btn.textContent      = opening ? "Close Shift" : "Open Shift";
+      btn.setAttribute("aria-expanded", String(opening));
+      if (opening) lucide.createIcons({ el: body });
+    });
+  });
+
   // Quick clock-in / clock-out buttons
   panel.querySelectorAll("[data-quick]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -586,23 +632,9 @@ function wireShiftCards(panel) {
       const input     = section.querySelector(`[name="${fieldName}"]`);
       if (!input) return;
       input.value = toDatetimeLocal(new Date().toISOString());
-      // Flash the input so the user sees it was filled
       input.classList.add("ms-time-input--flash");
       setTimeout(() => input.classList.remove("ms-time-input--flash"), 600);
     });
-  });
-
-  // Brief toggle expand/collapse
-  panel.querySelectorAll(".ms-briefs-toggle").forEach(toggle => {
-    const body    = toggle.nextElementSibling;
-    const chevron = toggle.querySelector(".ms-briefs-chevron");
-    function doToggle() {
-      const open = body.style.display !== "none";
-      body.style.display  = open ? "none" : "";
-      if (chevron) chevron.style.transform = open ? "" : "rotate(180deg)";
-    }
-    toggle.addEventListener("click", doToggle);
-    toggle.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") doToggle(); });
   });
 
   // Brief acknowledge buttons
