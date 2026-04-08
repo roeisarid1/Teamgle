@@ -4431,7 +4431,6 @@ tr.expanded-row > td {
   border: 1px solid var(--border);
   border-radius: 14px;
   margin-bottom: 16px;
-  overflow: hidden;
   transition: box-shadow .15s;
 }
 .ms-shift-card:hover { box-shadow: 0 2px 14px rgba(0,0,0,.07); }
@@ -4517,6 +4516,7 @@ tr.expanded-row > td {
 .ms-time-report {
   padding: 16px 20px;
   border-top: 1px solid var(--border);
+  border-radius: 0 0 14px 14px;
   background: var(--surface-2);
 }
 .ms-time-report-title {
@@ -4660,6 +4660,8 @@ tr.expanded-row > td {
 /* ── Inline briefs section ──────────────────────────────────────────────── */
 .ms-briefs-section {
   border-top: 1px solid var(--border);
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
 }
 .ms-briefs-toggle {
   display: flex;
