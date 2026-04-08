@@ -4045,3 +4045,346 @@ tr.expanded-row > td {
 @media (max-width: 560px) {
   .ev-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Event Detail Page ──────────────────────────────────────────────────── */
+
+/* Panels inside event detail */
+.ed-panel { padding: 24px 0; }
+
+/* ── Workers tab ─────────────────────────────────────────────────────────── */
+.ed-worker-sections { display: flex; flex-direction: column; gap: 28px; }
+
+.ed-worker-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ed-worker-count {
+  background: var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ed-worker-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ed-worker-table th,
+.ed-worker-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.ed-worker-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  background: var(--surface-2);
+}
+.ed-worker-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+}
+
+.ed-worker-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.ed-worker-badge--approved { background: #d1fae5; color: #065f46; }
+.ed-worker-badge--pending  { background: #fef3c7; color: #92400e; }
+.ed-worker-badge--hold     { background: #e0e7ff; color: #3730a3; }
+.ed-worker-badge--rejected { background: #fee2e2; color: #991b1b; }
+
+/* ── Brief acknowledgment count ──────────────────────────────────────────── */
+.ed-brief-ack {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+/* ── Expenses tab ────────────────────────────────────────────────────────── */
+.ed-expense-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.ed-expense-row.pd-row--expanded { box-shadow: 0 0 0 2px var(--accent); }
+
+.ed-expense-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: var(--surface-1);
+}
+.ed-expense-summary:hover { background: var(--surface-2); }
+
+.ed-expense-type-badge {
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-secondary);
+}
+.ed-expense-desc  { flex: 1; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-expense-date  { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+.ed-expense-amount { flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); min-width: 90px; text-align: right; }
+
+.ed-expense-form {
+  padding: 16px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+.ed-expense-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ed-expense-totals {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ed-expense-total-label { color: var(--text-secondary); font-weight: 500; }
+.ed-expense-total-value { color: var(--text-primary); }
+
+/* ── Payroll tab ─────────────────────────────────────────────────────────── */
+.ed-payroll-wrap { overflow-x: auto; }
+
+.ed-payroll-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 900px;
+}
+.ed-payroll-table th,
+.ed-payroll-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.ed-payroll-table th {
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  text-align: left;
+}
+.ed-payroll-table tbody tr:hover { background: var(--surface-2); }
+.ed-pr-name { font-weight: 600; color: var(--text-primary); }
+
+.ed-pr-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  min-width: 80px;
+}
+.ed-pr-input--sm { min-width: 70px; max-width: 90px; }
+.ed-pr-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+
+.ed-pr-select {
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.ed-pr-save-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ed-pr-save-btn:hover { opacity: .88; }
+.ed-pr-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Finance tab ─────────────────────────────────────────────────────────── */
+.ed-finance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.ed-finance-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.ed-finance-card--total {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ed-finance-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.ed-finance-card--total .ed-finance-card-label { color: rgba(255,255,255,.7); }
+.ed-finance-card-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ed-finance-card--total .ed-finance-card-value { color: #fff; }
+
+.ed-finance-section { margin-bottom: 28px; }
+.ed-finance-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+/* ── Employee Brief Cards ───────────────────────────────────────────────── */
+.brief-project-group { margin-bottom: 28px; }
+.brief-project-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.brief-event-group { margin-bottom: 18px; }
+.brief-event-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-left: 4px;
+  border-left: 3px solid var(--accent);
+}
+
+.brief-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 10px;
+  transition: box-shadow .15s;
+}
+.brief-card:not(.brief-card--acked):hover { box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+.brief-card--acked {
+  opacity: .65;
+  background: var(--surface-2);
+}
+
+.brief-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.brief-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.brief-unread-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.brief-acked-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.brief-card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.brief-card-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-bottom: 14px;
+}
+.brief-ack-btn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.brief-ack-btn:hover   { opacity: .88; }
+.brief-ack-btn:disabled { opacity: .5; cursor: not-allowed; }
+

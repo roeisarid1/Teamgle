@@ -1767,7 +1767,7 @@ function renderDashboardTab() {
       : "";
 
     return `
-      <div class="ev-card" style="--ev-index:${i}">
+      <div class="ev-card" style="--ev-index:${i}" data-event-id="${escapeHtml(ev.eventId)}">
         <div class="ev-card-accent"></div>
         <div class="ev-card-body">
           <div class="ev-card-top">
@@ -1799,6 +1799,12 @@ function renderDashboardTab() {
   }).join("");
 
   container.innerHTML = `<div class="ev-grid">${cards}</div>`;
+
+  // Delegated click — open event detail
+  container.querySelector(".ev-grid")?.addEventListener("click", (e) => {
+    const card = e.target.closest("[data-event-id]");
+    if (card) openEventDetail(card.dataset.eventId);
+  });
 }
 
 // ── Load and render the Gantt schedule tab ─────────────────────────────────
@@ -5439,4 +5445,1205 @@ function _toggleSectionPin(hdr) {
     }
     if (chevron) chevron.textContent = "—";
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EVENT DETAIL PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+
+let currentEventId   = null;
+let _edTasksData     = null; // cached tasks for current event
+let _edBriefsData    = null; // cached briefs for current event
+let _edExpandedRow   = null; // currently expanded task/brief row
+let _edTaskFilterPriority = "all";
+
+// ── Back button ────────────────────────────────────────────────────────────
+document.getElementById("btn-back-from-event-detail")
+  .addEventListener("click", () => {
+    activateSection("project-detail");
+  });
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+document.getElementById("event-detail-tabs")
+  .addEventListener("click", (e) => {
+    const tab = e.target.closest("[data-etab]");
+    if (tab) activateEventTab(tab.dataset.etab);
+  });
+
+function activateEventTab(name) {
+  document.querySelectorAll("#event-detail-tabs [data-etab]").forEach((t) => {
+    t.classList.toggle("active", t.dataset.etab === name);
+  });
+  document.querySelectorAll("[data-etab-panel]").forEach((p) => {
+    p.style.display = p.dataset.etabPanel === name ? "" : "none";
+  });
+  if (name === "workers")  renderEdWorkersTab();
+  if (name === "tasks")    renderEdTasksTab();
+  if (name === "briefs")   renderEdBriefsTab();
+  if (name === "expenses") renderEdExpensesTab();
+  if (name === "payroll")  renderEdPayrollTab();
+  if (name === "finance")  renderEdFinanceTab();
+}
+
+// ── Open event detail ──────────────────────────────────────────────────────
+async function openEventDetail(eventId) {
+  currentEventId  = eventId;
+  _edTasksData    = null;
+  _edBriefsData   = null;
+  _edExpandedRow  = null;
+  _edExpensesData = null;
+  _edPayrollData  = null;
+  _edTaskFilterPriority = "all";
+
+  // Update header from cached project data
+  const ev = (currentProjectDetail?.events ?? []).find((e) => e.eventId === eventId);
+  document.getElementById("event-detail-title").textContent = ev?.name ?? "Event";
+  document.getElementById("event-detail-subtitle").textContent = ev ? _edFormatSubtitle(ev) : "";
+
+  activateSection("event-detail");
+
+  // Reset priority filter pills
+  document.querySelectorAll("#ed-task-priority-filters .pd-filter-pill").forEach((p) => {
+    p.classList.toggle("active", p.dataset.value === "all");
+  });
+
+  activateEventTab("workers");
+}
+
+function _edFormatSubtitle(ev) {
+  const fmt = (iso) =>
+    iso
+      ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+      : "";
+  const loc = ev.location ? ` · ${ev.location}` : "";
+  return `${fmt(ev.startTime)}${loc}`;
+}
+
+// ── WORKERS TAB ────────────────────────────────────────────────────────────
+
+async function renderEdWorkersTab() {
+  const root = document.getElementById("ed-workers-root");
+  if (!root) return;
+  root.innerHTML = '<div class="pd-loading">Loading workers…</div>';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/workers`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    root.innerHTML = _buildEdWorkersHTML(data);
+  } catch {
+    root.innerHTML = '<div class="pd-loading">Failed to load workers.</div>';
+  }
+}
+
+function _buildEdWorkersHTML(data) {
+  const sections = [
+    { key: "approved",   label: "Approved",         color: "approved" },
+    { key: "awaiting",   label: "Awaiting Response", color: "pending"  },
+    { key: "applicants", label: "Applicants",        color: "pending"  },
+    { key: "hold",       label: "On Hold",           color: "hold"     },
+    { key: "rejected",   label: "Rejected",          color: "rejected" },
+  ];
+
+  const fmtTime = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+
+  const rows = sections.map(({ key, label, color }) => {
+    const workers = data[key] ?? [];
+    if (workers.length === 0) return "";
+    const workerRows = workers.map((w) => `
+      <tr>
+        <td>${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</td>
+        <td>${escapeHtml(w.roleName)}</td>
+        <td>${fmtTime(w.shiftStart)} – ${fmtTime(w.shiftEnd)}</td>
+        <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(w.status)}</span></td>
+      </tr>`).join("");
+    return `
+      <div class="ed-worker-section">
+        <h4 class="ed-worker-section-title">${escapeHtml(label)} <span class="ed-worker-count">${workers.length}</span></h4>
+        <table class="ed-worker-table">
+          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Status</th></tr></thead>
+          <tbody>${workerRows}</tbody>
+        </table>
+      </div>`;
+  }).join("");
+
+  const total = (data.approved?.length ?? 0) + (data.awaiting?.length ?? 0) +
+                (data.applicants?.length ?? 0) + (data.hold?.length ?? 0) + (data.rejected?.length ?? 0);
+
+  if (total === 0) {
+    return '<div class="pd-empty-state">No workers assigned to this event yet.</div>';
+  }
+  return `<div class="ed-worker-sections">${rows}</div>`;
+}
+
+// ── TASKS TAB ──────────────────────────────────────────────────────────────
+
+async function renderEdTasksTab() {
+  if (_edTasksData !== null) {
+    _edApplyTaskFilters();
+    return;
+  }
+
+  TASK_STATUSES.forEach((s) => {
+    const col = document.getElementById(`ed-col-${s}`);
+    if (col) col.innerHTML = '<div class="pd-loading">Loading…</div>';
+  });
+
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error();
+    _edTasksData = await res.json();
+    _edApplyTaskFilters();
+  } catch {
+    TASK_STATUSES.forEach((s) => {
+      const col = document.getElementById(`ed-col-${s}`);
+      if (col) col.innerHTML = "";
+    });
+    const col = document.getElementById("ed-col-open");
+    if (col) col.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
+  }
+}
+
+function _edApplyTaskFilters() {
+  if (_edTasksData === null) return;
+  const openCol = document.getElementById("ed-col-open");
+  if (openCol?.querySelector('[data-new="true"]')) return;
+  if (_edExpandedRow) _edExpandedRow = null;
+
+  const filtered = _edTasksData.filter(
+    (t) => _edTaskFilterPriority === "all" || t.priority === _edTaskFilterPriority,
+  );
+  filtered.sort(
+    (a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99),
+  );
+
+  TASK_STATUSES.forEach((status) => {
+    const col = document.getElementById(`ed-col-${status}`);
+    const countEl = document.getElementById(`ed-col-count-${status}`);
+    if (!col) return;
+    const colWrapper = col.closest(".pd-kanban-col");
+    const colTasks = filtered.filter((t) => t.status === status);
+    if (colTasks.length === 0) {
+      col.innerHTML = "";
+      if (countEl) countEl.textContent = "0";
+      if (colWrapper) colWrapper.style.display = "none";
+      return;
+    }
+    if (colWrapper) colWrapper.style.display = "";
+    if (countEl) countEl.textContent = colTasks.length;
+    col.innerHTML = "";
+    colTasks.forEach((t) => col.appendChild(_edBuildTaskRow(t)));
+  });
+}
+
+function _edBuildTaskRow(task) {
+  const row = document.createElement("div");
+  row.className = `pd-task-row pd-task-row--${task.status}`;
+  row.dataset.taskId = task.taskId;
+  row.innerHTML = `
+    <div class="pd-row-summary">
+      <span class="pd-task-content">${escapeHtml(task.content)}</span>
+      <div class="pd-row-meta">
+        <span class="pd-badge pd-badge--priority-${task.priority}">${task.priority}</span>
+        <button class="pd-row-delete-btn" title="Delete task" aria-label="Delete task">&#10005;</button>
+      </div>
+    </div>
+    <div class="pd-row-form">
+      <label class="pd-field-label">Content</label>
+      <input type="text" class="pd-form-input" name="content" value="${escapeHtml(task.content)}" placeholder="Task description…" maxlength="500">
+      <div class="pd-form-selects">
+        <div class="pd-select-field">
+          <label class="pd-field-label">Status</label>
+          <select class="pd-form-select" name="status">
+            ${["open","in_progress","done","canceled"]
+              .map((s) => `<option value="${s}"${task.status===s?" selected":""}>${s.replace("_"," ")}</option>`)
+              .join("")}
+          </select>
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Priority</label>
+          <select class="pd-form-select" name="priority">
+            ${["low","medium","high","urgent"]
+              .map((p) => `<option value="${p}"${task.priority===p?" selected":""}>${p}</option>`)
+              .join("")}
+          </select>
+        </div>
+      </div>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>Save</button>
+        <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+  _edWireTaskRow(row, task);
+  return row;
+}
+
+function _edWireTaskRow(row, task) {
+  const summary     = row.querySelector(".pd-row-summary");
+  const form        = row.querySelector(".pd-row-form");
+  const contentIn   = row.querySelector('input[name="content"]');
+  const statusSel   = row.querySelector('select[name="status"]');
+  const prioritySel = row.querySelector('select[name="priority"]');
+  const saveBtn     = row.querySelector(".pd-form-save-btn");
+  const cancelBtn   = row.querySelector(".pd-form-cancel-btn");
+  const deleteBtn   = row.querySelector(".pd-row-delete-btn");
+
+  summary.addEventListener("click", (e) => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow === row) { _edCollapseRow(row); return; }
+    if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+    _edExpandedRow = row;
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+  });
+
+  const isDirty = () =>
+    contentIn.value.trim() !== task.content ||
+    statusSel.value !== task.status ||
+    prioritySel.value !== task.priority;
+
+  [contentIn, statusSel, prioritySel].forEach((el) =>
+    el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }),
+  );
+
+  cancelBtn.addEventListener("click", () => _edCollapseRow(row));
+
+  saveBtn.addEventListener("click", async () => {
+    if (!isDirty()) return;
+    const content  = contentIn.value.trim();
+    const status   = statusSel.value;
+    const priority = prioritySel.value;
+    if (!content) { contentIn.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks/${encodeURIComponent(task.taskId)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ content, status, priority }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      const idx = _edTasksData.findIndex((t) => t.taskId === task.taskId);
+      if (idx !== -1) _edTasksData[idx] = updated;
+      _edApplyTaskFilters();
+    } catch {
+      saveBtn.textContent = "Save";
+      saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow && _edExpandedRow !== row) _edCollapseRow(_edExpandedRow);
+    if (_edExpandedRow === row) _edCollapseRow(row);
+    row.classList.add("pd-row--deleting");
+    const confirm = document.createElement("div");
+    confirm.className = "pd-delete-confirm";
+    confirm.innerHTML = `<span>Delete this task?</span>
+      <button class="btn-confirm-yes">Delete</button>
+      <button class="btn-confirm-no">Cancel</button>`;
+    row.querySelector(".pd-row-summary").appendChild(confirm);
+    confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
+      e.stopPropagation();
+      row.classList.remove("pd-row--deleting");
+      confirm.remove();
+    });
+    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks/${encodeURIComponent(task.taskId)}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) throw new Error();
+        _edTasksData = _edTasksData.filter((t) => t.taskId !== task.taskId);
+        if (_edExpandedRow === row) _edExpandedRow = null;
+        _edApplyTaskFilters();
+      } catch {
+        row.classList.remove("pd-row--deleting");
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function _edCollapseRow(row) {
+  row.querySelector(".pd-row-form")?.classList.remove("expanded");
+  row.classList.remove("pd-row--expanded");
+  if (_edExpandedRow === row) _edExpandedRow = null;
+}
+
+function _edAddNewTaskRow() {
+  const list = document.getElementById("ed-col-open");
+  if (!list) return;
+  if (list.querySelector('[data-new="true"]')) return;
+  const colWrapper = list.closest(".pd-kanban-col");
+  if (colWrapper) colWrapper.style.display = "";
+
+  const tempTask = { taskId: "", content: "", status: "open", priority: "medium" };
+  const row = _edBuildTaskRow(tempTask);
+  row.dataset.new = "true";
+  row.querySelector(".pd-row-delete-btn").style.display = "none";
+
+  const form        = row.querySelector(".pd-row-form");
+  const contentIn   = row.querySelector('input[name="content"]');
+  const statusSel   = row.querySelector('select[name="status"]');
+  const prioritySel = row.querySelector('select[name="priority"]');
+  const saveBtn     = row.querySelector(".pd-form-save-btn");
+  const cancelBtn   = row.querySelector(".pd-form-cancel-btn");
+
+  cancelBtn.addEventListener("click", () => {
+    if (_edExpandedRow === row) _edExpandedRow = null;
+    row.remove();
+    if (_edTasksData !== null) _edApplyTaskFilters();
+    else list.innerHTML = '<div class="pd-kanban-empty">No tasks</div>';
+  });
+
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = true;
+  contentIn.addEventListener("input", () => { newSaveBtn.disabled = contentIn.value.trim() === ""; });
+
+  newSaveBtn.addEventListener("click", async () => {
+    const content  = contentIn.value.trim();
+    const status   = statusSel.value;
+    const priority = prioritySel.value;
+    if (!content) { contentIn.focus(); return; }
+    newSaveBtn.disabled = true;
+    newSaveBtn.textContent = "Saving…";
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ content, status, priority }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (_edTasksData === null) _edTasksData = [];
+      _edTasksData.push(created);
+      if (_edExpandedRow === row) _edExpandedRow = null;
+      row.remove();
+      _edApplyTaskFilters();
+    } catch {
+      newSaveBtn.textContent = "Save";
+      newSaveBtn.disabled = false;
+    }
+  });
+
+  if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+  const emptyEl = list.querySelector(".pd-kanban-empty");
+  if (emptyEl) emptyEl.remove();
+  list.prepend(row);
+  _edExpandedRow = row;
+  requestAnimationFrame(() => {
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+    contentIn.focus();
+  });
+}
+
+// Wire event detail task/brief add buttons
+document.getElementById("ed-btn-add-task")
+  .addEventListener("click", () => _edAddNewTaskRow());
+document.getElementById("ed-btn-add-brief")
+  .addEventListener("click", () => _edAddNewBriefRow());
+
+// Priority filters for event tasks
+document.getElementById("ed-task-priority-filters").addEventListener("click", (e) => {
+  const pill = e.target.closest(".pd-filter-pill");
+  if (!pill) return;
+  _edTaskFilterPriority = pill.dataset.value;
+  document.querySelectorAll("#ed-task-priority-filters .pd-filter-pill").forEach((p) => {
+    p.classList.toggle("active", p.dataset.value === _edTaskFilterPriority);
+  });
+  if (_edTasksData !== null) _edApplyTaskFilters();
+});
+
+// ── BRIEFS TAB ─────────────────────────────────────────────────────────────
+
+async function renderEdBriefsTab() {
+  const list = document.getElementById("ed-brief-list");
+  if (!list) return;
+
+  if (_edBriefsData !== null) {
+    _edRenderBriefList(list);
+    return;
+  }
+
+  list.innerHTML = '<div class="pd-loading">Loading briefs…</div>';
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error();
+    _edBriefsData = await res.json();
+    _edRenderBriefList(list);
+  } catch {
+    list.innerHTML = '<div class="pd-loading">Failed to load briefs.</div>';
+  }
+}
+
+function _edRenderBriefList(list) {
+  list.innerHTML = _edBriefsData.length === 0 ? briefEmptyStateHtml() : "";
+  _edBriefsData.forEach((b) => list.appendChild(_edBuildBriefRow(b)));
+}
+
+function _edBuildBriefRow(brief) {
+  const row = document.createElement("div");
+  row.className = "pd-brief-row";
+  row.dataset.briefId = brief.briefId;
+
+  const authorName = brief.createdByManagerName ?? "Unknown";
+  const dateStr    = brief.createdAt ? formatBriefDate(brief.createdAt) : "";
+  const preview    = brief.content.length > 120 ? brief.content.slice(0, 120) + "…" : brief.content;
+
+  // Acknowledgment indicator (shown if ackCount present)
+  const ackHtml = brief.ackCount != null
+    ? `<span class="ed-brief-ack" title="${brief.ackCount} acknowledged">&#10003; ${brief.ackCount}</span>`
+    : "";
+
+  row.innerHTML = `
+    <div class="pd-row-summary">
+      <div class="pd-brief-summary">
+        <span class="pd-brief-title-text">${escapeHtml(brief.title)}</span>
+        <span class="pd-brief-preview-text">${escapeHtml(preview)}</span>
+        <span class="pd-brief-author-text">By: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}${ackHtml}</span>
+      </div>
+      <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
+    </div>
+    <div class="pd-row-form">
+      <label class="pd-field-label">Title</label>
+      <input type="text" class="pd-form-input" name="title" value="${escapeHtml(brief.title)}" placeholder="Brief title…" maxlength="200">
+      <label class="pd-field-label">Content</label>
+      <textarea class="pd-form-textarea pd-form-textarea--large" name="content" rows="5" placeholder="Brief content…" maxlength="5000">${escapeHtml(brief.content)}</textarea>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>Save</button>
+        <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+  _edWireBriefRow(row, brief);
+  return row;
+}
+
+function _edWireBriefRow(row, brief) {
+  const summary   = row.querySelector(".pd-row-summary");
+  const form      = row.querySelector(".pd-row-form");
+  const titleIn   = row.querySelector('input[name="title"]');
+  const contentIn = row.querySelector('textarea[name="content"]');
+  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+  const deleteBtn = row.querySelector(".pd-row-delete-btn");
+
+  summary.addEventListener("click", (e) => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow === row) { _edCollapseRow(row); return; }
+    if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+    _edExpandedRow = row;
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+  });
+
+  const isDirty = () =>
+    titleIn.value.trim() !== brief.title || contentIn.value.trim() !== brief.content;
+
+  [titleIn, contentIn].forEach((el) =>
+    el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }),
+  );
+
+  cancelBtn.addEventListener("click", () => _edCollapseRow(row));
+
+  saveBtn.addEventListener("click", async () => {
+    if (!isDirty()) return;
+    const title   = titleIn.value.trim();
+    const content = contentIn.value.trim();
+    if (!title)   { titleIn.focus();   return; }
+    if (!content) { contentIn.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      const idx = _edBriefsData.findIndex((b) => b.briefId === brief.briefId);
+      if (idx !== -1) _edBriefsData[idx] = updated;
+      brief.title   = updated.title;
+      brief.content = updated.content;
+      row.querySelector(".pd-brief-title-text").textContent = updated.title;
+      const p = updated.content.length > 120 ? updated.content.slice(0, 120) + "…" : updated.content;
+      row.querySelector(".pd-brief-preview-text").textContent = p;
+      _edCollapseRow(row);
+    } catch {
+      saveBtn.textContent = "Save";
+      saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow && _edExpandedRow !== row) _edCollapseRow(_edExpandedRow);
+    if (_edExpandedRow === row) _edCollapseRow(row);
+    row.classList.add("pd-row--deleting");
+    const confirm = document.createElement("div");
+    confirm.className = "pd-delete-confirm";
+    confirm.innerHTML = `<span>Delete this brief?</span>
+      <button class="btn-confirm-yes">Delete</button>
+      <button class="btn-confirm-no">Cancel</button>`;
+    row.querySelector(".pd-row-summary").appendChild(confirm);
+    confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
+      e.stopPropagation();
+      row.classList.remove("pd-row--deleting");
+      confirm.remove();
+    });
+    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) throw new Error();
+        _edBriefsData = _edBriefsData.filter((b) => b.briefId !== brief.briefId);
+        if (_edExpandedRow === row) _edExpandedRow = null;
+        row.remove();
+        const list = document.getElementById("ed-brief-list");
+        if (list && _edBriefsData.length === 0) list.innerHTML = briefEmptyStateHtml();
+      } catch {
+        row.classList.remove("pd-row--deleting");
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function _edAddNewBriefRow() {
+  const list = document.getElementById("ed-brief-list");
+  if (!list) return;
+  if (list.querySelector('[data-new="true"]')) return;
+
+  const tempBrief = { briefId: "", title: "", content: "", createdAt: null, createdByManagerName: null };
+  const row = _edBuildBriefRow(tempBrief);
+  row.dataset.new = "true";
+
+  const form      = row.querySelector(".pd-row-form");
+  const titleIn   = row.querySelector('input[name="title"]');
+  const contentIn = row.querySelector('textarea[name="content"]');
+  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+
+  cancelBtn.addEventListener("click", () => {
+    if (_edExpandedRow === row) _edExpandedRow = null;
+    row.remove();
+    if (_edBriefsData !== null && _edBriefsData.length === 0) list.innerHTML = briefEmptyStateHtml();
+  });
+
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = true;
+  const canSave = () => titleIn.value.trim() !== "" && contentIn.value.trim() !== "";
+  [titleIn, contentIn].forEach((el) => el.addEventListener("input", () => { newSaveBtn.disabled = !canSave(); }));
+
+  newSaveBtn.addEventListener("click", async () => {
+    const title   = titleIn.value.trim();
+    const content = contentIn.value.trim();
+    if (!title)   { titleIn.focus();   return; }
+    if (!content) { contentIn.focus(); return; }
+    newSaveBtn.disabled = true;
+    newSaveBtn.textContent = "Saving…";
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (_edBriefsData === null) _edBriefsData = [];
+      _edBriefsData.push(created);
+      const emptyEl = list.querySelector(".pd-empty-state");
+      if (emptyEl) emptyEl.remove();
+      if (_edExpandedRow === row) _edExpandedRow = null;
+      row.remove();
+      list.appendChild(_edBuildBriefRow(created));
+    } catch {
+      newSaveBtn.textContent = "Save";
+      newSaveBtn.disabled = false;
+    }
+  });
+
+  if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+  const emptyEl = list.querySelector(".pd-empty-state");
+  if (emptyEl) emptyEl.remove();
+  list.prepend(row);
+  _edExpandedRow = row;
+  requestAnimationFrame(() => {
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+    titleIn.focus();
+  });
+}
+
+// ── EXPENSES TAB ───────────────────────────────────────────────────────────
+
+let _edExpensesData = null;
+
+const EXPENSE_TYPES = ["venue","catering","equipment","transport","marketing","staff","other"];
+
+async function renderEdExpensesTab() {
+  const list = document.getElementById("ed-expense-list");
+  if (!list) return;
+
+  if (_edExpensesData !== null) {
+    _edRenderExpenseList(list);
+    return;
+  }
+
+  list.innerHTML = '<div class="pd-loading">Loading expenses…</div>';
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error();
+    _edExpensesData = await res.json();
+    _edRenderExpenseList(list);
+  } catch {
+    list.innerHTML = '<div class="pd-loading">Failed to load expenses.</div>';
+  }
+}
+
+function _edRenderExpenseList(list) {
+  if (_edExpensesData.length === 0) {
+    list.innerHTML = '<div class="pd-empty-state">No expenses recorded yet.</div>';
+    return;
+  }
+  list.innerHTML = "";
+  _edExpensesData.forEach((exp) => list.appendChild(_edBuildExpenseRow(exp)));
+  list.appendChild(_edBuildExpenseTotals());
+}
+
+function _edBuildExpenseTotals() {
+  const total = (_edExpensesData ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+  const div = document.createElement("div");
+  div.className = "ed-expense-totals";
+  div.innerHTML = `<span class="ed-expense-total-label">Total</span>
+    <span class="ed-expense-total-value">₪${total.toLocaleString("en-IL", { minimumFractionDigits: 2 })}</span>`;
+  return div;
+}
+
+function _fmtDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function _edBuildExpenseRow(exp) {
+  const row = document.createElement("div");
+  row.className = "ed-expense-row";
+  row.dataset.expenseId = exp.expenseId;
+
+  const dateVal = exp.expenseDate ? exp.expenseDate.slice(0, 10) : "";
+
+  row.innerHTML = `
+    <div class="ed-expense-summary">
+      <span class="ed-expense-type-badge">${escapeHtml(exp.expenseType)}</span>
+      <span class="ed-expense-desc">${escapeHtml(exp.description || exp.vendorName || "—")}</span>
+      <span class="ed-expense-date">${_fmtDate(exp.expenseDate)}</span>
+      <span class="ed-expense-amount">₪${(exp.amount ?? 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}</span>
+      <button class="pd-row-delete-btn ed-expense-delete" title="Delete" aria-label="Delete expense">&#10005;</button>
+    </div>
+    <div class="ed-expense-form" style="display:none">
+      <div class="ed-expense-form-grid">
+        <div class="pd-select-field">
+          <label class="pd-field-label">Type</label>
+          <select class="pd-form-select" name="expenseType">
+            ${EXPENSE_TYPES.map((t) => `<option value="${t}"${exp.expenseType===t?" selected":""}>${t}</option>`).join("")}
+          </select>
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Amount (₪)</label>
+          <input type="number" class="pd-form-input" name="amount" value="${exp.amount ?? ""}" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Date</label>
+          <input type="date" class="pd-form-input" name="expenseDate" value="${dateVal}">
+        </div>
+        <div class="pd-select-field">
+          <label class="pd-field-label">Vendor</label>
+          <input type="text" class="pd-form-input" name="vendorName" value="${escapeHtml(exp.vendorName || "")}" placeholder="Vendor name…" maxlength="200">
+        </div>
+      </div>
+      <label class="pd-field-label">Description</label>
+      <input type="text" class="pd-form-input" name="description" value="${escapeHtml(exp.description || "")}" placeholder="Description…" maxlength="500">
+      <label class="pd-field-label">Notes</label>
+      <textarea class="pd-form-textarea" name="notes" rows="2" maxlength="1000">${escapeHtml(exp.notes || "")}</textarea>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>Save</button>
+        <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+
+  _edWireExpenseRow(row, exp);
+  return row;
+}
+
+function _edWireExpenseRow(row, exp) {
+  const summary   = row.querySelector(".ed-expense-summary");
+  const form      = row.querySelector(".ed-expense-form");
+  const deleteBtn = row.querySelector(".ed-expense-delete");
+  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+
+  const inputs = form.querySelectorAll("input,select,textarea");
+
+  summary.addEventListener("click", (e) => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains("pd-row--deleting")) return;
+    const open = form.style.display !== "none";
+    if (open) {
+      form.style.display = "none";
+      row.classList.remove("pd-row--expanded");
+    } else {
+      // collapse any other open expense form
+      document.querySelectorAll(".ed-expense-form").forEach((f) => { f.style.display = "none"; });
+      document.querySelectorAll(".ed-expense-row").forEach((r) => r.classList.remove("pd-row--expanded"));
+      form.style.display = "";
+      row.classList.add("pd-row--expanded");
+    }
+  });
+
+  const snapshot = () => ({
+    expenseType:  form.querySelector('[name="expenseType"]').value,
+    amount:       form.querySelector('[name="amount"]').value,
+    expenseDate:  form.querySelector('[name="expenseDate"]').value,
+    vendorName:   form.querySelector('[name="vendorName"]').value.trim(),
+    description:  form.querySelector('[name="description"]').value.trim(),
+    notes:        form.querySelector('[name="notes"]').value.trim(),
+  });
+  const isDirty = () => {
+    const s = snapshot();
+    return s.expenseType !== exp.expenseType ||
+      String(s.amount) !== String(exp.amount ?? "") ||
+      s.expenseDate !== (exp.expenseDate ? exp.expenseDate.slice(0,10) : "") ||
+      s.vendorName !== (exp.vendorName ?? "") ||
+      s.description !== (exp.description ?? "") ||
+      s.notes !== (exp.notes ?? "");
+  };
+
+  inputs.forEach((el) => el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }));
+  cancelBtn.addEventListener("click", () => { form.style.display = "none"; row.classList.remove("pd-row--expanded"); });
+
+  saveBtn.addEventListener("click", async () => {
+    if (!isDirty()) return;
+    const s = snapshot();
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    try {
+      const token = await getToken();
+      const body = {
+        expenseType: s.expenseType,
+        description: s.description || null,
+        amount: s.amount !== "" ? parseFloat(s.amount) : null,
+        expenseDate: s.expenseDate || null,
+        vendorName: s.vendorName || null,
+        notes: s.notes || null,
+      };
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses/${encodeURIComponent(exp.expenseId)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      const idx = _edExpensesData.findIndex((e) => e.expenseId === exp.expenseId);
+      if (idx !== -1) _edExpensesData[idx] = updated;
+      Object.assign(exp, updated);
+      // Refresh summary in-place
+      row.querySelector(".ed-expense-type-badge").textContent = updated.expenseType;
+      row.querySelector(".ed-expense-desc").textContent = updated.description || updated.vendorName || "—";
+      row.querySelector(".ed-expense-date").textContent = _fmtDate(updated.expenseDate);
+      row.querySelector(".ed-expense-amount").textContent = `₪${(updated.amount ?? 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+      // Refresh totals
+      const list = document.getElementById("ed-expense-list");
+      list.querySelector(".ed-expense-totals")?.remove();
+      list.appendChild(_edBuildExpenseTotals());
+      form.style.display = "none";
+      row.classList.remove("pd-row--expanded");
+    } catch {
+      saveBtn.textContent = "Save";
+      saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (row.classList.contains("pd-row--deleting")) return;
+    form.style.display = "none";
+    row.classList.remove("pd-row--expanded");
+    row.classList.add("pd-row--deleting");
+    const confirm = document.createElement("div");
+    confirm.className = "pd-delete-confirm";
+    confirm.innerHTML = `<span>Delete this expense?</span>
+      <button class="btn-confirm-yes">Delete</button>
+      <button class="btn-confirm-no">Cancel</button>`;
+    summary.appendChild(confirm);
+    confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
+      e.stopPropagation();
+      row.classList.remove("pd-row--deleting");
+      confirm.remove();
+    });
+    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses/${encodeURIComponent(exp.expenseId)}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) throw new Error();
+        _edExpensesData = _edExpensesData.filter((e) => e.expenseId !== exp.expenseId);
+        const list = document.getElementById("ed-expense-list");
+        _edRenderExpenseList(list);
+      } catch {
+        row.classList.remove("pd-row--deleting");
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function _edAddNewExpenseRow() {
+  const list = document.getElementById("ed-expense-list");
+  if (!list) return;
+  if (list.querySelector(".ed-expense-row[data-new='true']")) return;
+
+  const tempExp = { expenseId: "", expenseType: "other", description: null, amount: null,
+                    expenseDate: null, vendorName: null, notes: null };
+  const row = _edBuildExpenseRow(tempExp);
+  row.dataset.new = "true";
+
+  // Auto-open the form
+  const form = row.querySelector(".ed-expense-form");
+  form.style.display = "";
+  row.classList.add("pd-row--expanded");
+
+  // Replace save handler with CREATE
+  const saveBtn = row.querySelector(".pd-form-save-btn");
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = false;
+
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+  cancelBtn.addEventListener("click", () => {
+    row.remove();
+    if (_edExpensesData !== null && _edExpensesData.length === 0) {
+      list.innerHTML = '<div class="pd-empty-state">No expenses recorded yet.</div>';
+    }
+  });
+
+  newSaveBtn.addEventListener("click", async () => {
+    newSaveBtn.disabled = true;
+    newSaveBtn.textContent = "Saving…";
+    const body = {
+      expenseType: form.querySelector('[name="expenseType"]').value,
+      description: form.querySelector('[name="description"]').value.trim() || null,
+      amount: form.querySelector('[name="amount"]').value !== "" ? parseFloat(form.querySelector('[name="amount"]').value) : null,
+      expenseDate: form.querySelector('[name="expenseDate"]').value || null,
+      vendorName: form.querySelector('[name="vendorName"]').value.trim() || null,
+      notes: form.querySelector('[name="notes"]').value.trim() || null,
+    };
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (_edExpensesData === null) _edExpensesData = [];
+      _edExpensesData.push(created);
+      _edRenderExpenseList(list);
+    } catch {
+      newSaveBtn.textContent = "Save";
+      newSaveBtn.disabled = false;
+    }
+  });
+
+  // Collapse any open expense form
+  document.querySelectorAll(".ed-expense-form").forEach((f) => { f.style.display = "none"; });
+  document.querySelectorAll(".ed-expense-row").forEach((r) => r.classList.remove("pd-row--expanded"));
+  const emptyEl = list.querySelector(".pd-empty-state");
+  if (emptyEl) emptyEl.remove();
+  list.querySelector(".ed-expense-totals")?.remove();
+  list.prepend(row);
+}
+
+document.getElementById("ed-btn-add-expense")
+  .addEventListener("click", () => _edAddNewExpenseRow());
+
+// ── PAYROLL TAB ────────────────────────────────────────────────────────────
+
+let _edPayrollData = null;
+
+async function renderEdPayrollTab() {
+  const root = document.getElementById("ed-payroll-root");
+  if (!root) return;
+  root.innerHTML = '<div class="pd-loading">Loading payroll…</div>';
+
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error();
+    _edPayrollData = await res.json();
+    root.innerHTML = _edBuildPayrollHTML(_edPayrollData);
+    _edWirePayrollSaveBtns();
+  } catch {
+    root.innerHTML = '<div class="pd-loading">Failed to load payroll.</div>';
+  }
+}
+
+function _fmtDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const date = d.toISOString().slice(0, 10);
+  const time = d.toTimeString().slice(0, 5);
+  return `${date}T${time}`;
+}
+
+function _edBuildPayrollHTML(items) {
+  if (!items || items.length === 0) {
+    return '<div class="pd-empty-state">No approved workers for payroll.</div>';
+  }
+
+  const rows = items.map((item, idx) => `
+    <tr class="ed-pr-row" data-idx="${idx}">
+      <td class="ed-pr-name">${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}</td>
+      <td>${escapeHtml(item.roleName)}</td>
+      <td><input type="datetime-local" class="ed-pr-input" name="actualStart" value="${_fmtDateTime(item.actualStart)}"></td>
+      <td><input type="datetime-local" class="ed-pr-input" name="actualEnd" value="${_fmtDateTime(item.actualEnd)}"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours" value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours" value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour" value="${item.payRatePerHour ?? ""}" min="0" step="0.01" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour" value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund" value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount" value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—"></td>
+      <td><input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount" value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—"></td>
+      <td>
+        <select class="ed-pr-select" name="paymentStatus">
+          ${["unpaid","processing","paid"].map(
+            (s) => `<option value="${s}"${item.paymentStatus===s?" selected":""}>${s}</option>`
+          ).join("")}
+        </select>
+      </td>
+      <td><button class="ed-pr-save-btn" data-idx="${idx}">Save</button></td>
+    </tr>`).join("");
+
+  return `
+    <div class="ed-payroll-wrap">
+      <table class="ed-payroll-table">
+        <thead>
+          <tr>
+            <th>Employee</th><th>Role</th>
+            <th>Actual Start</th><th>Actual End</th>
+            <th>Reg. Hours</th><th>OT Hours</th>
+            <th>Rate/h</th><th>OT Rate/h</th>
+            <th>Travel</th><th>Bonus</th><th>Penalty</th>
+            <th>Payment</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function _edWirePayrollSaveBtns() {
+  document.querySelectorAll(".ed-pr-save-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx  = parseInt(btn.dataset.idx, 10);
+      const item = _edPayrollData[idx];
+      const row  = btn.closest("tr");
+      const val  = (name) => row.querySelector(`[name="${name}"]`).value;
+      const num  = (name) => val(name) !== "" ? parseFloat(val(name)) : null;
+
+      const body = {
+        actualStart:           val("actualStart") || null,
+        actualEnd:             val("actualEnd") || null,
+        approvedRegularHours:  num("approvedRegularHours"),
+        approvedOvertimeHours: num("approvedOvertimeHours"),
+        payRatePerHour:        num("payRatePerHour"),
+        overtimeRatePerHour:   num("overtimeRatePerHour"),
+        travelRefund:          num("travelRefund"),
+        bonusAmount:           num("bonusAmount"),
+        penaltyAmount:         num("penaltyAmount"),
+        paymentStatus:         val("paymentStatus"),
+      };
+
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}`,
+          {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        );
+        if (!res.ok) throw new Error();
+        const updated = await res.json();
+        _edPayrollData[idx] = updated;
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
+      } catch {
+        btn.textContent = "Save";
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ── FINANCE TAB ────────────────────────────────────────────────────────────
+
+async function renderEdFinanceTab() {
+  const root = document.getElementById("ed-finance-root");
+  if (!root) return;
+  root.innerHTML = '<div class="pd-loading">Loading finance summary…</div>';
+
+  try {
+    const token = await getToken();
+    const [payrollRes, expensesRes] = await Promise.all([
+      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll`,   { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,  { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    if (!payrollRes.ok || !expensesRes.ok) throw new Error();
+    const payroll  = await payrollRes.json();
+    const expenses = await expensesRes.json();
+    root.innerHTML = _edBuildFinanceHTML(payroll, expenses);
+  } catch {
+    root.innerHTML = '<div class="pd-loading">Failed to load finance data.</div>';
+  }
+}
+
+function _edBuildFinanceHTML(payroll, expenses) {
+  const fmt = (n) => `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+
+  // Labor cost per worker
+  let totalLabor = 0;
+  const laborRows = payroll.map((p) => {
+    const reg  = (p.approvedRegularHours  ?? 0) * (p.payRatePerHour       ?? 0);
+    const ot   = (p.approvedOvertimeHours ?? 0) * (p.overtimeRatePerHour  ?? 0);
+    const travel = p.travelRefund   ?? 0;
+    const bonus  = p.bonusAmount    ?? 0;
+    const penalty= p.penaltyAmount  ?? 0;
+    const total  = reg + ot + travel + bonus - penalty;
+    totalLabor  += total;
+    return `<tr>
+      <td>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</td>
+      <td>${escapeHtml(p.roleName)}</td>
+      <td>${fmt(reg)}</td>
+      <td>${fmt(ot)}</td>
+      <td>${fmt(travel + bonus - penalty)}</td>
+      <td><strong>${fmt(total)}</strong></td>
+    </tr>`;
+  }).join("");
+
+  // Expenses by type
+  const byType = {};
+  let totalExpenses = 0;
+  (expenses ?? []).forEach((e) => {
+    byType[e.expenseType] = (byType[e.expenseType] ?? 0) + (e.amount ?? 0);
+    totalExpenses += (e.amount ?? 0);
+  });
+  const expenseRows = Object.entries(byType).map(([type, amt]) =>
+    `<tr><td>${escapeHtml(type)}</td><td>${fmt(amt)}</td></tr>`
+  ).join("");
+
+  const grandTotal = totalLabor + totalExpenses;
+
+  return `
+    <div class="ed-finance-cards">
+      <div class="ed-finance-card">
+        <div class="ed-finance-card-label">Total Labor Cost</div>
+        <div class="ed-finance-card-value">${fmt(totalLabor)}</div>
+      </div>
+      <div class="ed-finance-card">
+        <div class="ed-finance-card-label">Total Expenses</div>
+        <div class="ed-finance-card-value">${fmt(totalExpenses)}</div>
+      </div>
+      <div class="ed-finance-card ed-finance-card--total">
+        <div class="ed-finance-card-label">Grand Total</div>
+        <div class="ed-finance-card-value">${fmt(grandTotal)}</div>
+      </div>
+    </div>
+
+    ${payroll.length > 0 ? `
+    <div class="ed-finance-section">
+      <h4 class="ed-finance-section-title">Labor Breakdown</h4>
+      <table class="ed-worker-table">
+        <thead><tr><th>Employee</th><th>Role</th><th>Regular</th><th>Overtime</th><th>Extras</th><th>Total</th></tr></thead>
+        <tbody>${laborRows}</tbody>
+        <tfoot><tr><td colspan="5"><strong>Total Labor</strong></td><td><strong>${fmt(totalLabor)}</strong></td></tr></tfoot>
+      </table>
+    </div>` : ""}
+
+    ${expenses.length > 0 ? `
+    <div class="ed-finance-section">
+      <h4 class="ed-finance-section-title">Expenses by Category</h4>
+      <table class="ed-worker-table">
+        <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+        <tbody>${expenseRows}</tbody>
+        <tfoot><tr><td><strong>Total Expenses</strong></td><td><strong>${fmt(totalExpenses)}</strong></td></tr></tfoot>
+      </table>
+    </div>` : ""}`;
 }

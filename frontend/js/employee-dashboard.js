@@ -23,6 +23,8 @@ const chatSection        = document.getElementById("section-chats");
 const offersList         = document.getElementById("offers-list");
 const offersBadge        = document.getElementById("offers-badge");
 const applicationsList   = document.getElementById("applications-list");
+const briefsList         = document.getElementById("briefs-list");
+const briefsBadge        = document.getElementById("briefs-badge");
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -72,6 +74,7 @@ function showSection(sectionId) {
   lucide.createIcons();
 
   if (sectionId === "applications") loadApplications();
+  if (sectionId === "briefs")       loadBriefs();
 }
 
 document.querySelectorAll(".nav-item[data-section]").forEach(link => {
@@ -390,6 +393,125 @@ function renderApplicationCard(app, groupType) {
     </div>`;
 }
 
+// ── Briefs ────────────────────────────────────────────────────────────────────
+async function loadBriefs() {
+  briefsList.innerHTML = renderSkeletons(2);
+
+  let briefs;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/events/my-briefs`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error();
+    briefs = await res.json();
+  } catch {
+    briefsList.innerHTML = `
+      <div class="offers-empty">
+        <i data-lucide="wifi-off" style="width:40px;height:40px;color:var(--text-muted)"></i>
+        <p>Could not load briefs. Please try again.</p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  const unread = briefs.filter((b) => !b.isAcknowledged).length;
+  if (unread > 0) {
+    briefsBadge.textContent  = unread;
+    briefsBadge.style.display = "";
+  } else {
+    briefsBadge.style.display = "none";
+  }
+
+  if (briefs.length === 0) {
+    briefsList.innerHTML = `
+      <div class="offers-empty">
+        <i data-lucide="file-text" style="width:48px;height:48px;color:var(--blue-light)"></i>
+        <p>No briefs right now.<br><span>You'll see briefings here once assigned to shifts.</span></p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  // Group by project name then event name
+  const grouped = {};
+  briefs.forEach((b) => {
+    const projKey = b.projectName || "Project";
+    const evKey   = b.eventName || "Event";
+    if (!grouped[projKey]) grouped[projKey] = {};
+    if (!grouped[projKey][evKey]) grouped[projKey][evKey] = [];
+    grouped[projKey][evKey].push(b);
+  });
+
+  briefsList.innerHTML = Object.entries(grouped).map(([proj, events]) => `
+    <div class="brief-project-group">
+      <div class="brief-project-label">${escHtml(proj)}</div>
+      ${Object.entries(events).map(([ev, items]) => `
+        <div class="brief-event-group">
+          <div class="brief-event-label">${escHtml(ev)}</div>
+          ${items.map((b) => renderBriefCard(b)).join("")}
+        </div>`).join("")}
+    </div>`).join("");
+
+  lucide.createIcons();
+
+  briefsList.querySelectorAll(".brief-card[data-brief-id]").forEach((card) => {
+    const btn = card.querySelector(".brief-ack-btn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+      try {
+        const briefId = card.dataset.briefId;
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/events/briefs/${encodeURIComponent(briefId)}/acknowledge`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error();
+        card.classList.add("brief-card--acked");
+        btn.remove();
+        const badgeEl = card.querySelector(".brief-unread-dot");
+        if (badgeEl) badgeEl.remove();
+        // Update nav badge
+        const remaining = briefsList.querySelectorAll(".brief-card:not(.brief-card--acked)").length;
+        if (remaining > 0) {
+          briefsBadge.textContent  = remaining;
+          briefsBadge.style.display = "";
+        } else {
+          briefsBadge.style.display = "none";
+        }
+      } catch {
+        btn.disabled = false;
+        btn.textContent = "I acknowledge this brief";
+      }
+    });
+  });
+}
+
+function renderBriefCard(brief) {
+  const dateStr = brief.createdAt
+    ? new Date(brief.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : "";
+  const isAcked = brief.isAcknowledged;
+  const ackedAt = brief.acknowledgedAt
+    ? new Date(brief.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : "";
+
+  return `
+    <div class="brief-card${isAcked ? " brief-card--acked" : ""}" data-brief-id="${escHtml(brief.briefId)}">
+      <div class="brief-card-header">
+        <span class="brief-card-title">${escHtml(brief.title)}</span>
+        ${isAcked
+          ? `<span class="brief-acked-badge">&#10003; Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
+          : `<span class="brief-unread-dot"></span>`}
+      </div>
+      ${dateStr ? `<div class="brief-card-date">${escHtml(dateStr)}</div>` : ""}
+      <div class="brief-card-content">${escHtml(brief.content)}</div>
+      ${!isAcked ? `<button class="brief-ack-btn">I acknowledge this brief</button>` : ""}
+    </div>`;
+}
+
 // ── Auth gate ─────────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (!user) {
@@ -426,10 +548,11 @@ onAuthStateChanged(auth, async user => {
     console.warn("Chat profile write failed:", e);
   }
 
-  // Start on Chats (default), then load offers in background for badge
+  // Start on Chats (default), then load offers + briefs in background for badges
   showSection("chats");
   initChat(chatSection, profile, user.uid);
   loadOffers();
+  loadBriefs();
 });
 
 // ── Logout ────────────────────────────────────────────────────────────────────

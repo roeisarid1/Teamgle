@@ -414,6 +414,119 @@
 
     </div><!-- end #section-project-detail -->
 
+    <!-- ── Event Detail full-page view ──────────────────────────────────── -->
+    <div class="page-section" id="section-event-detail" data-section="event-detail" style="display:none">
+
+      <div class="cp-header">
+        <div class="cp-header-left">
+          <button class="cp-back-btn" id="btn-back-from-event-detail" type="button">
+            <i data-lucide="arrow-left"></i>
+            Back
+          </button>
+          <div>
+            <div class="cp-title" id="event-detail-title">Event</div>
+            <div class="cp-subtitle" id="event-detail-subtitle"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pd-tabs" id="event-detail-tabs">
+        <button class="pd-tab active" data-etab="workers">Workers</button>
+        <button class="pd-tab" data-etab="tasks">Tasks</button>
+        <button class="pd-tab" data-etab="briefs">Briefs</button>
+        <button class="pd-tab" data-etab="expenses">Expenses</button>
+        <button class="pd-tab" data-etab="payroll">Hours &amp; Payroll</button>
+        <button class="pd-tab" data-etab="finance">Finance</button>
+      </div>
+
+      <div class="pd-tab-body">
+
+        <!-- Workers tab -->
+        <div class="ed-panel" data-etab-panel="workers">
+          <div id="ed-workers-root"></div>
+        </div>
+
+        <!-- Tasks tab -->
+        <div class="ed-panel" data-etab-panel="tasks" style="display:none">
+          <div class="pd-section-header">
+            <h3 class="pd-section-title">Tasks</h3>
+            <button class="pd-add-btn" id="ed-btn-add-task">+ Add Task</button>
+          </div>
+          <div class="pd-filter-bar">
+            <div class="pd-filter-section">
+              <span class="pd-field-label">Priority</span>
+              <div class="pd-filter-group" id="ed-task-priority-filters">
+                <button class="pd-filter-pill active" data-value="all">All</button>
+                <button class="pd-filter-pill pd-filter-pill--urgent" data-value="urgent">urgent</button>
+                <button class="pd-filter-pill pd-filter-pill--high"   data-value="high">high</button>
+                <button class="pd-filter-pill pd-filter-pill--medium" data-value="medium">medium</button>
+                <button class="pd-filter-pill pd-filter-pill--low"    data-value="low">low</button>
+              </div>
+            </div>
+          </div>
+          <div class="pd-kanban-board" id="ed-task-board">
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--open">
+                <span class="pd-kanban-col-title">Open</span>
+                <span class="pd-kanban-col-count" id="ed-col-count-open">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="ed-col-open"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--in_progress">
+                <span class="pd-kanban-col-title">In Progress</span>
+                <span class="pd-kanban-col-count" id="ed-col-count-in_progress">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="ed-col-in_progress"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--done">
+                <span class="pd-kanban-col-title">Done</span>
+                <span class="pd-kanban-col-count" id="ed-col-count-done">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="ed-col-done"></div>
+            </div>
+            <div class="pd-kanban-col">
+              <div class="pd-kanban-col-header pd-kanban-col-header--canceled">
+                <span class="pd-kanban-col-title">Canceled</span>
+                <span class="pd-kanban-col-count" id="ed-col-count-canceled">0</span>
+              </div>
+              <div class="pd-kanban-col-list" id="ed-col-canceled"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Briefs tab -->
+        <div class="ed-panel" data-etab-panel="briefs" style="display:none">
+          <div class="pd-section-header">
+            <h3 class="pd-section-title">Briefs</h3>
+            <button class="pd-add-btn" id="ed-btn-add-brief">+ Add Brief</button>
+          </div>
+          <div class="pd-brief-list" id="ed-brief-list"></div>
+        </div>
+
+        <!-- Expenses tab -->
+        <div class="ed-panel" data-etab-panel="expenses" style="display:none">
+          <div class="pd-section-header">
+            <h3 class="pd-section-title">Expenses</h3>
+            <button class="pd-add-btn" id="ed-btn-add-expense">+ Add Expense</button>
+          </div>
+          <div id="ed-expense-list"></div>
+        </div>
+
+        <!-- Hours & Payroll tab -->
+        <div class="ed-panel" data-etab-panel="payroll" style="display:none">
+          <div id="ed-payroll-root"></div>
+        </div>
+
+        <!-- Finance tab -->
+        <div class="ed-panel" data-etab-panel="finance" style="display:none">
+          <div id="ed-finance-root"></div>
+        </div>
+
+      </div>
+    </div><!-- end #section-event-detail -->
+
     <!-- Chat section — injected by chat-ui.js, fills content area in chat-mode -->
     <div class="page-section" id="section-chats" data-section="chats" style="display:none">
     </div>

@@ -12,13 +12,13 @@ public interface IProjectService
     Task UpdateShiftAsync(string firebaseUid, string shiftId, UpdateShiftRequest request);
     Task DeleteShiftAsync(string firebaseUid, string shiftId);
 
-    // ── Tasks ──────────────────────────────────────────────────────────────
+    // ── Project Tasks ──────────────────────────────────────────────────────
     Task<IEnumerable<TaskItem>?> GetProjectTasksAsync(string firebaseUid, string projId);
     Task<TaskItem?> CreateProjectTaskAsync(string firebaseUid, string projId, CreateTaskRequest request);
     Task<TaskItem?> UpdateProjectTaskAsync(string firebaseUid, string projId, string taskId, UpdateTaskRequest request);
     Task<bool?> DeleteProjectTaskAsync(string firebaseUid, string projId, string taskId);
 
-    // ── Briefs ─────────────────────────────────────────────────────────────
+    // ── Project Briefs ─────────────────────────────────────────────────────
     Task<IEnumerable<BriefItem>?> GetProjectBriefsAsync(string firebaseUid, string projId);
     Task<BriefItem?> CreateProjectBriefAsync(string firebaseUid, string projId, CreateBriefRequest request);
     Task<BriefItem?> UpdateProjectBriefAsync(string firebaseUid, string projId, string briefId, UpdateBriefRequest request);
@@ -37,4 +37,31 @@ public interface IProjectService
     Task<EventWorkersResponse> GetEventWorkersAsync(string firebaseUid, string eventId);
     Task UpdateWorkerStatusAsync(string firebaseUid, string eventId, string employeeFbUid, string shiftId, string newStatus);
     Task DeleteWorkerAssignmentAsync(string firebaseUid, string eventId, string employeeFbUid, string shiftId);
+
+    // ── Event Tasks ────────────────────────────────────────────────────────
+    Task<IEnumerable<TaskItem>?> GetEventTasksAsync(string firebaseUid, string eventId);
+    Task<TaskItem?> CreateEventTaskAsync(string firebaseUid, string eventId, CreateTaskRequest request);
+    Task<TaskItem?> UpdateEventTaskAsync(string firebaseUid, string eventId, string taskId, UpdateTaskRequest request);
+    Task<bool?> DeleteEventTaskAsync(string firebaseUid, string eventId, string taskId);
+
+    // ── Event Briefs ───────────────────────────────────────────────────────
+    Task<IEnumerable<BriefItem>?> GetEventBriefsAsync(string firebaseUid, string eventId);
+    Task<BriefItem?> CreateEventBriefAsync(string firebaseUid, string eventId, CreateBriefRequest request);
+    Task<BriefItem?> UpdateEventBriefAsync(string firebaseUid, string eventId, string briefId, UpdateBriefRequest request);
+    Task<bool?> DeleteEventBriefAsync(string firebaseUid, string eventId, string briefId);
+
+    // ── Event Expenses ─────────────────────────────────────────────────────
+    Task<IEnumerable<EventExpenseItem>?> GetEventExpensesAsync(string firebaseUid, string eventId);
+    Task<EventExpenseItem?> CreateEventExpenseAsync(string firebaseUid, string eventId, CreateExpenseRequest request);
+    Task<EventExpenseItem?> UpdateEventExpenseAsync(string firebaseUid, string eventId, string expenseId, UpdateExpenseRequest request);
+    Task<bool?> DeleteEventExpenseAsync(string firebaseUid, string eventId, string expenseId);
+
+    // ── Event Payroll ──────────────────────────────────────────────────────
+    Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string firebaseUid, string eventId);
+    Task<PayrollItem?> UpdatePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, UpdatePayrollRequest request);
+
+    // ── Brief Acknowledgment ───────────────────────────────────────────────
+    Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string firebaseUid, string briefId);
+    Task<bool> AcknowledgeBriefAsync(string firebaseUid, string briefId);
+    Task<IEnumerable<EmployeeBriefItem>?> GetMyBriefsAsync(string firebaseUid);
 }

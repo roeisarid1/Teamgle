@@ -260,4 +260,130 @@ public class ProjectService : IProjectService
         await ResolveCompanyIdAsync(firebaseUid);
         await _projectRepo.DeleteWorkerAssignmentAsync(eventId, employeeFbUid, shiftId, firebaseUid);
     }
+
+    // ── Event Tasks ────────────────────────────────────────────────────────
+    public async Task<IEnumerable<TaskItem>?> GetEventTasksAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetTasksByEventIdAsync(eventId, firebaseUid);
+    }
+
+    public async Task<TaskItem?> CreateEventTaskAsync(string firebaseUid, string eventId, CreateTaskRequest request)
+    {
+        ValidateTaskFields(request.Content, request.Status, request.Priority);
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.CreateEventTaskAsync(eventId, request, firebaseUid);
+    }
+
+    public async Task<TaskItem?> UpdateEventTaskAsync(string firebaseUid, string eventId, string taskId, UpdateTaskRequest request)
+    {
+        ValidateTaskFields(request.Content, request.Status, request.Priority);
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdateEventTaskAsync(taskId, eventId, request, firebaseUid);
+    }
+
+    public async Task<bool?> DeleteEventTaskAsync(string firebaseUid, string eventId, string taskId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.DeleteEventTaskAsync(taskId, eventId, firebaseUid);
+    }
+
+    // ── Event Briefs ───────────────────────────────────────────────────────
+    public async Task<IEnumerable<BriefItem>?> GetEventBriefsAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetBriefsByEventIdAsync(eventId, firebaseUid);
+    }
+
+    public async Task<BriefItem?> CreateEventBriefAsync(string firebaseUid, string eventId, CreateBriefRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new ArgumentException("Brief title is required.");
+        if (string.IsNullOrWhiteSpace(request.Content))
+            throw new ArgumentException("Brief content is required.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.CreateEventBriefAsync(eventId, request, firebaseUid);
+    }
+
+    public async Task<BriefItem?> UpdateEventBriefAsync(string firebaseUid, string eventId, string briefId, UpdateBriefRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new ArgumentException("Brief title is required.");
+        if (string.IsNullOrWhiteSpace(request.Content))
+            throw new ArgumentException("Brief content is required.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdateEventBriefAsync(briefId, eventId, request, firebaseUid);
+    }
+
+    public async Task<bool?> DeleteEventBriefAsync(string firebaseUid, string eventId, string briefId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.DeleteEventBriefAsync(briefId, eventId, firebaseUid);
+    }
+
+    // ── Event Expenses ─────────────────────────────────────────────────────
+    private static readonly HashSet<string> ValidExpenseTypes =
+        ["venue", "catering", "equipment", "staffing", "transport", "marketing", "other"];
+
+    public async Task<IEnumerable<EventExpenseItem>?> GetEventExpensesAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetEventExpensesAsync(eventId, firebaseUid);
+    }
+
+    public async Task<EventExpenseItem?> CreateEventExpenseAsync(string firebaseUid, string eventId, CreateExpenseRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ExpenseType))
+            throw new ArgumentException("Expense type is required.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.CreateEventExpenseAsync(eventId, request, firebaseUid);
+    }
+
+    public async Task<EventExpenseItem?> UpdateEventExpenseAsync(string firebaseUid, string eventId, string expenseId, UpdateExpenseRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ExpenseType))
+            throw new ArgumentException("Expense type is required.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdateEventExpenseAsync(expenseId, eventId, request, firebaseUid);
+    }
+
+    public async Task<bool?> DeleteEventExpenseAsync(string firebaseUid, string eventId, string expenseId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.DeleteEventExpenseAsync(expenseId, eventId, firebaseUid);
+    }
+
+    // ── Event Payroll ──────────────────────────────────────────────────────
+    private static readonly HashSet<string> ValidPaymentStatuses = ["unpaid", "paid", "partial"];
+
+    public async Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetEventPayrollAsync(eventId, firebaseUid);
+    }
+
+    public async Task<PayrollItem?> UpdatePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, UpdatePayrollRequest request)
+    {
+        if (!ValidPaymentStatuses.Contains(request.PaymentStatus))
+            throw new ArgumentException($"Invalid payment status '{request.PaymentStatus}'. Allowed: unpaid, paid, partial.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdatePayrollAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
+    }
+
+    // ── Brief Acknowledgment ───────────────────────────────────────────────
+    public async Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string firebaseUid, string briefId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetBriefAcknowledgmentsAsync(briefId, firebaseUid);
+    }
+
+    public async Task<bool> AcknowledgeBriefAsync(string firebaseUid, string briefId)
+    {
+        return await _projectRepo.AcknowledgeBriefAsync(briefId, firebaseUid);
+    }
+
+    public async Task<IEnumerable<EmployeeBriefItem>?> GetMyBriefsAsync(string firebaseUid)
+    {
+        return await _projectRepo.GetBriefsForEmployeeAsync(firebaseUid);
+    }
 }
