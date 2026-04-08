@@ -2,19 +2,27 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --blue:        #5B7BF0;
-  --blue-dark:   #4563d4;
-  --blue-light:  #eef1fe;
-  --green:       #6FBF73;
-  --yellow:      #F6C04D;
-  --red:         #ef4444;
-  --text:        #1a1a2e;
-  --text-muted:  #6b7280;
-  --border:      #e5e7eb;
-  --bg:          #f4f6ff;
-  --card:        #ffffff;
-  --radius:      12px;
-  --transition:  .18s ease;
+  --blue:          #5B7BF0;
+  --blue-dark:     #4563d4;
+  --blue-light:    #eef1fe;
+  --green:         #6FBF73;
+  --yellow:        #F6C04D;
+  --red:           #ef4444;
+  --text:          #1a1a2e;
+  --text-muted:    #6b7280;
+  --border:        #e5e7eb;
+  --bg:            #f4f6ff;
+  --card:          #ffffff;
+  --radius:        12px;
+  --transition:    .18s ease;
+
+  /* Extended palette used by event-detail / shift UI */
+  --accent:        #5B7BF0;
+  --accent-light:  rgba(91,123,240,.15);
+  --surface-1:     #ffffff;
+  --surface-2:     #f8f9fc;
+  --text-primary:  #1a1a2e;
+  --text-secondary:#374151;
 }
 
 body {
