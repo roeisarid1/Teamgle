@@ -332,7 +332,48 @@ public class EventsController : ControllerBase
         }
     }
 
-    // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}
+    // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}/approve
+    [HttpPut("{eventId}/payroll/{employeeUserId}/{shiftId}/approve")]
+    public async Task<IActionResult> ApproveHours(string eventId, string employeeUserId, string shiftId, [FromBody] ApproveHoursRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var item = await _projectService.ApproveHoursAsync(uid, eventId, shiftId, employeeUserId, request);
+            if (item == null) return NotFound(new { error = "Record not found." });
+            return Ok(item);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error approving hours for employee {EmployeeUserId} shift {ShiftId}", employeeUserId, shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}/save
+    [HttpPut("{eventId}/payroll/{employeeUserId}/{shiftId}/save")]
+    public async Task<IActionResult> SavePayroll(string eventId, string employeeUserId, string shiftId, [FromBody] SavePayrollRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var item = await _projectService.SavePayrollAsync(uid, eventId, shiftId, employeeUserId, request);
+            if (item == null) return NotFound(new { error = "Record not found." });
+            return Ok(item);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving payroll for employee {EmployeeUserId} shift {ShiftId}", employeeUserId, shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}  (kept for compat)
     [HttpPut("{eventId}/payroll/{employeeUserId}/{shiftId}")]
     public async Task<IActionResult> UpdatePayroll(string eventId, string employeeUserId, string shiftId, [FromBody] UpdatePayrollRequest request)
     {

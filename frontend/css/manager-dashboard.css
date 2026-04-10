@@ -4946,6 +4946,30 @@ tr.expanded-row > td {
 .ed-pr-time-summary { color: var(--text-primary); font-weight: 500; }
 .ed-pr-not-reported { color: var(--text-muted); font-style: italic; }
 
+.ed-pr-status-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+.ed-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ed-badge-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ed-pr-approved-note {
+  font-size: 12px;
+  color: var(--success, #22c55e);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+
 
 /* Shared badge */
 .ed-badge {

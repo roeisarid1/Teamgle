@@ -359,7 +359,7 @@ public class ProjectService : IProjectService
     }
 
     // ── Event Payroll ──────────────────────────────────────────────────────
-    private static readonly HashSet<string> ValidPaymentStatuses = ["unpaid", "paid", "partial"];
+    private static readonly HashSet<string> ValidPaymentStatuses = ["pending", "approved", "paid"];
 
     public async Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string firebaseUid, string eventId)
     {
@@ -367,10 +367,22 @@ public class ProjectService : IProjectService
         return await _projectRepo.GetEventPayrollAsync(eventId, firebaseUid);
     }
 
-    public async Task<PayrollItem?> UpdatePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, UpdatePayrollRequest request)
+    public async Task<PayrollItem?> ApproveHoursAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, ApproveHoursRequest request)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.ApproveHoursAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
+    }
+
+    public async Task<PayrollItem?> SavePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, SavePayrollRequest request)
     {
         if (!ValidPaymentStatuses.Contains(request.PaymentStatus))
-            throw new ArgumentException($"Invalid payment status '{request.PaymentStatus}'. Allowed: unpaid, paid, partial.");
+            throw new ArgumentException($"Invalid payment_status '{request.PaymentStatus}'. Allowed: pending, approved, paid.");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.SavePayrollAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
+    }
+
+    public async Task<PayrollItem?> UpdatePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, UpdatePayrollRequest request)
+    {
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.UpdatePayrollAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
     }

@@ -1436,6 +1436,14 @@ public class ProjectRepository : IProjectRepository
         return (string?)await cmd.ExecuteScalarAsync();
     }
 
+    private async Task<string?> GetUserIdByFbUidAsync(SqlConnection conn, string firebaseUid)
+    {
+        const string sql = "SELECT user_ID FROM [User] WHERE FBUID = @fbUid";
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@fbUid", firebaseUid);
+        return (string?)await cmd.ExecuteScalarAsync();
+    }
+
     // ── Event Tasks ────────────────────────────────────────────────────────
 
     public async Task<IEnumerable<TaskItem>?> GetTasksByEventIdAsync(string eventId, string firebaseUid)
@@ -1743,74 +1751,158 @@ public class ProjectRepository : IProjectRepository
 
     // ── Event Payroll (Employee_Shift hours) ───────────────────────────────
 
+    // ── Shared SELECT fragment used by GET list and both write re-fetches ─────
+    private const string PayrollSelectSql = """
+        SELECT
+            u.user_ID                       AS EmployeeUserId,
+            u.FBUID                         AS EmployeeFbUid,
+            u.firstName                     AS FirstName,
+            u.lastName                      AS LastName,
+            es.shift_ID                     AS ShiftId,
+            r.Roll_name                     AS RoleName,
+            s.start_time                    AS ShiftStart,
+            s.end_time                      AS ShiftEnd,
+            es.actual_start_time            AS ActualStart,
+            es.actual_end_time              AS ActualEnd,
+            es.approved_regular_hours       AS ApprovedRegularHours,
+            es.approved_overtime_hours      AS ApprovedOvertimeHours,
+            es.approved_at                  AS ApprovedAt,
+            es.approved_by_manager_user_ID  AS ApprovedByManagerUserId,
+            es.pay_rate_per_hour            AS PayRatePerHour,
+            CASE WHEN es.pay_rate_per_hour IS NULL THEN e.cost_per_hour ELSE NULL END AS DefaultPayRate,
+            es.overtime_rate_per_hour       AS OvertimeRatePerHour,
+            es.travel_refund                AS TravelRefund,
+            es.bonus_amount                 AS BonusAmount,
+            es.penalty_amount               AS PenaltyAmount,
+            es.payment_status               AS PaymentStatus,
+            es.status                       AS Status
+        FROM Employee_Shift es
+        INNER JOIN [User]    u  ON u.user_ID  = es.employee_user_ID
+        INNER JOIN Employee  e  ON e.user_ID  = es.employee_user_ID
+        INNER JOIN Shift     s  ON s.Shift_ID = es.shift_ID
+        INNER JOIN Roll      r  ON r.Roll_ID  = s.roll_ID
+        """;
+
+    private static PayrollItem ReadPayrollItem(SqlDataReader reader) => new()
+    {
+        EmployeeUserId         = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))        ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
+        EmployeeFbUid          = reader.IsDBNull(reader.GetOrdinal("EmployeeFbUid"))         ? "" : reader.GetString(reader.GetOrdinal("EmployeeFbUid")),
+        FirstName              = reader.IsDBNull(reader.GetOrdinal("FirstName"))             ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
+        LastName               = reader.IsDBNull(reader.GetOrdinal("LastName"))              ? "" : reader.GetString(reader.GetOrdinal("LastName")),
+        ShiftId                = reader.IsDBNull(reader.GetOrdinal("ShiftId"))               ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
+        RoleName               = reader.IsDBNull(reader.GetOrdinal("RoleName"))              ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
+        ShiftStart             = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))            ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
+        ShiftEnd               = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))             ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
+        ActualStart            = reader.IsDBNull(reader.GetOrdinal("ActualStart"))           ? null : reader.GetDateTime(reader.GetOrdinal("ActualStart")),
+        ActualEnd              = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))             ? null : reader.GetDateTime(reader.GetOrdinal("ActualEnd")),
+        ApprovedRegularHours   = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
+        ApprovedOvertimeHours  = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours")) ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
+        ApprovedAt             = reader.IsDBNull(reader.GetOrdinal("ApprovedAt"))            ? null : reader.GetDateTime(reader.GetOrdinal("ApprovedAt")),
+        ApprovedByManagerUserId= reader.IsDBNull(reader.GetOrdinal("ApprovedByManagerUserId"))? null : reader.GetString(reader.GetOrdinal("ApprovedByManagerUserId")),
+        PayRatePerHour         = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))        ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
+        DefaultPayRate         = reader.IsDBNull(reader.GetOrdinal("DefaultPayRate"))        ? null : reader.GetDecimal(reader.GetOrdinal("DefaultPayRate")),
+        OvertimeRatePerHour    = reader.IsDBNull(reader.GetOrdinal("OvertimeRatePerHour"))   ? null : reader.GetDecimal(reader.GetOrdinal("OvertimeRatePerHour")),
+        TravelRefund           = reader.IsDBNull(reader.GetOrdinal("TravelRefund"))          ? null : reader.GetDecimal(reader.GetOrdinal("TravelRefund")),
+        BonusAmount            = reader.IsDBNull(reader.GetOrdinal("BonusAmount"))           ? null : reader.GetDecimal(reader.GetOrdinal("BonusAmount")),
+        PenaltyAmount          = reader.IsDBNull(reader.GetOrdinal("PenaltyAmount"))         ? null : reader.GetDecimal(reader.GetOrdinal("PenaltyAmount")),
+        PaymentStatus          = reader.IsDBNull(reader.GetOrdinal("PaymentStatus"))         ? "pending" : reader.GetString(reader.GetOrdinal("PaymentStatus")),
+        Status                 = reader.IsDBNull(reader.GetOrdinal("Status"))                ? "" : reader.GetString(reader.GetOrdinal("Status")),
+    };
+
     public async Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string eventId, string firebaseUid)
     {
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
         if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
 
-        const string sql = """
-            SELECT
-                u.user_ID           AS EmployeeUserId,
-                u.FBUID             AS EmployeeFbUid,
-                u.firstName         AS FirstName,
-                u.lastName          AS LastName,
-                es.shift_ID         AS ShiftId,
-                r.Roll_name         AS RoleName,
-                s.start_time        AS ShiftStart,
-                s.end_time          AS ShiftEnd,
-                es.actual_start_time          AS ActualStart,
-                es.actual_end_time            AS ActualEnd,
-                es.approved_regular_hours     AS ApprovedRegularHours,
-                es.approved_overtime_hours    AS ApprovedOvertimeHours,
-                es.pay_rate_per_hour          AS PayRatePerHour,
-                es.overtime_rate_per_hour     AS OvertimeRatePerHour,
-                es.travel_refund              AS TravelRefund,
-                es.bonus_amount               AS BonusAmount,
-                es.penalty_amount             AS PenaltyAmount,
-                es.payment_status             AS PaymentStatus,
-                es.status                     AS Status
-            FROM Employee_Shift es
-            INNER JOIN [User]  u  ON u.user_ID  = es.employee_user_ID
-            INNER JOIN Shift   s  ON s.Shift_ID = es.shift_ID
-            INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
+        var sql = PayrollSelectSql + """
             WHERE s.event_ID = @eventId
               AND es.status  = 'manager_approved'
             ORDER BY u.lastName, u.firstName, s.start_time
             """;
 
         var list = new List<PayrollItem>();
-        await using var cmd    = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@eventId", eventId);
         await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            list.Add(new PayrollItem
-            {
-                EmployeeUserId        = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))       ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
-                EmployeeFbUid         = reader.IsDBNull(reader.GetOrdinal("EmployeeFbUid"))        ? "" : reader.GetString(reader.GetOrdinal("EmployeeFbUid")),
-                FirstName             = reader.IsDBNull(reader.GetOrdinal("FirstName"))            ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
-                LastName              = reader.IsDBNull(reader.GetOrdinal("LastName"))             ? "" : reader.GetString(reader.GetOrdinal("LastName")),
-                ShiftId               = reader.IsDBNull(reader.GetOrdinal("ShiftId"))              ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
-                RoleName              = reader.IsDBNull(reader.GetOrdinal("RoleName"))             ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
-                ShiftStart            = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))           ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
-                ShiftEnd              = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))             ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
-                ActualStart           = reader.IsDBNull(reader.GetOrdinal("ActualStart"))          ? null : reader.GetDateTime(reader.GetOrdinal("ActualStart")),
-                ActualEnd             = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))            ? null : reader.GetDateTime(reader.GetOrdinal("ActualEnd")),
-                ApprovedRegularHours  = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours")) ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
-                ApprovedOvertimeHours = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours"))? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
-                PayRatePerHour        = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))       ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
-                OvertimeRatePerHour   = reader.IsDBNull(reader.GetOrdinal("OvertimeRatePerHour"))  ? null : reader.GetDecimal(reader.GetOrdinal("OvertimeRatePerHour")),
-                TravelRefund          = reader.IsDBNull(reader.GetOrdinal("TravelRefund"))         ? null : reader.GetDecimal(reader.GetOrdinal("TravelRefund")),
-                BonusAmount           = reader.IsDBNull(reader.GetOrdinal("BonusAmount"))          ? null : reader.GetDecimal(reader.GetOrdinal("BonusAmount")),
-                PenaltyAmount         = reader.IsDBNull(reader.GetOrdinal("PenaltyAmount"))        ? null : reader.GetDecimal(reader.GetOrdinal("PenaltyAmount")),
-                PaymentStatus         = reader.IsDBNull(reader.GetOrdinal("PaymentStatus"))        ? "unpaid" : reader.GetString(reader.GetOrdinal("PaymentStatus")),
-                Status                = reader.IsDBNull(reader.GetOrdinal("Status"))               ? "" : reader.GetString(reader.GetOrdinal("Status")),
-            });
-        }
+        while (await reader.ReadAsync()) list.Add(ReadPayrollItem(reader));
         return list;
     }
 
+    private async Task<PayrollItem?> RefetchPayrollItemAsync(SqlConnection conn, string shiftId, string employeeUserId)
+    {
+        var sel = PayrollSelectSql + "WHERE es.shift_ID = @shiftId AND es.employee_user_ID = @employeeUserId";
+        await using var cmd = new SqlCommand(sel, conn);
+        cmd.Parameters.AddWithValue("@shiftId",        shiftId);
+        cmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadPayrollItem(reader) : null;
+    }
+
+    public async Task<PayrollItem?> ApproveHoursAsync(string shiftId, string employeeUserId, string eventId, ApproveHoursRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Resolve manager's internal user_ID from their Firebase UID
+        var managerUserId = await GetUserIdByFbUidAsync(conn, firebaseUid);
+        if (managerUserId == null) return null;
+        if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
+
+        const string sql = """
+            UPDATE Employee_Shift
+            SET approved_regular_hours       = @regularHours,
+                approved_overtime_hours      = @overtimeHours,
+                approved_by_manager_user_ID  = @managerId,
+                approved_at                  = @now,
+                status_updated_at            = @now
+            WHERE shift_ID         = @shiftId
+              AND employee_user_ID = @employeeUserId
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@regularHours",  (object?)request.ApprovedRegularHours  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@overtimeHours", (object?)request.ApprovedOvertimeHours ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@managerId",     managerUserId);
+        cmd.Parameters.AddWithValue("@now",           DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("@shiftId",       shiftId);
+        cmd.Parameters.AddWithValue("@employeeUserId",employeeUserId);
+        if (await cmd.ExecuteNonQueryAsync() == 0) return null;
+        return await RefetchPayrollItemAsync(conn, shiftId, employeeUserId);
+    }
+
+    public async Task<PayrollItem?> SavePayrollAsync(string shiftId, string employeeUserId, string eventId, SavePayrollRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
+
+        const string sql = """
+            UPDATE Employee_Shift
+            SET pay_rate_per_hour      = @payRate,
+                overtime_rate_per_hour = @overtimeRate,
+                travel_refund          = @travel,
+                bonus_amount           = @bonus,
+                penalty_amount         = @penalty,
+                payment_status         = @paymentStatus,
+                status_updated_at      = @now
+            WHERE shift_ID         = @shiftId
+              AND employee_user_ID = @employeeUserId
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@payRate",        (object?)request.PayRatePerHour       ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@overtimeRate",   (object?)request.OvertimeRatePerHour  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@travel",         (object?)request.TravelRefund         ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@bonus",          (object?)request.BonusAmount          ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@penalty",        (object?)request.PenaltyAmount        ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@paymentStatus",  request.PaymentStatus);
+        cmd.Parameters.AddWithValue("@now",            DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("@shiftId",        shiftId);
+        cmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
+        if (await cmd.ExecuteNonQueryAsync() == 0) return null;
+        return await RefetchPayrollItemAsync(conn, shiftId, employeeUserId);
+    }
+
+    // kept for backward-compat
     public async Task<PayrollItem?> UpdatePayrollAsync(string shiftId, string employeeUserId, string eventId, UpdatePayrollRequest request, string firebaseUid)
     {
         await using var conn = new SqlConnection(_connectionString);
@@ -1819,80 +1911,28 @@ public class ProjectRepository : IProjectRepository
 
         const string sql = """
             UPDATE Employee_Shift
-            SET actual_start_time         = @actualStart,
-                actual_end_time           = @actualEnd,
-                approved_regular_hours    = @regularHours,
-                approved_overtime_hours   = @overtimeHours,
-                pay_rate_per_hour         = @payRate,
-                overtime_rate_per_hour    = @overtimeRate,
-                travel_refund             = @travel,
-                bonus_amount              = @bonus,
-                penalty_amount            = @penalty,
-                payment_status            = @paymentStatus,
-                status_updated_at         = @now
+            SET pay_rate_per_hour      = @payRate,
+                overtime_rate_per_hour = @overtimeRate,
+                travel_refund          = @travel,
+                bonus_amount           = @bonus,
+                penalty_amount         = @penalty,
+                payment_status         = @paymentStatus,
+                status_updated_at      = @now
             WHERE shift_ID         = @shiftId
               AND employee_user_ID = @employeeUserId
             """;
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@actualStart",    (object?)request.ActualStart           ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@actualEnd",      (object?)request.ActualEnd             ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@regularHours",   (object?)request.ApprovedRegularHours  ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@overtimeHours",  (object?)request.ApprovedOvertimeHours ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@payRate",        (object?)request.PayRatePerHour        ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@overtimeRate",   (object?)request.OvertimeRatePerHour   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@travel",         (object?)request.TravelRefund          ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@bonus",          (object?)request.BonusAmount           ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@penalty",        (object?)request.PenaltyAmount         ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@payRate",        (object?)request.PayRatePerHour       ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@overtimeRate",   (object?)request.OvertimeRatePerHour  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@travel",         (object?)request.TravelRefund         ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@bonus",          (object?)request.BonusAmount          ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@penalty",        (object?)request.PenaltyAmount        ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@paymentStatus",  request.PaymentStatus);
         cmd.Parameters.AddWithValue("@now",            DateTime.UtcNow);
         cmd.Parameters.AddWithValue("@shiftId",        shiftId);
         cmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
-        var rows = await cmd.ExecuteNonQueryAsync();
-        if (rows == 0) return null;
-
-        // Re-fetch via GetEventPayrollAsync pattern — just do a targeted SELECT
-        const string sel = """
-            SELECT u.user_ID AS EmployeeUserId, u.FBUID AS EmployeeFbUid, u.firstName AS FirstName,
-                   u.lastName AS LastName, es.shift_ID AS ShiftId, r.Roll_name AS RoleName,
-                   s.start_time AS ShiftStart, s.end_time AS ShiftEnd,
-                   es.actual_start_time AS ActualStart, es.actual_end_time AS ActualEnd,
-                   es.approved_regular_hours AS ApprovedRegularHours, es.approved_overtime_hours AS ApprovedOvertimeHours,
-                   es.pay_rate_per_hour AS PayRatePerHour, es.overtime_rate_per_hour AS OvertimeRatePerHour,
-                   es.travel_refund AS TravelRefund, es.bonus_amount AS BonusAmount, es.penalty_amount AS PenaltyAmount,
-                   es.payment_status AS PaymentStatus, es.status AS Status
-            FROM Employee_Shift es
-            INNER JOIN [User] u ON u.user_ID = es.employee_user_ID
-            INNER JOIN Shift  s ON s.Shift_ID = es.shift_ID
-            INNER JOIN Roll   r ON r.Roll_ID  = s.roll_ID
-            WHERE es.shift_ID = @shiftId AND es.employee_user_ID = @employeeUserId
-            """;
-        await using var selCmd = new SqlCommand(sel, conn);
-        selCmd.Parameters.AddWithValue("@shiftId",        shiftId);
-        selCmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
-        await using var reader = await selCmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        return new PayrollItem
-        {
-            EmployeeUserId        = reader.GetString(reader.GetOrdinal("EmployeeUserId")),
-            EmployeeFbUid         = reader.IsDBNull(reader.GetOrdinal("EmployeeFbUid"))         ? "" : reader.GetString(reader.GetOrdinal("EmployeeFbUid")),
-            FirstName             = reader.IsDBNull(reader.GetOrdinal("FirstName"))              ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
-            LastName              = reader.IsDBNull(reader.GetOrdinal("LastName"))               ? "" : reader.GetString(reader.GetOrdinal("LastName")),
-            ShiftId               = reader.GetString(reader.GetOrdinal("ShiftId")),
-            RoleName              = reader.IsDBNull(reader.GetOrdinal("RoleName"))               ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
-            ShiftStart            = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))             ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
-            ShiftEnd              = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))               ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
-            ActualStart           = reader.IsDBNull(reader.GetOrdinal("ActualStart"))            ? null : reader.GetDateTime(reader.GetOrdinal("ActualStart")),
-            ActualEnd             = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))              ? null : reader.GetDateTime(reader.GetOrdinal("ActualEnd")),
-            ApprovedRegularHours  = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))   ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
-            ApprovedOvertimeHours = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
-            PayRatePerHour        = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))         ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
-            OvertimeRatePerHour   = reader.IsDBNull(reader.GetOrdinal("OvertimeRatePerHour"))    ? null : reader.GetDecimal(reader.GetOrdinal("OvertimeRatePerHour")),
-            TravelRefund          = reader.IsDBNull(reader.GetOrdinal("TravelRefund"))           ? null : reader.GetDecimal(reader.GetOrdinal("TravelRefund")),
-            BonusAmount           = reader.IsDBNull(reader.GetOrdinal("BonusAmount"))            ? null : reader.GetDecimal(reader.GetOrdinal("BonusAmount")),
-            PenaltyAmount         = reader.IsDBNull(reader.GetOrdinal("PenaltyAmount"))          ? null : reader.GetDecimal(reader.GetOrdinal("PenaltyAmount")),
-            PaymentStatus         = reader.IsDBNull(reader.GetOrdinal("PaymentStatus"))          ? "unpaid" : reader.GetString(reader.GetOrdinal("PaymentStatus")),
-            Status                = reader.IsDBNull(reader.GetOrdinal("Status"))                 ? "" : reader.GetString(reader.GetOrdinal("Status")),
-        };
+        if (await cmd.ExecuteNonQueryAsync() == 0) return null;
+        return await RefetchPayrollItemAsync(conn, shiftId, employeeUserId);
     }
 
     // ── Brief Acknowledgment ───────────────────────────────────────────────

@@ -72,6 +72,8 @@ public interface IProjectRepository
 
     // ── Event Payroll (Employee_Shift hours) ───────────────────────────────
     Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string eventId, string firebaseUid);
+    Task<PayrollItem?> ApproveHoursAsync(string shiftId, string employeeUserId, string eventId, ApproveHoursRequest request, string firebaseUid);
+    Task<PayrollItem?> SavePayrollAsync(string shiftId, string employeeUserId, string eventId, SavePayrollRequest request, string firebaseUid);
     Task<PayrollItem?> UpdatePayrollAsync(string shiftId, string employeeUserId, string eventId, UpdatePayrollRequest request, string firebaseUid);
 
     // ── Brief Acknowledgment ───────────────────────────────────────────────

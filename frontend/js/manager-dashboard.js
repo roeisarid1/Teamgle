@@ -6515,153 +6515,141 @@ function _fmtDuration(startIso, endIso) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-function _payStatusClass(status) {
-  return status === "paid" ? "ed-badge--paid" : status === "processing" ? "ed-badge--processing" : "ed-badge--unpaid";
-}
-
-function _updatePayrollRowBadge(row, item) {
-  const badge       = row.querySelector(".ed-badge");
-  if (!badge) return;
-  const hasApproved = item.approvedRegularHours != null || item.approvedOvertimeHours != null;
+function _edBuildPayrollRowHTML(item, idx) {
+  const hasApproved = item.approvedAt != null;
   const hasReported = item.actualStart || item.actualEnd;
-  const payStatus   = item.paymentStatus || "unpaid";
-  let label, cls;
-  if      (payStatus === "paid")        { label = "Paid";         cls = "ed-badge--paid";        }
-  else if (payStatus === "processing")  { label = "Processing";   cls = "ed-badge--processing";  }
-  else if (hasApproved)                 { label = "Approved";     cls = "ed-badge--approved";    }
-  else if (hasReported)                 { label = "Submitted";    cls = "ed-badge--pending";     }
-  else                                  { label = "Not Reported"; cls = "ed-badge--unpaid";      }
-  badge.className   = `ed-badge ${cls}`;
-  badge.textContent = label;
+  const duration    = _fmtDuration(item.actualStart, item.actualEnd);
+  const payStatus   = item.paymentStatus || "pending";
+  const _t = iso => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+
+  // Hours status badge
+  let hoursLabel, hoursCls;
+  if (hasApproved)      { hoursLabel = "Approved";     hoursCls = "ed-badge--approved"; }
+  else if (hasReported) { hoursLabel = "Submitted";    hoursCls = "ed-badge--pending";  }
+  else                  { hoursLabel = "Not Reported"; hoursCls = "ed-badge--unpaid";   }
+
+  // Payment status badge
+  let payLabel, payCls;
+  if (payStatus === "paid")     { payLabel = "Paid";     payCls = "ed-badge--paid";      }
+  else if (payStatus === "approved") { payLabel = "Approved"; payCls = "ed-badge--approved"; }
+  else                          { payLabel = "Pending";  payCls = "ed-badge--unpaid";    }
+
+  const reportedHtml = hasReported
+    ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
+    : `<span class="ed-pr-not-reported">Not reported</span>`;
+
+  const sectionAContent = hasReported
+    ? `<div class="ed-pr-fields-row">
+        <div class="ed-pr-field">
+          <label class="ed-pr-field-label">Actual Arrival</label>
+          <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+        </div>
+        <div class="ed-pr-field">
+          <label class="ed-pr-field-label">Actual Departure</label>
+          <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+        </div>
+        ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
+      </div>`
+    : `<p class="ed-pr-empty-state">Employee has not reported hours yet.</p>`;
+
+  const approvedNote = hasApproved
+    ? `<p class="ed-pr-approved-note">Approved on ${new Date(item.approvedAt).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"})}</p>`
+    : "";
+
+  // Pre-fill pay rate from employee default if not yet set
+  const payRateVal = item.payRatePerHour ?? item.defaultPayRate ?? "";
+
+  return `
+    <div class="ed-pr-employee-row" data-idx="${idx}">
+      <div class="ed-pr-row-header">
+        <div class="ed-pr-identity">
+          <span class="ed-pr-name">${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}</span>
+          <span class="ed-pr-role">${escapeHtml(item.roleName)}</span>
+        </div>
+        <div class="ed-pr-reported">${reportedHtml}</div>
+        <div class="ed-pr-status-badges">
+          <div class="ed-badge-group"><span class="ed-badge-label">Hours:</span><span class="ed-badge ${hoursCls}">${hoursLabel}</span></div>
+          <div class="ed-badge-group"><span class="ed-badge-label">Pay:</span><span class="ed-badge ${payCls}">${payLabel}</span></div>
+        </div>
+        <button class="ed-pr-review-btn">Review</button>
+      </div>
+      <div class="ed-pr-panel" hidden>
+
+        <!-- Step 1: Reported by Employee -->
+        <div class="ed-pr-panel-section">
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> Employee Report</div>
+          ${sectionAContent}
+        </div>
+
+        <!-- Step 2: Manager Approval -->
+        <div class="ed-pr-panel-section">
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">2</span> Manager Approval</div>
+          ${approvedNote}
+          <div class="ed-pr-fields-row">
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Regular Hours</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours"
+                     value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Overtime Hours</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours"
+                     value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—">
+            </div>
+          </div>
+          <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
+        </div>
+
+        <!-- Step 3: Payroll -->
+        <div class="ed-pr-panel-section">
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">3</span> Payroll</div>
+          <div class="ed-pr-fields-row">
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Rate/hr (₪)</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour"
+                     value="${payRateVal}" min="0" step="0.01" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">OT Rate/hr (₪)</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour"
+                     value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Travel Refund (₪)</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund"
+                     value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Bonus (₪)</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount"
+                     value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Penalty (₪)</label>
+              <input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount"
+                     value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—">
+            </div>
+            <div class="ed-pr-field">
+              <label class="ed-pr-field-label">Payment Status</label>
+              <select class="ed-pr-input ed-pr-select" name="paymentStatus">
+                ${["pending","approved","paid"].map(
+                  s => `<option value="${s}"${payStatus === s ? " selected" : ""}>${capitalize(s)}</option>`
+                ).join("")}
+              </select>
+            </div>
+          </div>
+          <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">Save Payroll</button>
+        </div>
+
+      </div>
+    </div>`;
 }
 
 function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
     return '<div class="pd-empty-state">No approved workers for payroll.</div>';
   }
-
-  const rows = items.map((item, idx) => {
-    const hasApproved  = item.approvedRegularHours != null || item.approvedOvertimeHours != null;
-    const hasReported  = item.actualStart || item.actualEnd;
-    const duration     = _fmtDuration(item.actualStart, item.actualEnd);
-    const payStatus    = item.paymentStatus || "unpaid";
-    const _t = iso => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
-
-    // Status label in header: Not Reported / Submitted / Approved / Paid
-    let statusLabel, statusBadgeClass;
-    if (payStatus === "paid") {
-      statusLabel = "Paid"; statusBadgeClass = "ed-badge--paid";
-    } else if (payStatus === "processing") {
-      statusLabel = "Processing"; statusBadgeClass = "ed-badge--processing";
-    } else if (hasApproved) {
-      statusLabel = "Approved"; statusBadgeClass = "ed-badge--approved";
-    } else if (hasReported) {
-      statusLabel = "Submitted"; statusBadgeClass = "ed-badge--pending";
-    } else {
-      statusLabel = "Not Reported"; statusBadgeClass = "ed-badge--unpaid";
-    }
-
-    const reportedHtml = hasReported
-      ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
-      : `<span class="ed-pr-not-reported">Not reported</span>`;
-
-    // Section A: employee report — show empty state if nothing reported
-    const sectionAContent = hasReported
-      ? `<div class="ed-pr-fields-row">
-          <div class="ed-pr-field">
-            <label class="ed-pr-field-label">Actual Arrival</label>
-            <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
-          </div>
-          <div class="ed-pr-field">
-            <label class="ed-pr-field-label">Actual Departure</label>
-            <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
-          </div>
-          ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
-        </div>`
-      : `<p class="ed-pr-empty-state">Employee has not reported hours yet.</p>`;
-
-    return `
-      <div class="ed-pr-employee-row" data-idx="${idx}">
-        <div class="ed-pr-row-header">
-          <div class="ed-pr-identity">
-            <span class="ed-pr-name">${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}</span>
-            <span class="ed-pr-role">${escapeHtml(item.roleName)}</span>
-          </div>
-          <div class="ed-pr-reported">${reportedHtml}</div>
-          <span class="ed-badge ${statusBadgeClass}">${statusLabel}</span>
-          <button class="ed-pr-review-btn">Review</button>
-        </div>
-        <div class="ed-pr-panel" hidden>
-
-          <!-- Step 1: Reported by Employee -->
-          <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> Employee Report</div>
-            ${sectionAContent}
-          </div>
-
-          <!-- Step 2: Manager Approval -->
-          <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">2</span> Manager Approval</div>
-            <div class="ed-pr-fields-row">
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Regular Hours</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours"
-                       value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Overtime Hours</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours"
-                       value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—">
-              </div>
-            </div>
-            <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
-          </div>
-
-          <!-- Step 3: Payroll -->
-          <div class="ed-pr-panel-section">
-            <div class="ed-pr-panel-title"><span class="ed-pr-step-num">3</span> Payroll</div>
-            <div class="ed-pr-fields-row">
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Rate/hr (₪)</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour"
-                       value="${item.payRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">OT Rate/hr (₪)</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour"
-                       value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Travel Refund (₪)</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund"
-                       value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Bonus (₪)</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount"
-                       value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Penalty (₪)</label>
-                <input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount"
-                       value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—">
-              </div>
-              <div class="ed-pr-field">
-                <label class="ed-pr-field-label">Payment Status</label>
-                <select class="ed-pr-input ed-pr-select" name="paymentStatus">
-                  ${["unpaid","processing","paid"].map(
-                    s => `<option value="${s}"${item.paymentStatus === s ? " selected" : ""}>${capitalize(s)}</option>`
-                  ).join("")}
-                </select>
-              </div>
-            </div>
-            <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">Save Payroll</button>
-          </div>
-
-        </div>
-      </div>`;
-  }).join("");
-
+  const rows = items.map((item, idx) => _edBuildPayrollRowHTML(item, idx)).join("");
   return `<div class="ed-pr-list">${rows}</div>`;
 }
 
@@ -6676,8 +6664,9 @@ function _edWirePayrollSaveBtns() {
       const row   = e.target.closest(".ed-pr-employee-row");
       const panel = row?.querySelector(".ed-pr-panel");
       if (!panel) return;
-      panel.hidden = !panel.hidden;
-      e.target.closest(".ed-pr-review-btn").textContent = panel.hidden ? "Review" : "Close";
+      const isOpen = !panel.hidden;
+      panel.hidden = isOpen;
+      e.target.closest(".ed-pr-review-btn").textContent = isOpen ? "Review" : "Close";
       return;
     }
 
@@ -6692,42 +6681,49 @@ function _edWirePayrollSaveBtns() {
     const num    = (name) => val(name) !== "" ? parseFloat(val(name)) : null;
     const action = actionBtn.dataset.action;
 
-    // Build body — always send all fields to avoid overwriting existing data
-    const body = {
-      actualStart:           item.actualStart  ? _fmtDateTime(item.actualStart)  : null,
-      actualEnd:             item.actualEnd    ? _fmtDateTime(item.actualEnd)    : null,
-      approvedRegularHours:  num("approvedRegularHours"),
-      approvedOvertimeHours: num("approvedOvertimeHours"),
-      payRatePerHour:        num("payRatePerHour"),
-      overtimeRatePerHour:   num("overtimeRatePerHour"),
-      travelRefund:          num("travelRefund"),
-      bonusAmount:           num("bonusAmount"),
-      penaltyAmount:         num("penaltyAmount"),
-      paymentStatus:         val("paymentStatus") || "unpaid",
-    };
+    actionBtn.disabled    = true;
+    actionBtn.textContent = "Saving…";
 
-    actionBtn.disabled     = true;
-    actionBtn.textContent  = "Saving…";
     try {
       const token = await getToken();
-      const res = await fetch(
-        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}`,
-        { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) },
-      );
-      if (!res.ok) throw new Error();
-      const updated = await res.json();
-      _edPayrollData[idx] = updated;
-
-      // Update status badge in row header from fresh server data
-      const row = actionBtn.closest(".ed-pr-employee-row");
-      _updatePayrollRowBadge(row, updated);
+      let endpoint, body;
 
       if (action === "approve") {
-        actionBtn.textContent = "Approved ✓";
-        setTimeout(() => { actionBtn.textContent = "Approve Hours"; actionBtn.disabled = false; }, 2000);
+        endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/approve`;
+        body = {
+          approvedRegularHours:  num("approvedRegularHours"),
+          approvedOvertimeHours: num("approvedOvertimeHours"),
+        };
       } else {
-        actionBtn.textContent = "Saved ✓";
-        setTimeout(() => { actionBtn.textContent = "Save Payroll"; actionBtn.disabled = false; }, 2000);
+        endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`;
+        body = {
+          payRatePerHour:      num("payRatePerHour"),
+          overtimeRatePerHour: num("overtimeRatePerHour"),
+          travelRefund:        num("travelRefund"),
+          bonusAmount:         num("bonusAmount"),
+          penaltyAmount:       num("penaltyAmount"),
+          paymentStatus:       val("paymentStatus") || "pending",
+        };
+      }
+
+      const res = await fetch(endpoint, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+
+      // Update data store and re-render the row in-place (keep panel open)
+      _edPayrollData[idx] = updated;
+      const row = root.querySelector(`.ed-pr-employee-row[data-idx="${idx}"]`);
+      if (row) {
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = _edBuildPayrollRowHTML(updated, idx);
+        const newRow = tempDiv.firstElementChild;
+        newRow.querySelector(".ed-pr-panel").hidden = false;
+        newRow.querySelector(".ed-pr-review-btn").textContent = "Close";
+        row.replaceWith(newRow);
       }
     } catch {
       actionBtn.textContent = action === "approve" ? "Approve Hours" : "Save Payroll";
@@ -6761,9 +6757,14 @@ async function renderEdFinanceTab() {
 function _edBuildFinanceHTML(payroll, expenses) {
   const fmt = (n) => `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
 
+  // Finance only includes rows where hours are approved AND payment_status is approved or paid
+  const financePayroll = (payroll ?? []).filter(p =>
+    p.approvedAt && (p.paymentStatus === "approved" || p.paymentStatus === "paid")
+  );
+
   // Labor cost per worker
   let totalLabor = 0;
-  const laborRows = payroll.map((p) => {
+  const laborRows = financePayroll.map((p) => {
     const reg  = (p.approvedRegularHours  ?? 0) * (p.payRatePerHour       ?? 0);
     const ot   = (p.approvedOvertimeHours ?? 0) * (p.overtimeRatePerHour  ?? 0);
     const travel = p.travelRefund   ?? 0;
@@ -6791,6 +6792,10 @@ function _edBuildFinanceHTML(payroll, expenses) {
   const expenseRows = Object.entries(byType).map(([type, amt]) =>
     `<tr><td>${escapeHtml(type)}</td><td>${fmt(amt)}</td></tr>`
   ).join("");
+
+  if (financePayroll.length === 0 && Object.keys(byType).length === 0) {
+    return '<div class="pd-empty-state">No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.</div>';
+  }
 
   const grandTotal = totalLabor + totalExpenses;
 

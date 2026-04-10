@@ -14,15 +14,35 @@ public class PayrollItem
     public DateTime? ActualEnd              { get; set; }
     public decimal?  ApprovedRegularHours   { get; set; }
     public decimal?  ApprovedOvertimeHours  { get; set; }
+    public DateTime? ApprovedAt             { get; set; }
+    public string?   ApprovedByManagerUserId { get; set; }
     public decimal?  PayRatePerHour         { get; set; }
+    public decimal?  DefaultPayRate         { get; set; }   // from Employee.cost_per_hour; only present when PayRatePerHour is null
     public decimal?  OvertimeRatePerHour    { get; set; }
     public decimal?  TravelRefund           { get; set; }
     public decimal?  BonusAmount            { get; set; }
     public decimal?  PenaltyAmount          { get; set; }
-    public string    PaymentStatus          { get; set; } = "unpaid";
+    public string    PaymentStatus          { get; set; } = "pending";
     public string    Status                 { get; set; } = "";
 }
 
+public class ApproveHoursRequest
+{
+    public decimal? ApprovedRegularHours  { get; set; }
+    public decimal? ApprovedOvertimeHours { get; set; }
+}
+
+public class SavePayrollRequest
+{
+    public decimal? PayRatePerHour       { get; set; }
+    public decimal? OvertimeRatePerHour  { get; set; }
+    public decimal? TravelRefund         { get; set; }
+    public decimal? BonusAmount          { get; set; }
+    public decimal? PenaltyAmount        { get; set; }
+    public string   PaymentStatus        { get; set; } = "pending";
+}
+
+// kept for backward-compat — no longer used by new endpoints
 public class UpdatePayrollRequest
 {
     public DateTime? ActualStart           { get; set; }
@@ -34,5 +54,5 @@ public class UpdatePayrollRequest
     public decimal?  TravelRefund          { get; set; }
     public decimal?  BonusAmount           { get; set; }
     public decimal?  PenaltyAmount         { get; set; }
-    public string    PaymentStatus         { get; set; } = "unpaid";
+    public string    PaymentStatus         { get; set; } = "pending";
 }
