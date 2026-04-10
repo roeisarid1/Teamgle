@@ -6519,6 +6519,22 @@ function _payStatusClass(status) {
   return status === "paid" ? "ed-badge--paid" : status === "processing" ? "ed-badge--processing" : "ed-badge--unpaid";
 }
 
+function _updatePayrollRowBadge(row, item) {
+  const badge       = row.querySelector(".ed-badge");
+  if (!badge) return;
+  const hasApproved = item.approvedRegularHours != null || item.approvedOvertimeHours != null;
+  const hasReported = item.actualStart || item.actualEnd;
+  const payStatus   = item.paymentStatus || "unpaid";
+  let label, cls;
+  if      (payStatus === "paid")        { label = "Paid";         cls = "ed-badge--paid";        }
+  else if (payStatus === "processing")  { label = "Processing";   cls = "ed-badge--processing";  }
+  else if (hasApproved)                 { label = "Approved";     cls = "ed-badge--approved";    }
+  else if (hasReported)                 { label = "Submitted";    cls = "ed-badge--pending";     }
+  else                                  { label = "Not Reported"; cls = "ed-badge--unpaid";      }
+  badge.className   = `ed-badge ${cls}`;
+  badge.textContent = label;
+}
+
 function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
     return '<div class="pd-empty-state">No approved workers for payroll.</div>';
@@ -6702,20 +6718,14 @@ function _edWirePayrollSaveBtns() {
       const updated = await res.json();
       _edPayrollData[idx] = updated;
 
-      // Update approval badge in row header
+      // Update status badge in row header from fresh server data
       const row = actionBtn.closest(".ed-pr-employee-row");
+      _updatePayrollRowBadge(row, updated);
+
       if (action === "approve") {
-        const badge = row.querySelector(".ed-badge--pending");
-        if (badge) { badge.className = "ed-badge ed-badge--approved"; badge.textContent = "✓ Approved"; }
         actionBtn.textContent = "Approved ✓";
         setTimeout(() => { actionBtn.textContent = "Approve Hours"; actionBtn.disabled = false; }, 2000);
       } else {
-        // Update payment badge
-        const payBadge = row.querySelector(`.ed-badge--unpaid, .ed-badge--paid, .ed-badge--processing`);
-        if (payBadge) {
-          payBadge.className   = `ed-badge ${_payStatusClass(body.paymentStatus)}`;
-          payBadge.textContent = capitalize(body.paymentStatus);
-        }
         actionBtn.textContent = "Saved ✓";
         setTimeout(() => { actionBtn.textContent = "Save Payroll"; actionBtn.disabled = false; }, 2000);
       }
