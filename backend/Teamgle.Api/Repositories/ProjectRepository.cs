@@ -1752,36 +1752,30 @@ public class ProjectRepository : IProjectRepository
     // ── Event Payroll (Employee_Shift hours) ───────────────────────────────
 
     // ── Shared SELECT fragment used by GET list and both write re-fetches ─────
-    private const string PayrollSelectSql = """
-        SELECT
-            u.user_ID                       AS EmployeeUserId,
-            u.FBUID                         AS EmployeeFbUid,
-            u.firstName                     AS FirstName,
-            u.lastName                      AS LastName,
-            es.shift_ID                     AS ShiftId,
-            r.Roll_name                     AS RoleName,
-            s.start_time                    AS ShiftStart,
-            s.end_time                      AS ShiftEnd,
-            es.actual_start_time            AS ActualStart,
-            es.actual_end_time              AS ActualEnd,
-            es.approved_regular_hours       AS ApprovedRegularHours,
-            es.approved_overtime_hours      AS ApprovedOvertimeHours,
-            es.approved_at                  AS ApprovedAt,
-            es.approved_by_manager_user_ID  AS ApprovedByManagerUserId,
-            es.pay_rate_per_hour            AS PayRatePerHour,
-            CASE WHEN es.pay_rate_per_hour IS NULL THEN e.cost_per_hour ELSE NULL END AS DefaultPayRate,
-            es.overtime_rate_per_hour       AS OvertimeRatePerHour,
-            es.travel_refund                AS TravelRefund,
-            es.bonus_amount                 AS BonusAmount,
-            es.penalty_amount               AS PenaltyAmount,
-            es.payment_status               AS PaymentStatus,
-            es.status                       AS Status
-        FROM Employee_Shift es
-        INNER JOIN [User]    u  ON u.user_ID  = es.employee_user_ID
-        INNER JOIN Employee  e  ON e.user_ID  = es.employee_user_ID
-        INNER JOIN Shift     s  ON s.Shift_ID = es.shift_ID
-        INNER JOIN Roll      r  ON r.Roll_ID  = s.roll_ID
-        """;
+    private const string PayrollSelectSql = @"
+SELECT u.user_ID AS EmployeeUserId, u.FBUID AS EmployeeFbUid,
+       u.firstName AS FirstName, u.lastName AS LastName,
+       es.shift_ID AS ShiftId, r.Roll_name AS RoleName,
+       s.start_time AS ShiftStart, s.end_time AS ShiftEnd,
+       es.actual_start_time AS ActualStart, es.actual_end_time AS ActualEnd,
+       es.approved_regular_hours AS ApprovedRegularHours,
+       es.approved_overtime_hours AS ApprovedOvertimeHours,
+       es.approved_at AS ApprovedAt,
+       es.approved_by_manager_user_ID AS ApprovedByManagerUserId,
+       es.pay_rate_per_hour AS PayRatePerHour,
+       CASE WHEN es.pay_rate_per_hour IS NULL THEN e.cost_per_hour ELSE NULL END AS DefaultPayRate,
+       es.overtime_rate_per_hour AS OvertimeRatePerHour,
+       es.travel_refund AS TravelRefund,
+       es.bonus_amount AS BonusAmount,
+       es.penalty_amount AS PenaltyAmount,
+       es.payment_status AS PaymentStatus,
+       es.status AS Status
+FROM Employee_Shift es
+INNER JOIN [User]   u ON u.user_ID  = es.employee_user_ID
+INNER JOIN Employee e ON e.user_ID  = es.employee_user_ID
+INNER JOIN Shift    s ON s.Shift_ID = es.shift_ID
+INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
+";
 
     private static PayrollItem ReadPayrollItem(SqlDataReader reader) => new()
     {
@@ -1815,11 +1809,10 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
 
-        var sql = PayrollSelectSql + """
-            WHERE s.event_ID = @eventId
-              AND es.status  = 'manager_approved'
-            ORDER BY u.lastName, u.firstName, s.start_time
-            """;
+        var sql = PayrollSelectSql +
+            "WHERE s.event_ID = @eventId\n" +
+            "  AND es.status  = 'manager_approved'\n" +
+            "ORDER BY u.lastName, u.firstName, s.start_time";
 
         var list = new List<PayrollItem>();
         await using var cmd = new SqlCommand(sql, conn);
@@ -2033,7 +2026,7 @@ public class ProjectRepository : IProjectRepository
                 EmployeeUserId = reader.GetString(reader.GetOrdinal("EmployeeUserId")),
                 FirstName      = reader.IsDBNull(reader.GetOrdinal("FirstName")) ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
                 LastName       = reader.IsDBNull(reader.GetOrdinal("LastName"))  ? "" : reader.GetString(reader.GetOrdinal("LastName")),
-                IsRead         = reader.GetBoolean(reader.GetOrdinal("IsRead")),
+                IsRead         = Convert.ToBoolean(reader.GetValue(reader.GetOrdinal("IsRead"))),
                 ReadAt         = reader.IsDBNull(reader.GetOrdinal("ReadAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ReadAt")),
             });
         return list;

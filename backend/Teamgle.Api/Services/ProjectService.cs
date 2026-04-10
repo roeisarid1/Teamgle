@@ -383,6 +383,8 @@ public class ProjectService : IProjectService
 
     public async Task<PayrollItem?> UpdatePayrollAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, UpdatePayrollRequest request)
     {
+        if (!ValidPaymentStatuses.Contains(request.PaymentStatus))
+            throw new ArgumentException($"Invalid payment_status '{request.PaymentStatus}'. Allowed: pending, approved, paid.");
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.UpdatePayrollAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
     }
