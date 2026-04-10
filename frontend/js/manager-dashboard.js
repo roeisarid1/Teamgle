@@ -6653,8 +6653,8 @@ function _edWirePayrollSaveBtns() {
   const root = document.getElementById("ed-payroll-root");
   if (!root) return;
 
-  // Toggle expand/collapse on row header click
-  root.addEventListener("click", async (e) => {
+  // Use onclick (not addEventListener) so re-renders replace instead of stack listeners
+  root.onclick = async (e) => {
     // Review button toggle
     if (e.target.closest(".ed-pr-review-btn")) {
       const row   = e.target.closest(".ed-pr-employee-row");
@@ -6723,7 +6723,7 @@ function _edWirePayrollSaveBtns() {
       actionBtn.textContent = action === "approve" ? "Approve Hours" : "Save Payroll";
       actionBtn.disabled    = false;
     }
-  });
+  };
 }
 
 // ── FINANCE TAB ────────────────────────────────────────────────────────────
