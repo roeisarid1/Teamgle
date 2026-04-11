@@ -1777,6 +1777,9 @@ INNER JOIN Shift    s ON s.Shift_ID = es.shift_ID
 INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
 ";
 
+    private static DateTime Utc(SqlDataReader r, int ord) =>
+        DateTime.SpecifyKind(r.GetDateTime(ord), DateTimeKind.Utc);
+
     private static PayrollItem ReadPayrollItem(SqlDataReader reader) => new()
     {
         EmployeeUserId         = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))        ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
@@ -1785,13 +1788,13 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         LastName               = reader.IsDBNull(reader.GetOrdinal("LastName"))              ? "" : reader.GetString(reader.GetOrdinal("LastName")),
         ShiftId                = reader.IsDBNull(reader.GetOrdinal("ShiftId"))               ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
         RoleName               = reader.IsDBNull(reader.GetOrdinal("RoleName"))              ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
-        ShiftStart             = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))            ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
-        ShiftEnd               = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))             ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
-        ActualStart            = reader.IsDBNull(reader.GetOrdinal("ActualStart"))           ? null : reader.GetDateTime(reader.GetOrdinal("ActualStart")),
-        ActualEnd              = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))             ? null : reader.GetDateTime(reader.GetOrdinal("ActualEnd")),
+        ShiftStart             = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))            ? null : Utc(reader, reader.GetOrdinal("ShiftStart")),
+        ShiftEnd               = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))              ? null : Utc(reader, reader.GetOrdinal("ShiftEnd")),
+        ActualStart            = reader.IsDBNull(reader.GetOrdinal("ActualStart"))           ? null : Utc(reader, reader.GetOrdinal("ActualStart")),
+        ActualEnd              = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))             ? null : Utc(reader, reader.GetOrdinal("ActualEnd")),
         ApprovedRegularHours   = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
         ApprovedOvertimeHours  = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours")) ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
-        ApprovedAt             = reader.IsDBNull(reader.GetOrdinal("ApprovedAt"))            ? null : reader.GetDateTime(reader.GetOrdinal("ApprovedAt")),
+        ApprovedAt             = reader.IsDBNull(reader.GetOrdinal("ApprovedAt"))            ? null : Utc(reader, reader.GetOrdinal("ApprovedAt")),
         ApprovedByManagerUserId= reader.IsDBNull(reader.GetOrdinal("ApprovedByManagerUserId"))? null : reader.GetString(reader.GetOrdinal("ApprovedByManagerUserId")),
         PayRatePerHour         = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))        ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
         DefaultPayRate         = reader.IsDBNull(reader.GetOrdinal("DefaultPayRate"))        ? null : reader.GetDecimal(reader.GetOrdinal("DefaultPayRate")),
