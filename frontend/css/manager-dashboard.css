@@ -1458,6 +1458,10 @@ tr.expanded-row > td {
   gap: 10px;
   min-width: 200px;
 }
+.filter-date-popup[hidden],
+.filter-status-popup[hidden] {
+  display: none;
+}
 .filter-status-popup {
   left: 110px;
 }
