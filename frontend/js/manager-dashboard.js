@@ -6764,21 +6764,33 @@ function _edBuildFinanceHTML(payroll, expenses) {
     p.approvedAt && (p.paymentStatus === "approved" || p.paymentStatus === "paid")
   );
 
-  // Labor cost per worker
+  // Labor cost per worker — OT calculated by Israeli law (125%/150%)
+  // unless manager explicitly set overtimeRatePerHour
+  function calcOtCost(otHours, baseRate, manualOtRate) {
+    if (!otHours || !baseRate) return 0;
+    if (manualOtRate != null) return otHours * manualOtRate;
+    // Israeli law: first 2 OT hours at 125%, beyond at 150%
+    const tier1 = Math.min(otHours, 2) * baseRate * 1.25;
+    const tier2 = Math.max(0, otHours - 2)  * baseRate * 1.50;
+    return tier1 + tier2;
+  }
+
   let totalLabor = 0;
   const laborRows = financePayroll.map((p) => {
-    const reg  = (p.approvedRegularHours  ?? 0) * (p.payRatePerHour       ?? 0);
-    const ot   = (p.approvedOvertimeHours ?? 0) * (p.overtimeRatePerHour  ?? 0);
-    const travel = p.travelRefund   ?? 0;
-    const bonus  = p.bonusAmount    ?? 0;
-    const penalty= p.penaltyAmount  ?? 0;
+    const baseRate = p.payRatePerHour ?? p.defaultPayRate ?? 0;
+    const reg    = (p.approvedRegularHours ?? 0) * baseRate;
+    const ot     = calcOtCost(p.approvedOvertimeHours ?? 0, baseRate, p.overtimeRatePerHour);
+    const travel = p.travelRefund  ?? 0;
+    const bonus  = p.bonusAmount   ?? 0;
+    const penalty= p.penaltyAmount ?? 0;
     const total  = reg + ot + travel + bonus - penalty;
     totalLabor  += total;
+    const otNote = p.overtimeRatePerHour != null ? "" : " <span class='ed-fin-ot-note' title='125% first 2h, 150% beyond (Israeli law)'>⚖</span>";
     return `<tr>
       <td>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</td>
       <td>${escapeHtml(p.roleName)}</td>
       <td>${fmt(reg)}</td>
-      <td>${fmt(ot)}</td>
+      <td>${fmt(ot)}${otNote}</td>
       <td>${fmt(travel + bonus - penalty)}</td>
       <td><strong>${fmt(total)}</strong></td>
     </tr>`;
