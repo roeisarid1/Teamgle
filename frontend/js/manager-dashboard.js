@@ -6612,11 +6612,6 @@ function _edBuildPayrollRowHTML(item, idx) {
                      value="${payRateVal}" min="0" step="0.01" placeholder="—">
             </div>
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">OT Rate/hr (₪)</label>
-              <input type="number" class="ed-pr-input ed-pr-input--sm" name="overtimeRatePerHour"
-                     value="${item.overtimeRatePerHour ?? ""}" min="0" step="0.01" placeholder="—">
-            </div>
-            <div class="ed-pr-field">
               <label class="ed-pr-field-label">Travel Refund (₪)</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund"
                      value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—">
@@ -6699,9 +6694,8 @@ function _edWirePayrollSaveBtns() {
       } else {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`;
         body = {
-          payRatePerHour:      num("payRatePerHour"),
-          overtimeRatePerHour: num("overtimeRatePerHour"),
-          travelRefund:        num("travelRefund"),
+          payRatePerHour: num("payRatePerHour"),
+          travelRefund:   num("travelRefund"),
           bonusAmount:         num("bonusAmount"),
           penaltyAmount:       num("penaltyAmount"),
           paymentStatus:       val("paymentStatus") || "pending",
