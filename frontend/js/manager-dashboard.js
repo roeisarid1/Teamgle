@@ -6510,8 +6510,10 @@ function _fmtDateTime(iso) {
 
 function _fmtDuration(startIso, endIso) {
   if (!startIso || !endIso) return null;
-  const mins = Math.round((new Date(endIso) - new Date(startIso)) / 60000);
-  if (isNaN(mins) || mins < 0) return null;
+  const totalSecs = Math.round((new Date(endIso) - new Date(startIso)) / 1000);
+  if (isNaN(totalSecs) || totalSecs < 0) return null;
+  if (totalSecs < 60) return `${totalSecs}s`;
+  const mins = Math.floor(totalSecs / 60);
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
