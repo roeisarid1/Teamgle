@@ -172,36 +172,31 @@
 
       <!-- Filter Row -->
       <div class="events-filter-row">
-        <button class="btn-filter">
+        <button class="btn-filter" id="filter-date">
           <span class="material-symbols-outlined">calendar_month</span>
           Date
         </button>
-        <button class="btn-filter">
+        <div class="filter-date-popup" id="filter-date-popup" hidden>
+          <label>From <input type="date" id="filter-date-from"></label>
+          <label>To <input type="date" id="filter-date-to"></label>
+          <div class="filter-date-actions">
+            <button class="filter-date-clear" id="filter-date-clear">Clear</button>
+            <button class="filter-date-apply" id="filter-date-apply">Apply</button>
+          </div>
+        </div>
+        <button class="btn-filter" id="filter-status">
           <span class="material-symbols-outlined">tune</span>
           Status
         </button>
-        <button class="btn-filter">
-          <span class="material-symbols-outlined">label</span>
-          Category
-        </button>
-      </div>
-
-      <!-- Stats Row -->
-      <div class="events-stats-grid">
-        <div class="events-stat-card events-stat-blue">
-          <span class="events-stat-bg-icon material-symbols-outlined">task_alt</span>
-          <div class="events-stat-title">Project Readiness</div>
-          <div class="events-stat-info"></div>
-        </div>
-        <div class="events-stat-card events-stat-orange">
-          <span class="events-stat-bg-icon material-symbols-outlined">group</span>
-          <div class="events-stat-title">Staffing Status</div>
-          <div class="events-stat-info"></div>
-        </div>
-        <div class="events-stat-card events-stat-grey">
-          <span class="events-stat-bg-icon material-symbols-outlined">trending_up</span>
-          <div class="events-stat-title">Weekly Project Load</div>
-          <div class="events-stat-info"></div>
+        <div class="filter-status-popup" id="filter-status-popup" hidden>
+          <label><input type="checkbox" value="draft"> Draft</label>
+          <label><input type="checkbox" value="planning"> Planning</label>
+          <label><input type="checkbox" value="active"> Active</label>
+          <label><input type="checkbox" value="completed"> Completed</label>
+          <label><input type="checkbox" value="canceled"> Canceled</label>
+          <div class="filter-date-actions">
+            <button class="filter-date-clear" id="filter-status-clear">Clear</button>
+          </div>
         </div>
       </div>
 

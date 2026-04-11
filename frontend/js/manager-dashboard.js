@@ -1452,7 +1452,7 @@ function activateSection(name) {
     .classList.toggle("chat-mode", name === "chats");
 
   if (name === "customers") loadCustomers();
-  if (name === "projects")  loadProjects();
+  if (name === "projects")  { _initProjectFilters(); loadProjects(); }
   if (name === "create-project") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
 }
@@ -1470,6 +1470,105 @@ function _initChatSection() {
 // ── PROJECTS SECTION ────────────────────────────────────────────────────────
 
 let _allProjects = [];
+
+// ── Project filters state ──────────────────────────────────────────────────
+let _filterDateFrom   = null; // Date | null
+let _filterDateTo     = null; // Date | null
+let _filterStatuses   = new Set(); // empty = all
+
+function _applyProjectFilters() {
+  if (!_allProjects) return;
+  let projects = _allProjects;
+
+  if (_filterDateFrom || _filterDateTo) {
+    projects = projects.filter(p => {
+      const start = p.startDate ? new Date(p.startDate) : null;
+      const end   = p.endDate   ? new Date(p.endDate)   : null;
+      if (_filterDateFrom && end   && end   < _filterDateFrom) return false;
+      if (_filterDateTo   && start && start > _filterDateTo)   return false;
+      return true;
+    });
+  }
+
+  if (_filterStatuses.size > 0) {
+    projects = projects.filter(p => _filterStatuses.has(p.status));
+  }
+
+  _renderProjectKanban(projects);
+  _updateFilterBtnState();
+}
+
+function _updateFilterBtnState() {
+  const dateBtn   = document.getElementById("filter-date");
+  const statusBtn = document.getElementById("filter-status");
+  if (dateBtn)   dateBtn.classList.toggle("btn-filter--active", !!(_filterDateFrom || _filterDateTo));
+  if (statusBtn) statusBtn.classList.toggle("btn-filter--active", _filterStatuses.size > 0);
+}
+
+let _projectFiltersInited = false;
+function _initProjectFilters() {
+  if (_projectFiltersInited) return;
+  _projectFiltersInited = true;
+  const dateBtn     = document.getElementById("filter-date");
+  const datePop     = document.getElementById("filter-date-popup");
+  const dateFrom    = document.getElementById("filter-date-from");
+  const dateTo      = document.getElementById("filter-date-to");
+  const dateApply   = document.getElementById("filter-date-apply");
+  const dateClear   = document.getElementById("filter-date-clear");
+  const statusBtn   = document.getElementById("filter-status");
+  const statusPop   = document.getElementById("filter-status-popup");
+  const statusClear = document.getElementById("filter-status-clear");
+
+  if (!dateBtn || !statusBtn) return;
+
+  // Toggle popups
+  dateBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    datePop.hidden = !datePop.hidden;
+    statusPop.hidden = true;
+  });
+  statusBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    statusPop.hidden = !statusPop.hidden;
+    datePop.hidden = true;
+  });
+  document.addEventListener("click", () => {
+    datePop.hidden = true;
+    statusPop.hidden = true;
+  });
+  datePop.addEventListener("click", e => e.stopPropagation());
+  statusPop.addEventListener("click", e => e.stopPropagation());
+
+  // Date apply
+  dateApply.addEventListener("click", () => {
+    _filterDateFrom = dateFrom.value ? new Date(dateFrom.value) : null;
+    _filterDateTo   = dateTo.value   ? new Date(dateTo.value)   : null;
+    if (_filterDateTo) _filterDateTo.setHours(23, 59, 59, 999);
+    datePop.hidden = true;
+    _applyProjectFilters();
+  });
+  dateClear.addEventListener("click", () => {
+    _filterDateFrom = null; _filterDateTo = null;
+    dateFrom.value = ""; dateTo.value = "";
+    datePop.hidden = true;
+    _applyProjectFilters();
+  });
+
+  // Status checkboxes — live filter on change
+  statusPop.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      _filterStatuses = new Set(
+        [...statusPop.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value)
+      );
+      _applyProjectFilters();
+    });
+  });
+  statusClear.addEventListener("click", () => {
+    statusPop.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+    _filterStatuses = new Set();
+    _applyProjectFilters();
+  });
+}
 
 async function loadProjects() {
   const cols = {
@@ -1490,7 +1589,7 @@ async function loadProjects() {
     });
     if (!res.ok) throw new Error("Failed to load projects.");
     _allProjects = await res.json();
-    _renderProjectKanban(_allProjects);
+    _applyProjectFilters();
   } catch {
     Object.values(cols).forEach((col) => {
       col.innerHTML = `<div class="empty-col" style="color:#ef4444">Failed to load.</div>`;
