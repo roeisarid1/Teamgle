@@ -6764,33 +6764,31 @@ function _edBuildFinanceHTML(payroll, expenses) {
     p.approvedAt && (p.paymentStatus === "approved" || p.paymentStatus === "paid")
   );
 
-  // Labor cost per worker — OT calculated by Israeli law (125%/150%)
-  // unless manager explicitly set overtimeRatePerHour
-  function calcOtCost(otHours, baseRate, manualOtRate) {
-    if (!otHours || !baseRate) return 0;
-    if (manualOtRate != null) return otHours * manualOtRate;
-    // Israeli law: first 2 OT hours at 125%, beyond at 150%
-    const tier1 = Math.min(otHours, 2) * baseRate * 1.25;
-    const tier2 = Math.max(0, otHours - 2)  * baseRate * 1.50;
-    return tier1 + tier2;
+  // Labor cost per worker — Israeli law: first 8h regular, next 2h ×1.25, beyond ×1.50
+  function calcLaborCost(totalHours, baseRate) {
+    if (!totalHours || !baseRate) return { reg: 0, ot: 0 };
+    const regHours = Math.min(totalHours, 8);
+    const otHours  = Math.max(0, totalHours - 8);
+    const tier1    = Math.min(otHours, 2) * baseRate * 1.25;
+    const tier2    = Math.max(0, otHours - 2) * baseRate * 1.50;
+    return { reg: regHours * baseRate, ot: tier1 + tier2 };
   }
 
   let totalLabor = 0;
   const laborRows = financePayroll.map((p) => {
-    const baseRate = p.payRatePerHour ?? p.defaultPayRate ?? 0;
-    const reg    = (p.approvedRegularHours ?? 0) * baseRate;
-    const ot     = calcOtCost(p.approvedOvertimeHours ?? 0, baseRate, p.overtimeRatePerHour);
-    const travel = p.travelRefund  ?? 0;
-    const bonus  = p.bonusAmount   ?? 0;
-    const penalty= p.penaltyAmount ?? 0;
-    const total  = reg + ot + travel + bonus - penalty;
-    totalLabor  += total;
-    const otNote = p.overtimeRatePerHour != null ? "" : " <span class='ed-fin-ot-note' title='125% first 2h, 150% beyond (Israeli law)'>⚖</span>";
+    const baseRate   = p.payRatePerHour ?? p.defaultPayRate ?? 0;
+    const totalHours = (p.approvedRegularHours ?? 0) + (p.approvedOvertimeHours ?? 0);
+    const { reg, ot } = calcLaborCost(totalHours, baseRate);
+    const travel  = p.travelRefund  ?? 0;
+    const bonus   = p.bonusAmount   ?? 0;
+    const penalty = p.penaltyAmount ?? 0;
+    const total   = reg + ot + travel + bonus - penalty;
+    totalLabor   += total;
     return `<tr>
       <td>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</td>
       <td>${escapeHtml(p.roleName)}</td>
       <td>${fmt(reg)}</td>
-      <td>${fmt(ot)}${otNote}</td>
+      <td>${fmt(ot)} <span class='ed-fin-ot-note' title='First 2 OT hours ×1.25, beyond ×1.50 (Israeli law)'>⚖</span></td>
       <td>${fmt(travel + bonus - penalty)}</td>
       <td><strong>${fmt(total)}</strong></td>
     </tr>`;
