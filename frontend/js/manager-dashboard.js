@@ -1491,7 +1491,7 @@ function _applyProjectFilters() {
   }
 
   if (_filterStatuses.size > 0) {
-    projects = projects.filter(p => _filterStatuses.has(p.status));
+    projects = projects.filter(p => _filterStatuses.has(_computeProjectStatus(p)));
   }
 
   _renderProjectKanban(projects);
@@ -1610,28 +1610,13 @@ function _renderProjectKanban(projects) {
   todayDate.setHours(0, 0, 0, 0);
 
   for (const p of projects) {
-    const start = new Date(p.startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(p.endDate);
-    end.setHours(0, 0, 0, 0);
-
-    if (p.status === "draft") {
-      buckets.draft.push(p);
-    } else if (
-      p.status === "completed" ||
-      p.status === "canceled" ||
-      (p.endDate && end < todayDate)
-    ) {
-      buckets.completed.push(p);
-    } else if (
-      p.startDate &&
-      p.endDate &&
-      start <= todayDate &&
-      end >= todayDate
-    ) {
-      buckets.today.push(p);
-    } else {
-      buckets.upcoming.push(p);
+    const computed = _computeProjectStatus(p, todayDate);
+    switch (computed) {
+      case "draft":     buckets.draft.push(p);     break;
+      case "canceled":  buckets.completed.push(p); break;
+      case "completed": buckets.completed.push(p); break;
+      case "active":    buckets.today.push(p);     break;
+      default:          buckets.upcoming.push(p);  break; // planning
     }
   }
 
@@ -1643,18 +1628,29 @@ function _renderProjectKanban(projects) {
   }
 }
 
+// Compute display status from DB status + dates (no DB writes)
+function _computeProjectStatus(project, todayDate) {
+  if (project.status === "draft")    return "draft";
+  if (project.status === "canceled") return "canceled";
+  if (!project.startDate || !project.endDate) return "planning";
+  const start = new Date(project.startDate); start.setHours(0, 0, 0, 0);
+  const end   = new Date(project.endDate);   end.setHours(0, 0, 0, 0);
+  const today = todayDate ?? (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  if (today < start) return "planning";
+  if (today > end)   return "completed";
+  return "active";
+}
+
 function renderProjectCard(project) {
   const statusMap = {
-    draft: { label: "Draft", cls: "badge-pending" },
-    planning: { label: "Planning", cls: "badge-info" },
-    active: { label: "Active", cls: "badge-active" },
-    completed: { label: "Done", cls: "badge-success" },
-    canceled: { label: "Canceled", cls: "badge-error" },
+    draft:     { label: "Draft",     cls: "badge-pending" },
+    planning:  { label: "Planning",  cls: "badge-info"    },
+    active:    { label: "Active",    cls: "badge-active"  },
+    completed: { label: "Completed", cls: "badge-success" },
+    canceled:  { label: "Canceled",  cls: "badge-error"   },
   };
-  const badge = statusMap[project.status] ?? {
-    label: project.status,
-    cls: "badge-pending",
-  };
+  const computed = _computeProjectStatus(project);
+  const badge = statusMap[computed] ?? { label: computed, cls: "badge-pending" };
   const fmt = (d) =>
     d
       ? new Date(d).toLocaleDateString("en-GB", {
