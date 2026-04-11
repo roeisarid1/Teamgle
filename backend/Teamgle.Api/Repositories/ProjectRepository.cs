@@ -1268,10 +1268,13 @@ public class ProjectRepository : IProjectRepository
     public async Task DeleteWorkerAssignmentAsync(
         string eventId, string employeeFbUid, string shiftId, string managerFbUid)
     {
+        // Delete ALL Employee_Shift rows for this employee in this event.
+        // Using shiftId only for access verification (confirms shift belongs to event).
+        // This ensures "Return to Pool" fully clears the employee from the event,
+        // even when they were approved for multiple shifts/roles simultaneously.
         const string sql = """
             DELETE FROM Employee_Shift
-            WHERE  shift_ID          = @shiftId
-              AND  employee_user_ID  = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+            WHERE  employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
               AND  shift_ID IN (
                   SELECT s.Shift_ID
                   FROM   Shift s
@@ -1286,7 +1289,6 @@ public class ProjectRepository : IProjectRepository
 
         await using var conn = new SqlConnection(_connectionString);
         await using var cmd  = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@shiftId",       shiftId);
         cmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
         cmd.Parameters.AddWithValue("@eventId",       eventId);
         cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
