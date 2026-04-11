@@ -5176,6 +5176,13 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
 
     await loadAndRenderEventWorkers(eventId);
     if (currentProjectId) await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+
+    // Auto-open the Potential Workers section so the returned worker is visible
+    const potentialSection = document.getElementById(`ps-section-${eventId}-potential`);
+    if (potentialSection) {
+      const potentialHdr = potentialSection.querySelector(".ps-section-hdr");
+      if (potentialHdr) _setSectionOpen(potentialSection, potentialHdr, true);
+    }
   } catch {
     // btn may be detached after partial re-render — re-query or restore if still attached
     if (btn.isConnected) {

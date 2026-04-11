@@ -156,14 +156,17 @@ public class ProjectRepository : IProjectRepository
                      AND (es.canceled IS NULL OR es.canceled = 0)
                     THEN es.employee_user_ID
                 END)                                          AS StaffedCount
-            FROM Manager_Project mp
-            INNER JOIN [User] u  ON mp.manager_user_ID = u.user_ID
-            INNER JOIN Project p ON mp.project_ID       = p.Proj_ID
+            FROM Project p
             LEFT  JOIN Customer c        ON p.customer_ID  = c.customer_ID
             LEFT  JOIN Event e           ON e.project_ID   = p.Proj_ID
             LEFT  JOIN Shift s           ON s.event_ID     = e.event_ID
             LEFT  JOIN Employee_Shift es ON es.shift_ID    = s.Shift_ID
-            WHERE u.FBUID = @firebaseUid
+            WHERE p.Proj_ID IN (
+                SELECT mp.project_ID
+                FROM   Manager_Project mp
+                INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+            )
             GROUP BY
                 p.Proj_ID, p.name, p.start_date, p.end_date,
                 p.status, c.customer_company_name
@@ -211,11 +214,14 @@ public class ProjectRepository : IProjectRepository
                 p.status                  AS Status,
                 c.customer_company_name   AS CustomerName
             FROM Project p
-            INNER JOIN Manager_Project mp ON mp.project_ID      = p.Proj_ID
-            INNER JOIN [User]          u  ON u.user_ID           = mp.manager_user_ID
-            LEFT  JOIN Customer        c  ON c.customer_ID       = p.customer_ID
+            LEFT  JOIN Customer c ON c.customer_ID = p.customer_ID
             WHERE p.Proj_ID = @projId
-              AND u.FBUID   = @firebaseUid
+              AND p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+              )
             """;
 
         await using var conn = new SqlConnection(_connectionString);
@@ -291,10 +297,13 @@ public class ProjectRepository : IProjectRepository
         const string projSql = """
             SELECT p.Proj_ID AS ProjId, p.name AS Name
             FROM Project p
-            INNER JOIN Manager_Project mp ON mp.project_ID    = p.Proj_ID
-            INNER JOIN [User]          u  ON u.user_ID         = mp.manager_user_ID
             WHERE p.Proj_ID = @projId
-              AND u.FBUID   = @firebaseUid
+              AND p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+              )
             """;
 
         await using var conn = new SqlConnection(_connectionString);
@@ -419,12 +428,15 @@ public class ProjectRepository : IProjectRepository
               AND Shift_ID IN (
                 SELECT s.Shift_ID
                 FROM Shift s
-                INNER JOIN Event          e  ON e.event_ID     = s.event_ID
-                INNER JOIN Project        p  ON p.Proj_ID       = e.project_ID
-                INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
-                INNER JOIN [User]         u  ON u.user_ID       = mp.manager_user_ID
+                INNER JOIN Event   e ON e.event_ID = s.event_ID
+                INNER JOIN Project p ON p.Proj_ID  = e.project_ID
                 WHERE s.Shift_ID = @shiftId
-                  AND u.FBUID    = @firebaseUid
+                  AND p.Proj_ID IN (
+                      SELECT mp.project_ID
+                      FROM   Manager_Project mp
+                      INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                      WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+                  )
               )
             """;
 
@@ -455,12 +467,15 @@ public class ProjectRepository : IProjectRepository
               AND Shift_ID IN (
                 SELECT s.Shift_ID
                 FROM Shift s
-                INNER JOIN Event          e  ON e.event_ID     = s.event_ID
-                INNER JOIN Project        p  ON p.Proj_ID       = e.project_ID
-                INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
-                INNER JOIN [User]         u  ON u.user_ID       = mp.manager_user_ID
+                INNER JOIN Event   e ON e.event_ID = s.event_ID
+                INNER JOIN Project p ON p.Proj_ID  = e.project_ID
                 WHERE s.Shift_ID = @shiftId
-                  AND u.FBUID    = @firebaseUid
+                  AND p.Proj_ID IN (
+                      SELECT mp.project_ID
+                      FROM   Manager_Project mp
+                      INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                      WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+                  )
               )
             """;
 
@@ -487,15 +502,18 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Verify the event belongs to a project the authenticated manager owns
+        // Verify the event belongs to a project in the manager's company
         const string checkSql = """
             SELECT e.event_ID
             FROM Event e
-            INNER JOIN Project         p  ON p.Proj_ID      = e.project_ID
-            INNER JOIN Manager_Project mp ON mp.project_ID  = p.Proj_ID
-            INNER JOIN [User]          u  ON u.user_ID       = mp.manager_user_ID
+            INNER JOIN Project p ON p.Proj_ID = e.project_ID
             WHERE e.event_ID = @eventId
-              AND u.FBUID    = @firebaseUid
+              AND p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+              )
             """;
 
         await using var conn = new SqlConnection(_connectionString);
@@ -565,9 +583,9 @@ public class ProjectRepository : IProjectRepository
         const string accessSql = """
             SELECT 1
             FROM   Manager_Project mp
-            INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+            INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
             WHERE  mp.project_ID = @projId
-              AND  u.FBUID       = @fbUid
+              AND  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @fbUid)
             """;
         await using (var cmd = new SqlCommand(accessSql, conn))
         {
@@ -1164,10 +1182,13 @@ public class ProjectRepository : IProjectRepository
             INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
             INNER JOIN Event   e  ON e.event_ID = s.event_ID
             INNER JOIN Project p  ON p.Proj_ID  = e.project_ID
-            INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
-            INNER JOIN [User]  mu ON mu.user_ID = mp.manager_user_ID
             WHERE e.event_ID  = @eventId
-              AND mu.FBUID    = @firebaseUid
+              AND p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+              )
               AND es.status  IN (
                   'manager_offer_sent',
                   'employee_request',
@@ -1241,12 +1262,15 @@ public class ProjectRepository : IProjectRepository
               AND  shift_ID IN (
                   SELECT s.Shift_ID
                   FROM   Shift s
-                  INNER JOIN Event           e  ON e.event_ID   = s.event_ID
-                  INNER JOIN Project         p  ON p.Proj_ID    = e.project_ID
-                  INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
-                  INNER JOIN [User]          mu ON mu.user_ID   = mp.manager_user_ID
+                  INNER JOIN Event   e ON e.event_ID = s.event_ID
+                  INNER JOIN Project p ON p.Proj_ID  = e.project_ID
                   WHERE e.event_ID = @eventId
-                    AND mu.FBUID   = @managerFbUid
+                    AND p.Proj_ID IN (
+                        SELECT mp.project_ID
+                        FROM   Manager_Project mp
+                        INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                        WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
+                    )
               )
             """;
 
@@ -1278,12 +1302,15 @@ public class ProjectRepository : IProjectRepository
               AND  shift_ID IN (
                   SELECT s.Shift_ID
                   FROM   Shift s
-                  INNER JOIN Event           e  ON e.event_ID   = s.event_ID
-                  INNER JOIN Project         p  ON p.Proj_ID    = e.project_ID
-                  INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
-                  INNER JOIN [User]          mu ON mu.user_ID   = mp.manager_user_ID
+                  INNER JOIN Event   e ON e.event_ID = s.event_ID
+                  INNER JOIN Project p ON p.Proj_ID  = e.project_ID
                   WHERE e.event_ID = @eventId
-                    AND mu.FBUID   = @managerFbUid
+                    AND p.Proj_ID IN (
+                        SELECT mp.project_ID
+                        FROM   Manager_Project mp
+                        INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                        WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
+                    )
               )
             """;
 
@@ -1421,17 +1448,20 @@ public class ProjectRepository : IProjectRepository
     //  EVENT-SCOPED HELPERS
     // ══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Returns the project_ID if the manager has access to the event; null otherwise.</summary>
+    /// <summary>Returns the project_ID if the manager's company has access to the event; null otherwise.</summary>
     private async Task<string?> CheckEventAccessAsync(SqlConnection conn, string eventId, string firebaseUid)
     {
         const string sql = """
             SELECT p.Proj_ID
             FROM   Event e
-            INNER JOIN Project         p  ON p.Proj_ID    = e.project_ID
-            INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
-            INNER JOIN [User]          u  ON u.user_ID    = mp.manager_user_ID
+            INNER JOIN Project p ON p.Proj_ID = e.project_ID
             WHERE  e.event_ID = @eventId
-              AND  u.FBUID    = @fbUid
+              AND  p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @fbUid)
+              )
             """;
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@eventId", eventId);
@@ -1941,16 +1971,20 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        // verify manager has access to the project that owns this brief
+        // verify manager's company has access to the project that owns this brief
         const string accessSql = """
             SELECT 1
             FROM   Brief b
-            LEFT JOIN Project         p  ON p.Proj_ID    = b.project_ID
-            LEFT JOIN Event            e  ON e.event_ID   = b.event_ID
-            LEFT JOIN Project         ep ON ep.Proj_ID   = e.project_ID
-            LEFT JOIN Manager_Project mp ON mp.project_ID = COALESCE(p.Proj_ID, ep.Proj_ID)
-            LEFT JOIN [User]          mu ON mu.user_ID   = mp.manager_user_ID
-            WHERE b.brief_ID = @briefId AND mu.FBUID = @fbUid
+            LEFT JOIN Project p  ON p.Proj_ID  = b.project_ID
+            LEFT JOIN Event   e  ON e.event_ID  = b.event_ID
+            LEFT JOIN Project ep ON ep.Proj_ID  = e.project_ID
+            WHERE b.brief_ID = @briefId
+              AND COALESCE(p.Proj_ID, ep.Proj_ID) IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @fbUid)
+              )
             """;
         await using (var ac = new SqlCommand(accessSql, conn))
         {
