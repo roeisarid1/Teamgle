@@ -1867,6 +1867,12 @@ tr.expanded-row > td {
   box-shadow: 0 0 0 3px rgba(239,68,68,.10);
 }
 
+/* Event date out-of-project-range — red border only, no message */
+.field.has-range-error input[type="date"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239,68,68,.10);
+}
+
 /* Form-level error banner */
 .create-project-error {
   display: none;
@@ -2455,42 +2461,6 @@ tr.expanded-row > td {
 }
 
 .btn-add-shift-gantt:hover { background: var(--blue-light); }
-/* ── Schedule / Gantt Tab ────────────────────────────────────────────────── */
-
-.pd-schedule-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
-}
-
-.pd-view-btns {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.pd-view-btn {
-  padding: 7px 18px;
-  border: none;
-  border-right: 1px solid var(--border);
-  background: #fff;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  transition: background var(--transition), color var(--transition);
-}
-.pd-view-btn:last-child  { border-right: none; }
-.pd-view-btn:hover       { background: var(--blue-light); color: var(--blue); }
-.pd-view-btn.active      { background: var(--blue); color: #fff; }
-
-#pd-calendar {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
 
 /* Override FullCalendar chrome to match app design language */
 #pd-calendar .fc-button {
@@ -4265,6 +4235,13 @@ tr.expanded-row > td {
   transition: box-shadow .15s;
 }
 .ed-expense-row.pd-row--expanded { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Expense delete confirm sits at row level (not inside the flex summary) */
+.ed-expense-delete-confirm {
+  padding: 10px 16px;
+  border-top: 1px solid #fecaca;
+  background: #fef2f2;
+}
 
 .ed-expense-summary {
   display: flex;

@@ -1719,7 +1719,6 @@ document.querySelector(".events-kanban").addEventListener("dblclick", (e) => {
 
 let currentProjectId = null; // tracks which project is open in the detail view
 let currentProjectDetail = null; // holds last fetched ProjectDetailResponse
-let _pdCalendar = null; // FullCalendar instance
 let _pdTasksData = null; // cached tasks array for current project
 let _pdBriefsData = null; // cached briefs array for current project
 let _expandedRow = null; // currently expanded task/brief DOM row
@@ -1747,7 +1746,6 @@ function activateProjectTab(name) {
     p.style.display = p.dataset.tabPanel === name ? "" : "none";
   });
   if (name === "dashboard") renderDashboardTab();
-  if (name === "schedule") renderScheduleCalendar();
   if (name === "tasks") renderTasksTab();
   if (name === "brief") renderBriefTab();
   if (name === "employees") renderStaffingTab();
@@ -2099,66 +2097,6 @@ function renderGantt(schedule) {
 
   // Re-initialize Lucide icons for newly rendered elements
   if (window.lucide) lucide.createIcons();
-}
-// ── SCHEDULE / GANTT TAB ───────────────────────────────────────────────────
-
-// View-switcher buttons (delegated on the static toolbar element)
-document.querySelector(".pd-view-btns").addEventListener("click", (e) => {
-  const btn = e.target.closest(".pd-view-btn[data-view]");
-  if (!btn || !_pdCalendar) return;
-  _pdCalendar.changeView(btn.dataset.view);
-  document
-    .querySelectorAll(".pd-view-btn")
-    .forEach((b) => b.classList.toggle("active", b === btn));
-});
-
-function renderScheduleCalendar() {
-  // Destroy previous instance (project may have changed)
-  if (_pdCalendar) {
-    _pdCalendar.destroy();
-    _pdCalendar = null;
-  }
-
-  const el = document.getElementById("pd-calendar");
-  if (!el) return;
-
-  // Map backend EventDetailItem → FullCalendar event objects
-  const fcEvents = (currentProjectDetail?.events ?? []).map((ev) => ({
-    id: ev.eventId,
-    title: ev.name,
-    start: ev.startTime,
-    end: ev.endTime,
-    extendedProps: {
-      location: ev.location,
-      status: ev.status,
-      eventType: ev.eventType,
-    },
-  }));
-
-  _pdCalendar = new FullCalendar.Calendar(el, {
-    initialView: "dayGridMonth",
-    direction: "rtl",
-    locale: "en",
-    headerToolbar: {
-      start: "prev,next today",
-      center: "title",
-      end: "",
-    },
-    editable: false,
-    eventStartEditable: false,
-    eventDurationEditable: false,
-    selectable: false,
-    eventColor: "#5B7BF0",
-    events: fcEvents,
-    eventDidMount(info) {
-      // Show location as tooltip if available
-      if (info.event.extendedProps.location) {
-        info.el.title = info.event.extendedProps.location;
-      }
-    },
-  });
-
-  _pdCalendar.render();
 }
 
 // ── ADD TASK / ADD BRIEF buttons ────────────────────────────────────────────
@@ -3865,6 +3803,69 @@ document
 
 let projectEventCounter = 0; // monotonic counter for unique event block IDs
 let cachedRoles = []; // roles loaded once per session
+let _projEndDateTouched = false; // true once the user manually changes End Date
+
+// ── Project date DOM refs (static elements) ───────────────────────────────
+const _projStartInput = document.getElementById("proj-start-date");
+const _projEndInput   = document.getElementById("proj-end-date");
+
+// ── Revalidate every event-date field against the current project range ────
+function revalidateEventDates() {
+  const startDate = _projStartInput.value;
+  const endDate   = _projEndInput.value;
+
+  // Project-level: mark End Date red if it precedes Start Date
+  const projEndFieldEl = document.getElementById("field-proj-end");
+  const projDatesInvalid = !!(startDate && endDate && endDate < startDate);
+  projEndFieldEl?.classList.toggle("has-range-error", projDatesInvalid);
+
+  document.querySelectorAll(".event-block").forEach((block) => {
+    const idx      = block.dataset.eventIdx;
+    const dateInput = document.getElementById(`event-date-${idx}`);
+    const fieldEl   = block.querySelector(`[data-field="event-date-${idx}"]`);
+    if (!dateInput || !fieldEl) return;
+    const dateVal  = dateInput.value;
+    // Out-of-range only when all three dates are present
+    const outOfRange = !!(dateVal && startDate && endDate &&
+      (dateVal < startDate || dateVal > endDate));
+    fieldEl.classList.toggle("has-range-error", outOfRange);
+  });
+}
+
+// ── Project Start Date change ─────────────────────────────────────────────
+_projStartInput.addEventListener("change", () => {
+  const startVal = _projStartInput.value;
+  // Keep end-date's minimum in sync
+  _projEndInput.min = startVal;
+  // Auto-set End Date only if the user has never touched it
+  if (startVal && !_projEndDateTouched) {
+    _projEndInput.value = startVal;
+  }
+  // Auto-fill every untouched event date
+  document.querySelectorAll(".event-block").forEach((block) => {
+    const idx       = block.dataset.eventIdx;
+    const dateInput = document.getElementById(`event-date-${idx}`);
+    if (dateInput && !dateInput.dataset.touched) {
+      dateInput.value = startVal;
+      // Refresh the header summary for this block
+      const nameVal   = document.getElementById(`event-name-${idx}`)?.value.trim() || "";
+      const summaryEl = document.getElementById(`event-summary-${idx}`);
+      if (summaryEl) {
+        const parts = [];
+        if (nameVal)   parts.push(nameVal);
+        if (startVal)  parts.push(startVal);
+        summaryEl.textContent = parts.length ? ` · ${parts.join(" · ")}` : "";
+      }
+    }
+  });
+  revalidateEventDates();
+});
+
+// ── Project End Date change ───────────────────────────────────────────────
+_projEndInput.addEventListener("change", () => {
+  _projEndDateTouched = true;
+  revalidateEventDates();
+});
 
 // ── Back button ────────────────────────────────────────────────────────────
 document
@@ -3959,8 +3960,11 @@ document.getElementById("btn-collapse-events").addEventListener("click", () => {
 function initCreateProjectForm() {
   // Clear project-level fields
   document.getElementById("proj-name").value = "";
-  document.getElementById("proj-start-date").value = "";
-  document.getElementById("proj-end-date").value = "";
+  _projStartInput.value = "";
+  _projStartInput.max   = "";
+  _projEndInput.value   = "";
+  _projEndInput.min     = "";
+  _projEndDateTouched   = false;
   document.getElementById("proj-customer").value = "";
   ["field-proj-name", "field-proj-start", "field-proj-end"].forEach((id) =>
     document.getElementById(id)?.classList.remove("has-error"),
@@ -4234,9 +4238,24 @@ async function appendEventBlock() {
   block
     .querySelector(`#event-name-${idx}`)
     .addEventListener("input", updateSummary);
+  // Event date: update summary + mark touched + revalidate range
   block
     .querySelector(`#event-date-${idx}`)
-    .addEventListener("change", updateSummary);
+    .addEventListener("change", () => {
+      document.getElementById(`event-date-${idx}`).dataset.touched = "1";
+      updateSummary();
+      revalidateEventDates();
+    });
+
+  // Default event date to project start date (if already chosen)
+  const projStartVal = _projStartInput.value;
+  if (projStartVal) {
+    document.getElementById(`event-date-${idx}`).value = projStartVal;
+    updateSummary();
+  }
+
+  // Revalidate so new block is checked immediately against current project range
+  revalidateEventDates();
 
   // Render first shift row immediately
   appendShiftRow(idx, roles);
@@ -4346,6 +4365,21 @@ function collectProjectFormData() {
     errBanner.textContent = "End date cannot be before start date.";
     errBanner.classList.add("visible");
     valid = false;
+  }
+
+  // Block Create Project if any event date is outside the project range
+  if (startDate && endDate) {
+    document.querySelectorAll(".event-block").forEach((block) => {
+      const idx     = block.dataset.eventIdx;
+      const dateVal = document.getElementById(`event-date-${idx}`)?.value;
+      if (dateVal && (dateVal < startDate || dateVal > endDate)) {
+        valid = false;
+        if (!errBanner.classList.contains("visible")) {
+          errBanner.textContent = "One or more event dates are outside the project date range.";
+          errBanner.classList.add("visible");
+        }
+      }
+    });
   }
 
   // Event blocks
@@ -6486,11 +6520,12 @@ function _edWireExpenseRow(row, exp) {
     row.classList.remove("pd-row--expanded");
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
-    confirm.className = "pd-delete-confirm";
+    confirm.className = "pd-delete-confirm ed-expense-delete-confirm";
     confirm.innerHTML = `<span>Delete this expense?</span>
       <button class="btn-confirm-yes">Delete</button>
       <button class="btn-confirm-no">Cancel</button>`;
-    summary.appendChild(confirm);
+    // Append to the row (not the summary flex container) to avoid overflow clipping
+    summary.insertAdjacentElement("afterend", confirm);
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
       e.stopPropagation();
       row.classList.remove("pd-row--deleting");
@@ -6498,6 +6533,7 @@ function _edWireExpenseRow(row, exp) {
     });
     confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
       e.stopPropagation();
+      confirm.querySelector(".btn-confirm-yes").disabled = true;
       try {
         const token = await getToken();
         const res = await fetch(
@@ -6505,12 +6541,17 @@ function _edWireExpenseRow(row, exp) {
           { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
         );
         if (!res.ok) throw new Error();
-        _edExpensesData = _edExpensesData.filter((e) => e.expenseId !== exp.expenseId);
+        _edExpensesData = _edExpensesData.filter((x) => x.expenseId !== exp.expenseId);
         const list = document.getElementById("ed-expense-list");
         _edRenderExpenseList(list);
       } catch {
         row.classList.remove("pd-row--deleting");
-        confirm.remove();
+        confirm.innerHTML = `<span style="color:#ef4444">Delete failed. Try again.</span>
+          <button class="btn-confirm-no">Dismiss</button>`;
+        confirm.querySelector(".btn-confirm-no").addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          confirm.remove();
+        });
       }
     });
   });
