@@ -5599,6 +5599,7 @@ async function openEventDetail(eventId) {
 
   // Update header from cached project data
   const ev = (currentProjectDetail?.events ?? []).find((e) => e.eventId === eventId);
+  document.getElementById("event-detail-project-name").textContent = currentProjectDetail?.name ?? "";
   document.getElementById("event-detail-title").textContent = ev?.name ?? "Event";
   document.getElementById("event-detail-subtitle").textContent = ev ? _edFormatSubtitle(ev) : "";
 
@@ -5613,12 +5614,22 @@ async function openEventDetail(eventId) {
 }
 
 function _edFormatSubtitle(ev) {
-  const fmt = (iso) =>
-    iso
-      ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-      : "";
-  const loc = ev.location ? ` · ${ev.location}` : "";
-  return `${fmt(ev.startTime)}${loc}`;
+  const parts = [];
+
+  if (ev.startTime) {
+    parts.push(new Date(ev.startTime).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }));
+  }
+
+  const statusLabels = { planning: "Planning", active: "Active", completed: "Completed", canceled: "Canceled" };
+  if (ev.status && statusLabels[ev.status]) parts.push(statusLabels[ev.status]);
+
+  if (ev.startTime) {
+    const fmtT = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const timeStr = ev.endTime ? `${fmtT(ev.startTime)}–${fmtT(ev.endTime)}` : fmtT(ev.startTime);
+    parts.push(timeStr);
+  }
+
+  return parts.join(" | ");
 }
 
 // ── WORKERS TAB ────────────────────────────────────────────────────────────

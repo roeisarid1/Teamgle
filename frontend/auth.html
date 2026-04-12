@@ -1,176 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Teamgle — Sign In</title>
-  <link rel="stylesheet" href="css/auth.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
-</head>
-<body>
-
-  <div class="auth-card">
-
-    <!-- ── Header ───────────────────────────────────────────────────────── -->
-    <div class="auth-header">
-      <div class="logo-wrap">
-        <img
-          src="../logo/Gemini_Generated_Image_x5zncpx5zncpx5zn.png"
-          alt="Teamgle"
-        />
-      </div>
-      <p>Workforce management platform</p>
-    </div>
-
-    <!-- ── Accent bar ────────────────────────────────────────────────────── -->
-    <div class="accent-bar">
-      <span></span><span></span><span></span>
-    </div>
-
-    <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
-    <div class="auth-tabs">
-      <button id="tab-login" class="active">Sign In</button>
-      <button id="tab-register">First Registration</button>
-    </div>
-
-    <!-- ── Forms ────────────────────────────────────────────────────────── -->
-    <div class="auth-body">
-
-      <!-- Login form -->
-      <form id="form-login" class="auth-form active" novalidate>
-
-        <div class="field">
-          <label for="login-email">Email address</label>
-          <div class="input-wrap">
-            <span class="icon">✉️</span>
-            <input
-              type="email"
-              id="login-email"
-              placeholder="you@company.com"
-              autocomplete="email"
-            />
-          </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teamgle — Sign In</title>
+    <link rel="stylesheet" href="css/auth.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <div class="auth-card">
+      <!-- ── Header ───────────────────────────────────────────────────────── -->
+      <div class="auth-header">
+        <div class="logo-wrap">
+          <img
+            src="../logo/Gemini_Generated_Image_x5zncpx5zncpx5zn.png"
+            alt="Teamgle"
+          />
         </div>
-
-        <div class="field">
-          <label for="login-password">Password</label>
-          <div class="input-wrap">
-            <span class="icon">🔒</span>
-            <input
-              type="password"
-              id="login-password"
-              placeholder="Your password"
-              autocomplete="current-password"
-            />
-          </div>
-        </div>
-
-        <div id="login-error" class="msg-error" role="alert"></div>
-
-        <div class="forgot-link-wrap">
-          <button type="button" id="forgot-link">Forgot password?</button>
-        </div>
-
-        <button type="button" id="login-btn" class="btn-primary">Sign In</button>
-
-        <p class="form-hint">
-          🔐 Only pre-registered team members can sign in.<br />
-          Contact your manager if you need access.
-        </p>
-
-      </form>
-
-      <!-- Forgot Password inline section -->
-      <div id="forgot-section" class="forgot-section" aria-hidden="true">
-
-        <button type="button" id="forgot-back" class="forgot-back">← Back to Sign In</button>
-
-        <div class="forgot-heading">
-          <span class="forgot-icon">🔑</span>
-          <div>
-            <h2>Reset your password</h2>
-            <p>Enter your email and we'll send you a reset link.</p>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="forgot-email">Email address</label>
-          <div class="input-wrap">
-            <span class="icon">✉️</span>
-            <input
-              type="email"
-              id="forgot-email"
-              placeholder="you@company.com"
-              autocomplete="email"
-            />
-          </div>
-        </div>
-
-        <div id="forgot-error"   class="msg-error"   role="alert"></div>
-        <div id="forgot-success" class="msg-success" role="status"></div>
-
-        <button type="button" id="forgot-btn" class="btn-primary">Send Reset Email</button>
-
+        <p>Workforce management platform</p>
       </div>
 
-      <!-- First Registration form -->
-      <form id="form-register" class="auth-form" novalidate>
+      <!-- ── Accent bar ────────────────────────────────────────────────────── -->
+      <div class="accent-bar"><span></span><span></span><span></span></div>
 
-        <div class="field">
-          <label for="reg-email">Email address</label>
-          <div class="input-wrap">
-            <span class="icon">✉️</span>
-            <input
-              type="email"
-              id="reg-email"
-              placeholder="The email your manager registered you with"
-              autocomplete="email"
-            />
+      <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
+      <div class="auth-tabs">
+        <button id="tab-login" class="active">Sign In</button>
+        <button id="tab-register">First Registration</button>
+      </div>
+
+      <!-- ── Forms ────────────────────────────────────────────────────────── -->
+      <div class="auth-body">
+        <!-- Login form -->
+        <form id="form-login" class="auth-form active" novalidate>
+          <div class="field">
+            <label for="login-email">Email address</label>
+            <div class="input-wrap">
+              <span class="icon">✉️</span>
+              <input
+                type="email"
+                id="login-email"
+                placeholder="you@company.com"
+                autocomplete="email"
+              />
+            </div>
           </div>
+
+          <div class="field">
+            <label for="login-password">Password</label>
+            <div class="input-wrap">
+              <span class="icon">🔒</span>
+              <input
+                type="password"
+                id="login-password"
+                placeholder="Your password"
+                autocomplete="current-password"
+              />
+            </div>
+          </div>
+
+          <div id="login-error" class="msg-error" role="alert"></div>
+
+          <div class="forgot-link-wrap">
+            <button type="button" id="forgot-link">Forgot password?</button>
+          </div>
+
+          <button type="button" id="login-btn" class="btn-primary">
+            Sign In
+          </button>
+
+          <p class="form-hint">
+            🔐 Only pre-registered team members can sign in.<br />
+            Contact your manager if you need access.
+          </p>
+        </form>
+
+        <!-- Forgot Password inline section -->
+        <div id="forgot-section" class="forgot-section" aria-hidden="true">
+          <button type="button" id="forgot-back" class="forgot-back">
+            ← Back to Sign In
+          </button>
+
+          <div class="forgot-heading">
+            <span class="forgot-icon">🔑</span>
+            <div>
+              <h2>Reset your password</h2>
+              <p>Enter your email and we'll send you a reset link.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="forgot-email">Email address</label>
+            <div class="input-wrap">
+              <span class="icon">✉️</span>
+              <input
+                type="email"
+                id="forgot-email"
+                placeholder="you@company.com"
+                autocomplete="email"
+              />
+            </div>
+          </div>
+
+          <div id="forgot-error" class="msg-error" role="alert"></div>
+          <div id="forgot-success" class="msg-success" role="status"></div>
+
+          <button type="button" id="forgot-btn" class="btn-primary">
+            Send Reset Email
+          </button>
         </div>
 
-        <div class="field">
-          <label for="reg-password">Create password</label>
-          <div class="input-wrap">
-            <span class="icon">🔒</span>
-            <input
-              type="password"
-              id="reg-password"
-              placeholder="At least 8 characters"
-              autocomplete="new-password"
-            />
+        <!-- First Registration form -->
+        <form id="form-register" class="auth-form" novalidate>
+          <div class="field">
+            <label for="reg-email">Email address</label>
+            <div class="input-wrap">
+              <span class="icon">✉️</span>
+              <input
+                type="email"
+                id="reg-email"
+                placeholder="The email your manager registered you with"
+                autocomplete="email"
+              />
+            </div>
           </div>
-        </div>
 
-        <div class="field">
-          <label for="reg-confirm">Confirm password</label>
-          <div class="input-wrap">
-            <span class="icon">✅</span>
-            <input
-              type="password"
-              id="reg-confirm"
-              placeholder="Repeat your password"
-              autocomplete="new-password"
-            />
+          <div class="field">
+            <label for="reg-password">Create password</label>
+            <div class="input-wrap">
+              <span class="icon">🔒</span>
+              <input
+                type="password"
+                id="reg-password"
+                placeholder="At least 8 characters"
+                autocomplete="new-password"
+              />
+            </div>
           </div>
-        </div>
 
-        <div id="reg-error"   class="msg-error"   role="alert"></div>
-        <div id="reg-success" class="msg-success" role="status"></div>
+          <div class="field">
+            <label for="reg-confirm">Confirm password</label>
+            <div class="input-wrap">
+              <span class="icon">✅</span>
+              <input
+                type="password"
+                id="reg-confirm"
+                placeholder="Repeat your password"
+                autocomplete="new-password"
+              />
+            </div>
+          </div>
 
-        <button type="button" id="reg-btn" class="btn-primary">Create Account</button>
+          <div id="reg-error" class="msg-error" role="alert"></div>
+          <div id="reg-success" class="msg-success" role="status"></div>
 
-        <p class="form-hint">
-          👥 First Registration is only available to users<br />
-          who were already added to the system by a manager.
-        </p>
+          <button type="button" id="reg-btn" class="btn-primary">
+            Create Account
+          </button>
 
-      </form>
-
+          <p class="form-hint">
+            👥 First Registration is only available to users<br />
+            who were already added to the system by a manager.
+          </p>
+        </form>
+        3
+      </div>
     </div>
-  </div>
 
-  <script type="module" src="js/auth.js"></script>
-</body>
+    <script type="module" src="js/auth.js"></script>
+  </body>
 </html>

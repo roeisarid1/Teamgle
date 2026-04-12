@@ -3774,20 +3774,29 @@ tr.expanded-row > td {
   width: 100%;
 }
 
-/* ── Project Detail — larger, clearer typography ─────────────────────────────
-   Scoped to #section-project-detail so nothing outside is affected.
+/* ── Project Detail + Event Detail — shared typography ───────────────────────
+   Both detail sections use the same font base and header sizing.
    ─────────────────────────────────────────────────────────────────────────── */
-#section-project-detail {
+#section-project-detail,
+#section-event-detail {
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   font-size: 16px;
 }
 
-/* Project name / subtitle in header */
-#section-project-detail .cp-title    { font-size: 22px; }
-#section-project-detail .cp-subtitle { font-size: 15px; }
+/* Title / subtitle in header — same scale for both detail pages */
+#section-project-detail .cp-title,
+#section-event-detail   .cp-title    { font-size: 22px; }
+#section-project-detail .cp-subtitle,
+#section-event-detail   .cp-subtitle { font-size: 15px; }
 
 /* Tab navigation */
-#section-project-detail .pd-tab { font-size: 16px; font-weight: 600; }
+#section-project-detail .pd-tab,
+#section-event-detail   .pd-tab { font-size: 16px; font-weight: 600; }
+
+/* Event detail — breadcrumb layout (content only, no size overrides) */
+.cp-title--breadcrumb { display: flex; align-items: baseline; gap: 0; flex-wrap: wrap; }
+.ed-crumb-project { color: var(--text-muted); font-weight: 500; }
+.ed-crumb-sep     { color: var(--text-muted); margin: 0 6px; font-weight: 400; }
 
 /* Section / card headers inside tabs */
 #section-project-detail .section-title,
