@@ -1,5 +1,6 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Teamgle.Api.DAL;
 using Teamgle.Api.Repositories;
 using Teamgle.Api.Services;
 
@@ -35,7 +36,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
-builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
+builder.Services.AddScoped<DBservices>();
+builder.Services.AddScoped<ICustomerRepository, CustomerDAL>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IProjectService, ProjectService>();

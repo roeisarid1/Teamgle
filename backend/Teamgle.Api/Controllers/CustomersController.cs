@@ -10,25 +10,25 @@ namespace Teamgle.Api.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerService _customerService;
-    private readonly ILogger<CustomersController> _logger;
 
-    public CustomersController(ICustomerService customerService, ILogger<CustomersController> logger)
+    public CustomersController(ICustomerService customerService)
     {
         _customerService = customerService;
-        _logger = logger;
     }
 
-    // ── Helper: extract and verify Firebase token from Authorization header ─
+    // Extracts the Firebase ID token from the Authorization header,
+    // verifies it, and returns the user's UID.
+    // Returns null if the token is missing or invalid.
     private async Task<string?> GetFirebaseUidAsync()
     {
-        var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+        string? authHeader = Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader == null || !authHeader.StartsWith("Bearer "))
             return null;
 
-        var idToken = authHeader["Bearer ".Length..].Trim();
+        string idToken = authHeader.Substring("Bearer ".Length).Trim();
         try
         {
-            var decoded = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken);
+            FirebaseToken decoded = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken);
             return decoded.Uid;
         }
         catch
@@ -37,17 +37,18 @@ public class CustomersController : ControllerBase
         }
     }
 
-    // ── GET /api/customers ─────────────────────────────────────────────────
+    // GET /api/customers
+    // Returns all customers for the manager's company.
     [HttpGet]
     public async Task<IActionResult> GetCustomers()
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var customers = await _customerService.GetCustomersAsync(uid);
+            List<CustomerResponse> customers = await _customerService.GetCustomersAsync(uid);
             return Ok(customers);
         }
         catch (UnauthorizedAccessException ex)
@@ -56,22 +57,22 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching customers");
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── POST /api/customers ────────────────────────────────────────────────
+    // POST /api/customers
+    // Creates a new customer and returns the new customer ID.
     [HttpPost]
     public async Task<IActionResult> CreateCustomer([FromBody] CreateCustomerRequest request)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var customerId = await _customerService.CreateCustomerAsync(uid, request);
+            string customerId = await _customerService.CreateCustomerAsync(uid, request);
             return Ok(new { message = "Customer created successfully.", customerId });
         }
         catch (UnauthorizedAccessException ex)
@@ -88,22 +89,22 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating customer");
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── GET /api/customers/{id} ────────────────────────────────────────────
+    // GET /api/customers/{id}
+    // Returns full details for one customer including its contacts.
     [HttpGet("{id}")]
     public async Task<IActionResult> GetCustomer(string id)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var customer = await _customerService.GetCustomerByIdAsync(uid, id);
+            CustomerDetailResponse customer = await _customerService.GetCustomerByIdAsync(uid, id);
             return Ok(customer);
         }
         catch (UnauthorizedAccessException ex)
@@ -116,16 +117,16 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching customer {Id}", id);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── PUT /api/customers/{id} ────────────────────────────────────────────
+    // PUT /api/customers/{id}
+    // Updates an existing customer.
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateCustomer(string id, [FromBody] UpdateCustomerRequest request)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
@@ -148,16 +149,16 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating customer {Id}", id);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── DELETE /api/customers/{id} ─────────────────────────────────────────
+    // DELETE /api/customers/{id}
+    // Deletes a customer and all its contact persons.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCustomer(string id)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
@@ -176,22 +177,22 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting customer {Id}", id);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── GET /api/customers/{customerId}/contacts ───────────────────────────
+    // GET /api/customers/{customerId}/contacts
+    // Returns all contact persons for a customer.
     [HttpGet("{customerId}/contacts")]
     public async Task<IActionResult> GetContacts(string customerId)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var contacts = await _customerService.GetContactsAsync(uid, customerId);
+            List<ContactPersonResponse> contacts = await _customerService.GetContactsAsync(uid, customerId);
             return Ok(contacts);
         }
         catch (UnauthorizedAccessException ex)
@@ -204,22 +205,22 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching contacts for customer {CustomerId}", customerId);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── POST /api/customers/{customerId}/contacts ──────────────────────────
+    // POST /api/customers/{customerId}/contacts
+    // Creates a new contact person for a customer.
     [HttpPost("{customerId}/contacts")]
     public async Task<IActionResult> CreateContact(string customerId, [FromBody] CreateContactPersonRequest request)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var contactId = await _customerService.CreateContactAsync(uid, customerId, request);
+            string contactId = await _customerService.CreateContactAsync(uid, customerId, request);
             return Ok(new { message = "Contact person created successfully.", contactId });
         }
         catch (UnauthorizedAccessException ex)
@@ -240,22 +241,22 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating contact for customer {CustomerId}", customerId);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── GET /api/customers/{customerId}/contacts/{contactId} ───────────────
+    // GET /api/customers/{customerId}/contacts/{contactId}
+    // Returns one contact person.
     [HttpGet("{customerId}/contacts/{contactId}")]
     public async Task<IActionResult> GetContact(string customerId, string contactId)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
         try
         {
-            var contact = await _customerService.GetContactByIdAsync(uid, customerId, contactId);
+            ContactPersonResponse contact = await _customerService.GetContactByIdAsync(uid, customerId, contactId);
             return Ok(contact);
         }
         catch (UnauthorizedAccessException ex)
@@ -268,16 +269,16 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching contact {ContactId} for customer {CustomerId}", contactId, customerId);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── PUT /api/customers/{customerId}/contacts/{contactId} ───────────────
+    // PUT /api/customers/{customerId}/contacts/{contactId}
+    // Updates an existing contact person.
     [HttpPut("{customerId}/contacts/{contactId}")]
     public async Task<IActionResult> UpdateContact(string customerId, string contactId, [FromBody] UpdateContactPersonRequest request)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
@@ -300,16 +301,16 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating contact {ContactId} for customer {CustomerId}", contactId, customerId);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    // ── DELETE /api/customers/{customerId}/contacts/{contactId} ───────────
+    // DELETE /api/customers/{customerId}/contacts/{contactId}
+    // Deletes a contact person.
     [HttpDelete("{customerId}/contacts/{contactId}")]
     public async Task<IActionResult> DeleteContact(string customerId, string contactId)
     {
-        var uid = await GetFirebaseUidAsync();
+        string? uid = await GetFirebaseUidAsync();
         if (uid == null)
             return Unauthorized(new { error = "Valid Firebase token required." });
 
@@ -328,8 +329,7 @@ public class CustomersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting contact {ContactId} for customer {CustomerId}", contactId, customerId);
-            return StatusCode(500, new { error = "An unexpected error occurred." });
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 }
