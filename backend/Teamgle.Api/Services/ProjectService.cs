@@ -405,4 +405,9 @@ public class ProjectService : IProjectService
     {
         return await _projectRepo.GetBriefsForEmployeeAsync(firebaseUid);
     }
+
+    public async Task<AutoAssignResult> AutoAssignShiftAsync(string firebaseUid, string shiftId)
+    {
+        return await _projectRepo.AutoAssignShiftAsync(shiftId, firebaseUid);
+    }
 }

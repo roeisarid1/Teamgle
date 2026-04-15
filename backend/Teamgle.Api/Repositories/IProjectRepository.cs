@@ -80,4 +80,7 @@ public interface IProjectRepository
     Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string briefId, string firebaseUid);
     Task<bool> AcknowledgeBriefAsync(string briefId, string firebaseUid);
     Task<IEnumerable<EmployeeBriefItem>?> GetBriefsForEmployeeAsync(string firebaseUid);
+
+    // ── Auto-Assign ────────────────────────────────────────────────────────
+    Task<AutoAssignResult> AutoAssignShiftAsync(string shiftId, string managerFbUid);
 }

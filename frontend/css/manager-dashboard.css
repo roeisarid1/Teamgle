@@ -3226,6 +3226,28 @@ tr.expanded-row > td {
 
 .ps-badge--potential { background: var(--blue-light); color: var(--blue); border: 1px solid #c7d3fa; }
 
+/* Auto-Assign button */
+.btn-auto-assign {
+  margin-left: 8px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1.5px solid #f97316;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-auto-assign:hover:not(:disabled) {
+  background: #f97316;
+  color: #fff;
+}
+.btn-auto-assign:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Table */
 .ps-table {
   width: 100%;

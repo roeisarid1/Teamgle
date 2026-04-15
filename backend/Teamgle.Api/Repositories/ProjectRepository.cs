@@ -1253,6 +1253,31 @@ public class ProjectRepository : IProjectRepository
     public async Task UpdateWorkerStatusAsync(
         string eventId, string employeeFbUid, string shiftId, string newStatus, string managerFbUid)
     {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Hard block: if approving, reject if employee is already approved in any other shift of this event
+        if (newStatus == "manager_approved")
+        {
+            const string conflictSql = """
+                SELECT COUNT(*)
+                FROM   Employee_Shift es
+                INNER JOIN Shift s ON s.Shift_ID = es.shift_ID
+                WHERE  es.employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+                  AND  s.event_ID          = @eventId
+                  AND  es.shift_ID        <> @shiftId
+                  AND  es.status           = 'manager_approved'
+                """;
+            await using var conflictCmd = new SqlCommand(conflictSql, conn);
+            conflictCmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
+            conflictCmd.Parameters.AddWithValue("@eventId",       eventId);
+            conflictCmd.Parameters.AddWithValue("@shiftId",       shiftId);
+            var conflicts = (int)(await conflictCmd.ExecuteScalarAsync() ?? 0);
+            if (conflicts > 0)
+                throw new InvalidOperationException(
+                    "This employee is already approved for another shift in this event.");
+        }
+
         const string sql = """
             UPDATE Employee_Shift
             SET    status            = @newStatus,
@@ -1274,15 +1299,13 @@ public class ProjectRepository : IProjectRepository
               )
             """;
 
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd  = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@newStatus",      newStatus);
         cmd.Parameters.AddWithValue("@shiftId",        shiftId);
         cmd.Parameters.AddWithValue("@employeeFbUid",  employeeFbUid);
         cmd.Parameters.AddWithValue("@eventId",        eventId);
         cmd.Parameters.AddWithValue("@managerFbUid",   managerFbUid);
 
-        await conn.OpenAsync();
         var rowsAffected = await cmd.ExecuteNonQueryAsync();
         if (rowsAffected == 0)
             throw new KeyNotFoundException("No matching assignment found for this shift.");
@@ -2165,5 +2188,233 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 AcknowledgedAt = reader.IsDBNull(reader.GetOrdinal("AcknowledgedAt")) ? null : reader.GetDateTime(reader.GetOrdinal("AcknowledgedAt")),
             });
         return list;
+    }
+
+    // ── Auto-Assign: score all 'employee_request' candidates and assign the best ones ──
+    public async Task<AutoAssignResult> AutoAssignShiftAsync(string shiftId, string managerFbUid)
+    {
+        // Step 1: Load the shift info (required slots, time window) and verify the manager owns it
+        const string shiftSql = """
+            SELECT s.required_quantity, s.start_time, s.end_time
+            FROM   Shift s
+            INNER JOIN Event   e  ON e.event_ID  = s.event_ID
+            INNER JOIN Project p  ON p.Proj_ID   = e.project_ID
+            INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
+            INNER JOIN [User]  mu ON mu.user_ID  = mp.manager_user_ID
+            WHERE  s.Shift_ID    = @shiftId
+              AND  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
+            """;
+
+        int requiredQty;
+        DateTime shiftStart, shiftEnd;
+
+        await using (var conn = new SqlConnection(_connectionString))
+        await using (var cmd  = new SqlCommand(shiftSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@shiftId",      shiftId);
+            cmd.Parameters.AddWithValue("@managerFbUid", managerFbUid);
+            await conn.OpenAsync();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                throw new KeyNotFoundException("Shift not found or you do not have access.");
+
+            requiredQty = reader.GetInt32(reader.GetOrdinal("required_quantity"));
+            shiftStart  = reader.GetDateTime(reader.GetOrdinal("start_time"));
+            shiftEnd    = reader.GetDateTime(reader.GetOrdinal("end_time"));
+        }
+
+        // Step 2: Count how many are already manually approved (they are untouchable)
+        const string approvedCountSql = """
+            SELECT COUNT(*)
+            FROM   Employee_Shift
+            WHERE  shift_ID = @shiftId AND status = 'manager_approved'
+            """;
+
+        int alreadyApproved;
+        await using (var conn = new SqlConnection(_connectionString))
+        await using (var cmd  = new SqlCommand(approvedCountSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@shiftId", shiftId);
+            await conn.OpenAsync();
+            alreadyApproved = (int)(await cmd.ExecuteScalarAsync() ?? 0);
+        }
+
+        int remainingSlots = requiredQty - alreadyApproved;
+
+        // Step 3: Load all candidates (status = 'employee_request') with their historical data for scoring
+        const string candidatesSql = """
+            SELECT
+                u.user_ID                                                             AS UserId,
+                ISNULL(e.cost_per_hour, 0)                                            AS CostPerHour,
+
+                -- Reliability: how many past shifts did they actually show up for
+                (SELECT COUNT(*) FROM Employee_Shift es2
+                 WHERE  es2.employee_user_ID = u.user_ID
+                   AND  es2.canceled        = 0
+                   AND  es2.actual_start_time IS NOT NULL)                            AS CompletedShifts,
+
+                (SELECT COUNT(*) FROM Employee_Shift es2
+                 WHERE  es2.employee_user_ID = u.user_ID)                             AS TotalShifts,
+
+                -- Performance: net bonus minus penalty across all past shifts
+                ISNULL((SELECT SUM(es2.bonus_amount)   FROM Employee_Shift es2
+                        WHERE es2.employee_user_ID = u.user_ID), 0)
+                - ISNULL((SELECT SUM(es2.penalty_amount) FROM Employee_Shift es2
+                          WHERE es2.employee_user_ID = u.user_ID), 0)                AS NetPerformance,
+
+                -- Rotation fairness: fewer recent shifts = higher priority
+                (SELECT COUNT(*) FROM Employee_Shift es2
+                 WHERE  es2.employee_user_ID = u.user_ID
+                   AND  es2.status_updated_at >= DATEADD(day, -30, GETUTCDATE()))    AS RecentShifts
+
+            FROM  Employee_Shift es
+            INNER JOIN [User]    u ON u.user_ID  = es.employee_user_ID
+            INNER JOIN Employee  e ON e.user_ID  = u.user_ID
+            WHERE es.shift_ID = @shiftId
+              AND es.status   = 'employee_request'
+              -- Hard filter: exclude anyone already approved in ANY other shift of the same event
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM   Employee_Shift  es3
+                  INNER JOIN Shift       s2 ON s2.Shift_ID = es3.shift_ID
+                  WHERE  es3.employee_user_ID = u.user_ID
+                    AND  es3.status           = 'manager_approved'
+                    AND  s2.Shift_ID         <> @shiftId
+                    AND  s2.event_ID          = (SELECT event_ID FROM Shift WHERE Shift_ID = @shiftId)
+              )
+            """;
+
+        // Raw data row used only inside this method for scoring
+        var candidates = new List<(string UserId, double CostPerHour, int CompletedShifts, int TotalShifts, double NetPerformance, int RecentShifts)>();
+
+        await using (var conn = new SqlConnection(_connectionString))
+        await using (var cmd  = new SqlCommand(candidatesSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@shiftId",    shiftId);
+            cmd.Parameters.AddWithValue("@shiftStart", shiftStart);
+            cmd.Parameters.AddWithValue("@shiftEnd",   shiftEnd);
+            await conn.OpenAsync();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                candidates.Add((
+                    UserId:          reader.GetString(reader.GetOrdinal("UserId")),
+                    CostPerHour:     (double)reader.GetDecimal(reader.GetOrdinal("CostPerHour")),
+                    CompletedShifts: reader.GetInt32(reader.GetOrdinal("CompletedShifts")),
+                    TotalShifts:     reader.GetInt32(reader.GetOrdinal("TotalShifts")),
+                    NetPerformance:  (double)reader.GetDecimal(reader.GetOrdinal("NetPerformance")),
+                    RecentShifts:    reader.GetInt32(reader.GetOrdinal("RecentShifts"))
+                ));
+            }
+        }
+
+        // Step 4: Score each candidate (all sub-scores normalised 0–1)
+        // Helper: normalize a list of raw values to 0-1 range
+        double[] Normalize(double[] values, bool invertHighIsBad)
+        {
+            double min = values.Min();
+            double max = values.Max();
+            double range = max - min;
+
+            return values.Select(v =>
+            {
+                double normalized = range == 0 ? 0.5 : (v - min) / range;
+                return invertHighIsBad ? 1.0 - normalized : normalized;
+            }).ToArray();
+        }
+
+        double[] reliabilityRaw   = candidates.Select(c => c.TotalShifts == 0 ? 0.5 : (double)c.CompletedShifts / c.TotalShifts).ToArray();
+        double[] performanceRaw   = candidates.Select(c => c.NetPerformance).ToArray();
+        double[] rotationRaw      = candidates.Select(c => (double)c.RecentShifts).ToArray();  // fewer = better
+        double[] costRaw          = candidates.Select(c => c.CostPerHour).ToArray();             // lower = better
+
+        double[] reliabilityScore = Normalize(reliabilityRaw,  invertHighIsBad: false);
+        double[] performanceScore = Normalize(performanceRaw,   invertHighIsBad: false);
+        double[] rotationScore    = Normalize(rotationRaw,      invertHighIsBad: true);   // invert: fewer recent shifts → higher score
+        double[] costScore        = Normalize(costRaw,          invertHighIsBad: true);   // invert: lower cost → higher score
+
+        var scored = candidates
+            .Select((c, i) => new
+            {
+                c.UserId,
+                Score = reliabilityScore[i] * 0.35
+                      + performanceScore[i] * 0.20
+                      + rotationScore[i]    * 0.20
+                      + costScore[i]        * 0.25
+            })
+            .OrderByDescending(x => x.Score)
+            .ToList();
+
+        // Step 5: Split into auto-assigned (top N) vs standby (the rest)
+        var toApprove = scored.Take(remainingSlots > 0 ? remainingSlots : 0).Select(x => x.UserId).ToList();
+        var toStandby = scored.Skip(remainingSlots > 0 ? remainingSlots : 0).Select(x => x.UserId).ToList();
+
+        // Also move anyone who was already interested but got displaced (remainingSlots <= 0) to standby
+        if (remainingSlots <= 0)
+        {
+            toStandby = scored.Select(x => x.UserId).ToList();
+            toApprove.Clear();
+        }
+
+        // Step 6: Apply the status updates inside a single transaction
+        await using (var conn = new SqlConnection(_connectionString))
+        {
+            await conn.OpenAsync();
+            await using var transaction = (SqlTransaction)await conn.BeginTransactionAsync();
+            try
+            {
+                foreach (var userId in toApprove)
+                {
+                    await using var cmd = new SqlCommand("""
+                        UPDATE Employee_Shift
+                        SET    status            = 'manager_approved',
+                               status_updated_at = GETUTCDATE()
+                        WHERE  shift_ID          = @shiftId
+                          AND  employee_user_ID  = @userId
+                          AND  status            = 'employee_request'
+                        """, conn, transaction);
+                    cmd.Parameters.AddWithValue("@shiftId", shiftId);
+                    cmd.Parameters.AddWithValue("@userId",  userId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                foreach (var userId in toStandby)
+                {
+                    await using var cmd = new SqlCommand("""
+                        UPDATE Employee_Shift
+                        SET    status            = 'manager_hold',
+                               status_updated_at = GETUTCDATE()
+                        WHERE  shift_ID          = @shiftId
+                          AND  employee_user_ID  = @userId
+                          AND  status            = 'employee_request'
+                        """, conn, transaction);
+                    cmd.Parameters.AddWithValue("@shiftId", shiftId);
+                    cmd.Parameters.AddWithValue("@userId",  userId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // Step 7: Build and return the result summary
+        var result = new AutoAssignResult
+        {
+            Required        = requiredQty,
+            AlreadyApproved = alreadyApproved,
+            Assigned        = toApprove.Count,
+            Standby         = toStandby.Count,
+        };
+
+        if (toApprove.Count < remainingSlots)
+            result.Warning = $"Only {toApprove.Count} out of {remainingSlots} open slots could be filled. " +
+                             $"Not enough applicants without scheduling conflicts.";
+
+        return result;
     }
 }

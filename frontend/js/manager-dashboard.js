@@ -2831,13 +2831,20 @@ async function loadCustomers() {
   tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
   try {
     const token = await getToken();
+    console.log("[loadCustomers] token:", token ? token.substring(0, 30) + "..." : "NULL/UNDEFINED");
     const res = await fetch(`${API_BASE}/customers`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error();
+    console.log("[loadCustomers] status:", res.status);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[loadCustomers] error response:", err);
+      throw new Error();
+    }
     allCustomers = await res.json();
     renderCustomers(filterCustomers(allCustomers));
-  } catch {
+  } catch (e) {
+    console.error("[loadCustomers] caught:", e);
     tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load customers.</td></tr>`;
   }
 }
@@ -4994,6 +5001,12 @@ function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, se
   const rows = workers.length === 0
     ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
     : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+
+  // The Auto-Assign button only appears on the "applicants" section
+  const autoAssignBtn = key === "applicants"
+    ? `<button class="btn-auto-assign" data-action="auto-assign" data-event-id="${eventId}">⚡ Auto-Assign</button>`
+    : "";
+
   return `
     <div class="ps-section" id="ps-section-${eventId}-${key}" data-pinned="false" data-section-type="${key}">
       <div class="ps-section-hdr" data-ps-section="${eventId}-${key}">
@@ -5001,6 +5014,7 @@ function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, se
           <i data-lucide="${icon}" class="ps-section-icon"></i>
           <span class="ps-section-title">${title}</span>
           <span class="ps-badge ps-badge--${badgeType}">${workers.length}</span>
+          ${autoAssignBtn}
         </div>
         <span class="ps-chevron">▾</span>
       </div>
@@ -5182,13 +5196,77 @@ async function _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn
         body: JSON.stringify({ status: newStatus, shiftId }),
       }
     );
-    if (!res.ok) throw new Error("Failed to update status");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // 409 = employee already approved in another shift of this event
+      if (res.status === 409)
+        throw new Error(body.error ?? "This employee is already approved for another shift in this event.");
+      throw new Error("Failed to update status");
+    }
     await loadAndRenderEventWorkers(eventId);
-  } catch {
+  } catch (err) {
     // btn may be detached after re-render — re-query by fbUid+shiftId
     document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"][data-shift-id="${CSS.escape(shiftId)}"] [data-action]`)
       .forEach(b => { b.disabled = false; });
-    alert("Failed to update worker status. Please try again.");
+    alert(err.message);
+  }
+}
+
+async function _handleAutoAssign(eventId, btn) {
+  // Find every shift ID that has applicants inside this event's applicants section
+  const section  = document.getElementById(`ps-section-${eventId}-applicants`);
+  const shiftIds = [...new Set(
+    [...section.querySelectorAll(".ps-row[data-shift-id]")]
+      .map(r => r.dataset.shiftId)
+      .filter(Boolean)
+  )];
+
+  if (shiftIds.length === 0) {
+    alert("No applicants to assign.");
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = "Assigning…";
+
+  const token = await getToken();
+  const results = [];
+
+  try {
+    for (const shiftId of shiftIds) {
+      const res = await fetch(`${API_BASE}/shifts/${shiftId}/auto-assign`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `Server error on shift ${shiftId}`);
+      }
+
+      const data = await res.json();
+      results.push(data);
+    }
+
+    // Refresh the workers panel — this re-renders the button so reset it first
+    btn.disabled    = false;
+    btn.textContent = "⚡ Auto-Assign";
+    await loadAndRenderEventWorkers(eventId);
+
+    // Build a short summary message for the manager
+    const totalAssigned = results.reduce((s, r) => s + r.assigned, 0);
+    const totalStandby  = results.reduce((s, r) => s + r.standby, 0);
+    const warnings      = results.map(r => r.warning).filter(Boolean);
+
+    let msg = `✅ Auto-assign complete.\nAssigned: ${totalAssigned}  |  Standby: ${totalStandby}`;
+    if (warnings.length > 0) msg += `\n\n⚠️ ${warnings.join("\n")}`;
+    alert(msg);
+
+  } catch (err) {
+    console.error("Auto-assign failed:", err);
+    alert(`Auto-assign failed: ${err.message}`);
+    btn.disabled    = false;
+    btn.textContent = "⚡ Auto-Assign";
   }
 }
 
@@ -5483,6 +5561,15 @@ function _initStaffingHandlers() {
       e.stopPropagation();
 
       const action = btn.dataset.action;
+
+      // Auto-assign button lives in the section header, not inside a row
+      if (action === "auto-assign") {
+        const eventId = btn.dataset.eventId;
+        if (!eventId) return;
+        await _handleAutoAssign(eventId, btn);
+        return;
+      }
+
       const row    = btn.closest(".ps-row");
       if (!row) return;
 

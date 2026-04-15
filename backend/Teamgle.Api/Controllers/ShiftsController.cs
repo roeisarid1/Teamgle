@@ -263,6 +263,10 @@ public class ShiftsController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(403, new { error = ex.Message });
@@ -274,6 +278,34 @@ public class ShiftsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating worker status");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── POST /api/shifts/{shiftId}/auto-assign ────────────────────────────
+    [HttpPost("{shiftId}/auto-assign")]
+    public async Task<IActionResult> AutoAssign(string shiftId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null)
+            return Unauthorized(new { error = "Valid Firebase token required." });
+
+        try
+        {
+            var result = await _projectService.AutoAssignShiftAsync(uid, shiftId);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running auto-assign for shift {ShiftId}", shiftId);
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
