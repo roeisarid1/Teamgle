@@ -1,346 +1,206 @@
 using Microsoft.Data.SqlClient;
-using Teamgle.Api.Models.DTOs;
-using Teamgle.Api.Repositories;
+using Teamgle.Api.BL;
 
 namespace Teamgle.Api.DAL;
 
-// CustomerDAL - Data Access Layer for the Customer and ContactPerson tables.
-// Uses DBservices to open a connection, then calls Stored Procedures for all DB operations.
-// Errors from RAISERROR in the SPs are translated into .NET exceptions the controller expects.
-//
-// Note: implements ICustomerRepository (defined in Repositories/) so the existing
-// CustomerService and DI wiring don't need to change.
-public class CustomerDAL : ICustomerRepository
+// CustomerDAL - Data Access Layer for the Customer table.
+// Inherits BaseDAL for connection management.
+// Uses stored procedures (sp_*) for all DB operations.
+// Controller instantiates directly: new CustomerDAL()
+public class CustomerDAL : BaseDAL
 {
-    private readonly DBservices _db;
+    // ── Manager / company ────────────────────────────────────────────────────
 
-    public CustomerDAL(DBservices db)
+    public string? GetManagerCompanyId(string firebaseUid)
     {
-        _db = db;
-    }
-
-    // ── Error translation ─────────────────────────────────────────────────────
-    // Each SP signals a specific error via RAISERROR with a state number.
-    // We convert that state into the right .NET exception so the controller
-    // can return the correct HTTP status code without knowing about SQL.
-    //   state 1 → KeyNotFoundException          → 404 Not Found
-    //   state 2 → UnauthorizedAccessException   → 403 Forbidden
-    //   state 3 → InvalidOperationException     → 409 Conflict
-    private static Exception ToAppException(SqlException ex)
-    {
-        if (ex.State == 1) return new KeyNotFoundException(ex.Message);
-        if (ex.State == 2) return new UnauthorizedAccessException(ex.Message);
-        if (ex.State == 3) return new InvalidOperationException(ex.Message);
-        return ex; // unexpected SQL error → 500
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // MANAGER / COMPANY
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Returns the company_ID for a manager by Firebase UID, or null if not a manager.
-    public async Task<string?> GetManagerCompanyIdAsync(string firebaseUid)
-    {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_GetManagerCompanyId", conn);
-        cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
-
-        await conn.OpenAsync();
-        object? result = await cmd.ExecuteScalarAsync();
-        return result as string;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // CUSTOMER CRUD
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Returns summary list of all customers for the given company.
-    public async Task<List<CustomerResponse>> GetCustomersByCompanyAsync(string companyId)
-    {
-        List<CustomerResponse> customers = new List<CustomerResponse>();
-
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_GetCustomersByCompany", conn);
-        cmd.Parameters.AddWithValue("@companyId", companyId);
-
-        await conn.OpenAsync();
-        await using SqlDataReader reader = await cmd.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
+        SqlConnection con = null;
+        SqlCommand cmd = null;
+        try
         {
-            customers.Add(new CustomerResponse
-            {
-                CustomerId          = reader["customer_ID"].ToString()!,
-                CustomerCompanyName = reader["customer_company_name"].ToString()!,
-                CompanyPhone        = reader["company_phone"]   == DBNull.Value ? null : reader["company_phone"].ToString(),
-                CompanyEmail        = reader["company_email"]   == DBNull.Value ? null : reader["company_email"].ToString(),
-                CompanyCity         = reader["company_city"]    == DBNull.Value ? null : reader["company_city"].ToString(),
-                BusinessNumber      = reader["business_number"] == DBNull.Value ? null : reader["business_number"].ToString(),
-                CreatedAt           = reader["created_at"]      == DBNull.Value ? null : (DateTime?)reader["created_at"]
-            });
+            con = OpenConnection();
+            cmd = new SqlCommand(
+                "SELECT u.company_ID FROM [User] u INNER JOIN Manager m ON u.user_ID = m.user_ID WHERE u.FBUID = @fbuid",
+                con);
+            cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
+            return cmd.ExecuteScalar() as string;
         }
-
-        return customers;
+        finally
+        {
+            cmd?.Dispose();
+            con?.Close();
+        }
     }
 
-    // Returns full detail for one customer plus its contact persons.
-    // Returns null if the customer doesn't exist or belongs to a different company.
-    public async Task<CustomerDetailResponse?> GetCustomerByIdAsync(string customerId, string companyId)
+    // ── Customer CRUD ────────────────────────────────────────────────────────
+
+    public List<Customer> GetCustomersByCompany(string companyId)
     {
-        await using SqlConnection conn = _db.Connect();
-        await conn.OpenAsync();
+        SqlConnection con = null;
+        SqlCommand cmd = null;
+        SqlDataReader reader = null;
+        var customers = new List<Customer>();
 
-        CustomerDetailResponse? customer = null;
-
-        // Step 1: get the customer row
-        await using (SqlCommand cmd = _db.CreateCommand("sp_GetCustomerById", conn))
+        try
         {
-            cmd.Parameters.AddWithValue("@customerId", customerId);
-            cmd.Parameters.AddWithValue("@companyId",  companyId);
-
-            await using SqlDataReader reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            con = OpenConnection();
+            cmd = CreateStoredProcedureCommand(con, "sp_GetCustomersByCompany", new Dictionary<string, object>
             {
-                customer = new CustomerDetailResponse
+                { "@companyId", companyId }
+            });
+
+            reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                customers.Add(new Customer
                 {
                     CustomerId          = reader["customer_ID"].ToString()!,
                     CustomerCompanyName = reader["customer_company_name"].ToString()!,
                     CompanyPhone        = reader["company_phone"]   == DBNull.Value ? null : reader["company_phone"].ToString(),
                     CompanyEmail        = reader["company_email"]   == DBNull.Value ? null : reader["company_email"].ToString(),
                     CompanyCity         = reader["company_city"]    == DBNull.Value ? null : reader["company_city"].ToString(),
-                    CompanyAddress      = reader["company_address"] == DBNull.Value ? null : reader["company_address"].ToString(),
-                    BillingEmail        = reader["billing_email"]   == DBNull.Value ? null : reader["billing_email"].ToString(),
                     BusinessNumber      = reader["business_number"] == DBNull.Value ? null : reader["business_number"].ToString(),
-                    PaymentTerms        = reader["payment_terms"]   == DBNull.Value ? null : reader["payment_terms"].ToString(),
-                    Notes               = reader["notes"]           == DBNull.Value ? null : reader["notes"].ToString(),
-                    CreatedAt           = reader["created_at"]      == DBNull.Value ? null : (DateTime?)reader["created_at"],
-                    Contacts            = new List<ContactPersonResponse>()
-                };
+                    CreatedAt           = reader["created_at"]      == DBNull.Value ? null : (DateTime?)reader["created_at"]
+                });
             }
+
+            return customers;
         }
-
-        if (customer == null) return null;
-
-        // Step 2: get the contact persons for this customer
-        await using (SqlCommand cmd = _db.CreateCommand("sp_GetContactsByCustomer", conn))
+        finally
         {
-            cmd.Parameters.AddWithValue("@customerId", customerId);
-            cmd.Parameters.AddWithValue("@companyId",  companyId);
-
-            await using SqlDataReader reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                customer.Contacts.Add(ReadContact(reader));
+            reader?.Close();
+            cmd?.Dispose();
+            con?.Close();
         }
-
-        return customer;
     }
 
-    // Creates a new customer. Generates the GUID here and returns it to the caller.
-    public async Task<string> CreateCustomerAsync(string companyId, CreateCustomerRequest request)
+    // Returns full customer detail without contacts (controller fetches those separately).
+    public Customer? GetCustomerById(string customerId, string companyId)
+    {
+        SqlConnection con = null;
+        SqlCommand cmd = null;
+        SqlDataReader reader = null;
+
+        try
+        {
+            con = OpenConnection();
+            cmd = CreateStoredProcedureCommand(con, "sp_GetCustomerById", new Dictionary<string, object>
+            {
+                { "@customerId", customerId },
+                { "@companyId",  companyId  }
+            });
+
+            reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+
+            return new Customer
+            {
+                CustomerId          = reader["customer_ID"].ToString()!,
+                CustomerCompanyName = reader["customer_company_name"].ToString()!,
+                CompanyPhone        = reader["company_phone"]   == DBNull.Value ? null : reader["company_phone"].ToString(),
+                CompanyEmail        = reader["company_email"]   == DBNull.Value ? null : reader["company_email"].ToString(),
+                CompanyCity         = reader["company_city"]    == DBNull.Value ? null : reader["company_city"].ToString(),
+                CompanyAddress      = reader["company_address"] == DBNull.Value ? null : reader["company_address"].ToString(),
+                BillingEmail        = reader["billing_email"]   == DBNull.Value ? null : reader["billing_email"].ToString(),
+                BusinessNumber      = reader["business_number"] == DBNull.Value ? null : reader["business_number"].ToString(),
+                PaymentTerms        = reader["payment_terms"]   == DBNull.Value ? null : reader["payment_terms"].ToString(),
+                Notes               = reader["notes"]           == DBNull.Value ? null : reader["notes"].ToString(),
+                CreatedAt           = reader["created_at"]      == DBNull.Value ? null : (DateTime?)reader["created_at"],
+                Contacts            = []
+            };
+        }
+        finally
+        {
+            reader?.Close();
+            cmd?.Dispose();
+            con?.Close();
+        }
+    }
+
+    // Creates a new customer. Returns the new customer_ID.
+    public string CreateCustomer(string companyId, Customer customer)
     {
         string customerId = Guid.NewGuid().ToString();
+        SqlConnection con = null;
+        SqlCommand cmd = null;
 
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_CreateCustomer", conn);
-
-        cmd.Parameters.AddWithValue("@customerId",     customerId);
-        cmd.Parameters.AddWithValue("@name",           request.CustomerCompanyName.Trim());
-        cmd.Parameters.AddWithValue("@phone",          (object?)request.CompanyPhone?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@email",          (object?)request.CompanyEmail?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@city",           (object?)request.CompanyCity?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@address",        (object?)request.CompanyAddress?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@billingEmail",   (object?)request.BillingEmail?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@businessNumber", (object?)request.BusinessNumber?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@paymentTerms",   (object?)request.PaymentTerms?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@notes",          (object?)request.Notes?.Trim()          ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@createdAt",      DateTime.UtcNow);
-        cmd.Parameters.AddWithValue("@companyId",      companyId);
-
-        await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
-
-        return customerId;
-    }
-
-    // Updates all editable fields of a customer.
-    // The SP raises state=2 if the customer doesn't exist or belongs to another company.
-    public async Task UpdateCustomerAsync(string customerId, string companyId, UpdateCustomerRequest request)
-    {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_UpdateCustomer", conn);
-
-        cmd.Parameters.AddWithValue("@customerId",     customerId);
-        cmd.Parameters.AddWithValue("@companyId",      companyId);
-        cmd.Parameters.AddWithValue("@name",           request.CustomerCompanyName.Trim());
-        cmd.Parameters.AddWithValue("@phone",          (object?)request.CompanyPhone?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@email",          (object?)request.CompanyEmail?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@city",           (object?)request.CompanyCity?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@address",        (object?)request.CompanyAddress?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@billingEmail",   (object?)request.BillingEmail?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@businessNumber", (object?)request.BusinessNumber?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@paymentTerms",   (object?)request.PaymentTerms?.Trim()   ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@notes",          (object?)request.Notes?.Trim()          ?? DBNull.Value);
-
-        await conn.OpenAsync();
         try
         {
-            await cmd.ExecuteNonQueryAsync();
+            con = OpenConnection();
+            cmd = CreateStoredProcedureCommand(con, "sp_CreateCustomer", new Dictionary<string, object>
+            {
+                { "@customerId",     customerId                                                     },
+                { "@name",           customer.CustomerCompanyName!.Trim()                           },
+                { "@phone",          (object?)customer.CompanyPhone?.Trim()   ?? DBNull.Value },
+                { "@email",          (object?)customer.CompanyEmail?.Trim()   ?? DBNull.Value },
+                { "@city",           (object?)customer.CompanyCity?.Trim()    ?? DBNull.Value },
+                { "@address",        (object?)customer.CompanyAddress?.Trim() ?? DBNull.Value },
+                { "@billingEmail",   (object?)customer.BillingEmail?.Trim()   ?? DBNull.Value },
+                { "@businessNumber", (object?)customer.BusinessNumber?.Trim() ?? DBNull.Value },
+                { "@paymentTerms",   (object?)customer.PaymentTerms?.Trim()   ?? DBNull.Value },
+                { "@notes",          (object?)customer.Notes?.Trim()          ?? DBNull.Value },
+                { "@createdAt",      DateTime.UtcNow                                          },
+                { "@companyId",      companyId                                                }
+            });
+            cmd.ExecuteNonQuery();
+            return customerId;
         }
-        catch (SqlException ex) { throw ToAppException(ex); }
+        finally
+        {
+            cmd?.Dispose();
+            con?.Close();
+        }
     }
 
-    // Deletes a customer and all its contacts.
-    // The SP handles the cascade delete in a transaction.
-    public async Task DeleteCustomerAsync(string customerId, string companyId)
+    public void UpdateCustomer(string customerId, string companyId, Customer customer)
     {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_DeleteCustomer", conn);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
+        SqlConnection con = null;
+        SqlCommand cmd = null;
 
-        await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // CONTACT PERSON CRUD
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Returns all contacts for a customer.
-    // The SP raises state=1 if the customer doesn't exist or belongs to another company.
-    public async Task<List<ContactPersonResponse>> GetContactsByCustomerAsync(string customerId, string companyId)
-    {
-        List<ContactPersonResponse> contacts = new List<ContactPersonResponse>();
-
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_GetContactsByCustomer", conn);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
-
-        await conn.OpenAsync();
         try
         {
-            await using SqlDataReader reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                contacts.Add(ReadContact(reader));
+            con = OpenConnection();
+            cmd = CreateStoredProcedureCommand(con, "sp_UpdateCustomer", new Dictionary<string, object>
+            {
+                { "@customerId",     customerId                                                     },
+                { "@companyId",      companyId                                                      },
+                { "@name",           customer.CustomerCompanyName!.Trim()                           },
+                { "@phone",          (object?)customer.CompanyPhone?.Trim()   ?? DBNull.Value },
+                { "@email",          (object?)customer.CompanyEmail?.Trim()   ?? DBNull.Value },
+                { "@city",           (object?)customer.CompanyCity?.Trim()    ?? DBNull.Value },
+                { "@address",        (object?)customer.CompanyAddress?.Trim() ?? DBNull.Value },
+                { "@billingEmail",   (object?)customer.BillingEmail?.Trim()   ?? DBNull.Value },
+                { "@businessNumber", (object?)customer.BusinessNumber?.Trim() ?? DBNull.Value },
+                { "@paymentTerms",   (object?)customer.PaymentTerms?.Trim()   ?? DBNull.Value },
+                { "@notes",          (object?)customer.Notes?.Trim()          ?? DBNull.Value }
+            });
+            cmd.ExecuteNonQuery();
         }
-        catch (SqlException ex) { throw ToAppException(ex); }
-
-        return contacts;
+        finally
+        {
+            cmd?.Dispose();
+            con?.Close();
+        }
     }
 
-    // Returns one contact person. Returns null if not found or wrong company.
-    public async Task<ContactPersonResponse?> GetContactByIdAsync(string contactId, string customerId, string companyId)
+    public void DeleteCustomer(string customerId, string companyId)
     {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_GetContactById", conn);
-        cmd.Parameters.AddWithValue("@contactId",  contactId);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
+        SqlConnection con = null;
+        SqlCommand cmd = null;
 
-        await conn.OpenAsync();
-        await using SqlDataReader reader = await cmd.ExecuteReaderAsync();
-
-        if (!await reader.ReadAsync()) return null;
-        return ReadContact(reader);
-    }
-
-    // Creates a new contact person.
-    // SP raises state=1 if customer not found, state=3 if a primary contact already exists.
-    public async Task<string> CreateContactAsync(string customerId, string companyId, CreateContactPersonRequest request)
-    {
-        string contactId = Guid.NewGuid().ToString();
-
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_CreateContact", conn);
-
-        cmd.Parameters.AddWithValue("@contactId",  contactId);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
-        cmd.Parameters.AddWithValue("@firstName",  request.FirstName.Trim());
-        cmd.Parameters.AddWithValue("@lastName",   request.LastName.Trim());
-        cmd.Parameters.AddWithValue("@phone",      (object?)request.Phone?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@email",      (object?)request.Email?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@jobTitle",   (object?)request.JobTitle?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@isPrimary",  request.IsPrimary);
-        cmd.Parameters.AddWithValue("@notes",      (object?)request.Notes?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@createdAt",  DateTime.UtcNow);
-
-        await conn.OpenAsync();
         try
         {
-            await cmd.ExecuteNonQueryAsync();
+            con = OpenConnection();
+            cmd = CreateStoredProcedureCommand(con, "sp_DeleteCustomer", new Dictionary<string, object>
+            {
+                { "@customerId", customerId },
+                { "@companyId",  companyId  }
+            });
+            cmd.ExecuteNonQuery();
         }
-        catch (SqlException ex) { throw ToAppException(ex); }
-
-        return contactId;
-    }
-
-    // Updates all fields of a contact person.
-    // If IsPrimary=true the SP clears the flag on all other contacts first.
-    // SP raises state=2 if the contact doesn't belong to this company.
-    public async Task UpdateContactAsync(string contactId, string customerId, string companyId, UpdateContactPersonRequest request)
-    {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_UpdateContact", conn);
-
-        cmd.Parameters.AddWithValue("@contactId",  contactId);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
-        cmd.Parameters.AddWithValue("@firstName",  request.FirstName.Trim());
-        cmd.Parameters.AddWithValue("@lastName",   request.LastName.Trim());
-        cmd.Parameters.AddWithValue("@phone",      (object?)request.Phone?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@email",      (object?)request.Email?.Trim()    ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@jobTitle",   (object?)request.JobTitle?.Trim() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@isPrimary",  request.IsPrimary);
-        cmd.Parameters.AddWithValue("@notes",      (object?)request.Notes?.Trim()    ?? DBNull.Value);
-
-        await conn.OpenAsync();
-        try
+        finally
         {
-            await cmd.ExecuteNonQueryAsync();
+            cmd?.Dispose();
+            con?.Close();
         }
-        catch (SqlException ex) { throw ToAppException(ex); }
-    }
-
-    // Deletes one contact person.
-    // SP raises state=2 if the contact doesn't belong to this company.
-    public async Task DeleteContactAsync(string contactId, string customerId, string companyId)
-    {
-        await using SqlConnection conn = _db.Connect();
-        await using SqlCommand cmd = _db.CreateCommand("sp_DeleteContact", conn);
-        cmd.Parameters.AddWithValue("@contactId",  contactId);
-        cmd.Parameters.AddWithValue("@customerId", customerId);
-        cmd.Parameters.AddWithValue("@companyId",  companyId);
-
-        await conn.OpenAsync();
-        try
-        {
-            await cmd.ExecuteNonQueryAsync();
-        }
-        catch (SqlException ex) { throw ToAppException(ex); }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PRIVATE HELPER
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Reads one row from a SqlDataReader and returns a ContactPersonResponse.
-    // Used by every method that reads contact data.
-    private static ContactPersonResponse ReadContact(SqlDataReader reader)
-    {
-        return new ContactPersonResponse
-        {
-            ContactId  = reader["contact_ID"].ToString()!,
-            CustomerId = reader["customer_company_ID"].ToString()!,
-            FirstName  = reader["first_name"].ToString()!,
-            LastName   = reader["last_name"].ToString()!,
-            Phone      = reader["phone"]      == DBNull.Value ? null : reader["phone"].ToString(),
-            Email      = reader["email"]      == DBNull.Value ? null : reader["email"].ToString(),
-            JobTitle   = reader["job_title"]  == DBNull.Value ? null : reader["job_title"].ToString(),
-            IsPrimary  = reader["is_primary"] != DBNull.Value && (bool)reader["is_primary"],
-            Notes      = reader["notes"]      == DBNull.Value ? null : reader["notes"].ToString(),
-            CreatedAt  = reader["created_at"] == DBNull.Value ? null : (DateTime?)reader["created_at"]
-        };
     }
 }

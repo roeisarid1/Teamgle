@@ -1,6 +1,6 @@
-namespace Teamgle.Api.Models.DTOs;
+namespace Teamgle.Api.BL;
 
-public class ContactPersonResponse
+public class ContactPerson
 {
     public string ContactId { get; set; } = string.Empty;
     public string CustomerId { get; set; } = string.Empty;
