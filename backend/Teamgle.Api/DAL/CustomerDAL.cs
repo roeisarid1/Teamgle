@@ -13,8 +13,8 @@ public class CustomerDAL : BaseDAL
 
     public string? GetManagerCompanyId(string firebaseUid)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
         try
         {
             con = OpenConnection();
@@ -35,9 +35,9 @@ public class CustomerDAL : BaseDAL
 
     public List<Customer> GetCustomersByCompany(string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
         var customers = new List<Customer>();
 
         try
@@ -76,9 +76,9 @@ public class CustomerDAL : BaseDAL
     // Returns full customer detail without contacts (controller fetches those separately).
     public Customer? GetCustomerById(string customerId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
 
         try
         {
@@ -120,8 +120,8 @@ public class CustomerDAL : BaseDAL
     public string CreateCustomer(string companyId, Customer customer)
     {
         string customerId = Guid.NewGuid().ToString();
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -153,8 +153,8 @@ public class CustomerDAL : BaseDAL
 
     public void UpdateCustomer(string customerId, string companyId, Customer customer)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -184,8 +184,8 @@ public class CustomerDAL : BaseDAL
 
     public void DeleteCustomer(string customerId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {

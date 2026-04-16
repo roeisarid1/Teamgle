@@ -13,8 +13,8 @@ public class ContactPersonDAL : BaseDAL
 
     public string? GetManagerCompanyId(string firebaseUid)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
         try
         {
             con = OpenConnection();
@@ -35,9 +35,9 @@ public class ContactPersonDAL : BaseDAL
 
     public List<ContactPerson> GetContactsByCustomer(string customerId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
         var contacts = new List<ContactPerson>();
 
         try
@@ -65,9 +65,9 @@ public class ContactPersonDAL : BaseDAL
 
     public ContactPerson? GetContactById(string contactId, string customerId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
 
         try
         {
@@ -95,8 +95,8 @@ public class ContactPersonDAL : BaseDAL
     public string CreateContact(string customerId, string companyId, ContactPerson contact)
     {
         string contactId = Guid.NewGuid().ToString();
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -127,8 +127,8 @@ public class ContactPersonDAL : BaseDAL
 
     public void UpdateContact(string contactId, string customerId, string companyId, ContactPerson contact)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -157,8 +157,8 @@ public class ContactPersonDAL : BaseDAL
 
     public void DeleteContact(string contactId, string customerId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {

@@ -12,8 +12,8 @@ public class EmployeeDAL : BaseDAL
 
     public string? GetManagerCompanyId(string firebaseUid)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
         try
         {
             con = OpenConnection();
@@ -34,9 +34,9 @@ public class EmployeeDAL : BaseDAL
 
     public List<Employee> GetEmployeesByCompany(string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
         var employees = new Dictionary<string, Employee>();
 
         try
@@ -113,9 +113,9 @@ public class EmployeeDAL : BaseDAL
 
     public Employee? GetEmployeeById(string userId, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
         Employee? emp = null;
 
         try
@@ -185,9 +185,9 @@ public class EmployeeDAL : BaseDAL
     public string CreateEmployee(string companyId, Employee emp)
     {
         string userId = Guid.NewGuid().ToString();
-        SqlConnection con = null;
-        SqlTransaction tx = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlTransaction? tx = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -247,9 +247,9 @@ public class EmployeeDAL : BaseDAL
     // Updates User fields + cost + roles (transactional).
     public void UpdateEmployee(string userId, string companyId, Employee emp)
     {
-        SqlConnection con = null;
-        SqlTransaction tx = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlTransaction? tx = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -317,9 +317,9 @@ public class EmployeeDAL : BaseDAL
     // Deletes Employee_Roll → Employee → User (transactional).
     public void DeleteEmployee(string userId, string companyId)
     {
-        SqlConnection con = null;
-        SqlTransaction tx = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlTransaction? tx = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -377,9 +377,9 @@ public class EmployeeDAL : BaseDAL
 
     public List<Role> GetAllRoles(string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
-        SqlDataReader reader = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
+        SqlDataReader? reader = null;
         var roles = new List<Role>();
 
         try
@@ -415,8 +415,8 @@ public class EmployeeDAL : BaseDAL
 
     public bool RoleNameExistsForCompany(string roleName, string companyId)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -442,9 +442,9 @@ public class EmployeeDAL : BaseDAL
     public void CreateRole(string roleName, string companyId)
     {
         string rollId = Guid.NewGuid().ToString();
-        SqlConnection con = null;
-        SqlTransaction tx = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlTransaction? tx = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -481,8 +481,8 @@ public class EmployeeDAL : BaseDAL
     public bool RoleIdsExist(List<string> roleIds, string companyId)
     {
         if (roleIds.Count == 0) return false;
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
@@ -511,8 +511,8 @@ public class EmployeeDAL : BaseDAL
 
     public bool EmailExists(string email)
     {
-        SqlConnection con = null;
-        SqlCommand cmd = null;
+        SqlConnection? con = null;
+        SqlCommand? cmd = null;
 
         try
         {
