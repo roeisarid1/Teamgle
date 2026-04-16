@@ -2247,25 +2247,33 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 u.user_ID                                                             AS UserId,
                 ISNULL(e.cost_per_hour, 0)                                            AS CostPerHour,
 
-                -- Reliability: how many past shifts did they actually show up for
+                -- Commitment: how many shifts the employee did NOT reject out of all shifts
                 (SELECT COUNT(*) FROM Employee_Shift es2
                  WHERE  es2.employee_user_ID = u.user_ID
-                   AND  es2.canceled        = 0
-                   AND  es2.actual_start_time IS NOT NULL)                            AS CompletedShifts,
+                   AND  es2.status          <> 'employee_rejected')                   AS RegisteredShifts,
 
                 (SELECT COUNT(*) FROM Employee_Shift es2
-                 WHERE  es2.employee_user_ID = u.user_ID)                             AS TotalShifts,
+                 WHERE  es2.employee_user_ID = u.user_ID)                             AS OfferedShifts,
 
-                -- Performance: net bonus minus penalty across all past shifts
-                ISNULL((SELECT SUM(es2.bonus_amount)   FROM Employee_Shift es2
-                        WHERE es2.employee_user_ID = u.user_ID), 0)
-                - ISNULL((SELECT SUM(es2.penalty_amount) FROM Employee_Shift es2
-                          WHERE es2.employee_user_ID = u.user_ID), 0)                AS NetPerformance,
+                -- Attendance accuracy: avg minutes diff between actual_start_time and scheduled start_time (lower = better)
+                ISNULL((SELECT AVG(ABS(DATEDIFF(minute, es2.actual_start_time, s2.start_time)))
+                        FROM   Employee_Shift es2
+                        INNER JOIN Shift s2 ON s2.Shift_ID = es2.shift_ID
+                        WHERE  es2.employee_user_ID = u.user_ID
+                          AND  es2.status           = 'manager_approved'
+                          AND  es2.actual_start_time IS NOT NULL), 0)                 AS AttendanceAccuracy,
 
-                -- Rotation fairness: fewer recent shifts = higher priority
-                (SELECT COUNT(*) FROM Employee_Shift es2
-                 WHERE  es2.employee_user_ID = u.user_ID
-                   AND  es2.status_updated_at >= DATEADD(day, -30, GETUTCDATE()))    AS RecentShifts
+                -- Role fit: worked shifts in this role / total worked shifts
+                ISNULL(
+                    CAST((SELECT COUNT(*) FROM Employee_Shift es2
+                          INNER JOIN Shift s2 ON s2.Shift_ID = es2.shift_ID
+                          WHERE  es2.employee_user_ID = u.user_ID
+                            AND  es2.status           = 'manager_approved'
+                            AND  s2.roll_ID           = (SELECT roll_ID FROM Shift WHERE Shift_ID = @shiftId)) AS FLOAT)
+                    / NULLIF((SELECT COUNT(*) FROM Employee_Shift es2
+                               WHERE es2.employee_user_ID = u.user_ID
+                                 AND es2.status           = 'manager_approved'), 0)
+                , 0)                                                                  AS RoleFitScore,
 
             FROM  Employee_Shift es
             INNER JOIN [User]    u ON u.user_ID  = es.employee_user_ID
@@ -2285,7 +2293,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             """;
 
         // Raw data row used only inside this method for scoring
-        var candidates = new List<(string UserId, double CostPerHour, int CompletedShifts, int TotalShifts, double NetPerformance, int RecentShifts)>();
+        var candidates = new List<(string UserId, double CostPerHour, int RegisteredShifts, int OfferedShifts, double AttendanceAccuracy, double RoleFitScore)>();
 
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(candidatesSql, conn))
@@ -2298,12 +2306,12 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             while (await reader.ReadAsync())
             {
                 candidates.Add((
-                    UserId:          reader.GetString(reader.GetOrdinal("UserId")),
-                    CostPerHour:     (double)reader.GetDecimal(reader.GetOrdinal("CostPerHour")),
-                    CompletedShifts: reader.GetInt32(reader.GetOrdinal("CompletedShifts")),
-                    TotalShifts:     reader.GetInt32(reader.GetOrdinal("TotalShifts")),
-                    NetPerformance:  (double)reader.GetDecimal(reader.GetOrdinal("NetPerformance")),
-                    RecentShifts:    reader.GetInt32(reader.GetOrdinal("RecentShifts"))
+                    UserId:              reader.GetString(reader.GetOrdinal("UserId")),
+                    CostPerHour:         (double)reader.GetDecimal(reader.GetOrdinal("CostPerHour")),
+                    RegisteredShifts:    reader.GetInt32(reader.GetOrdinal("RegisteredShifts")),
+                    OfferedShifts:       reader.GetInt32(reader.GetOrdinal("OfferedShifts")),
+                    AttendanceAccuracy:  (double)reader.GetDecimal(reader.GetOrdinal("AttendanceAccuracy")),
+                    RoleFitScore:        (double)reader.GetDouble(reader.GetOrdinal("RoleFitScore"))
                 ));
             }
         }
@@ -2323,23 +2331,23 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             }).ToArray();
         }
 
-        double[] reliabilityRaw   = candidates.Select(c => c.TotalShifts == 0 ? 0.5 : (double)c.CompletedShifts / c.TotalShifts).ToArray();
-        double[] performanceRaw   = candidates.Select(c => c.NetPerformance).ToArray();
-        double[] rotationRaw      = candidates.Select(c => (double)c.RecentShifts).ToArray();  // fewer = better
-        double[] costRaw          = candidates.Select(c => c.CostPerHour).ToArray();             // lower = better
+        double[] commitmentRaw         = candidates.Select(c => c.OfferedShifts == 0 ? 0.5 : (double)c.RegisteredShifts / c.OfferedShifts).ToArray();
+        double[] attendanceAccuracyRaw = candidates.Select(c => c.AttendanceAccuracy).ToArray();  // lower = better
+        double[] roleFitRaw            = candidates.Select(c => c.RoleFitScore).ToArray();
+        double[] costRaw               = candidates.Select(c => c.CostPerHour).ToArray();          // lower = better
 
-        double[] reliabilityScore = Normalize(reliabilityRaw,  invertHighIsBad: false);
-        double[] performanceScore = Normalize(performanceRaw,   invertHighIsBad: false);
-        double[] rotationScore    = Normalize(rotationRaw,      invertHighIsBad: true);   // invert: fewer recent shifts → higher score
-        double[] costScore        = Normalize(costRaw,          invertHighIsBad: true);   // invert: lower cost → higher score
+        double[] commitmentScore       = Normalize(commitmentRaw,         invertHighIsBad: false);
+        double[] attendanceScore       = Normalize(attendanceAccuracyRaw, invertHighIsBad: true);   // invert: fewer minutes late = better
+        double[] roleFitScore          = Normalize(roleFitRaw,            invertHighIsBad: false);
+        double[] costScore             = Normalize(costRaw,               invertHighIsBad: true);   // invert: lower cost = better
 
         var scored = candidates
             .Select((c, i) => new
             {
                 c.UserId,
-                Score = reliabilityScore[i] * 0.35
-                      + performanceScore[i] * 0.20
-                      + rotationScore[i]    * 0.20
+                Score = commitmentScore[i]  * 0.25
+                      + attendanceScore[i]  * 0.30
+                      + roleFitScore[i]     * 0.20
                       + costScore[i]        * 0.25
             })
             .OrderByDescending(x => x.Score)
