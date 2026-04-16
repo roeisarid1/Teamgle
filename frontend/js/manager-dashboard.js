@@ -266,7 +266,7 @@ function renderEmployees(employees) {
               ? e.roles
                   .map(
                     (r) =>
-                      `<span class="role-chip">${capitalize(escape(r))}</span>`,
+                      `<span class="role-chip">${capitalize(escape(r.rollName || r))}</span>`,
                   )
                   .join("")
               : '<span style="color:#6b7280;font-size:12px">—</span>'
