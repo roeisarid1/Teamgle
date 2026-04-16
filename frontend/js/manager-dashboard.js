@@ -1451,7 +1451,7 @@ function activateSection(name) {
     .querySelector(".page-content")
     .classList.toggle("chat-mode", name === "chats");
 
-  if (name === "customers") loadCustomers();
+  if (name === "customers") { if (allCustomers.length === 0) loadCustomers(); else renderCustomers(filterCustomers(allCustomers)); }
   if (name === "projects")  { _initProjectFilters(); loadProjects(); }
   if (name === "create-project") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
