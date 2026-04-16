@@ -576,6 +576,8 @@ modalOverlay.addEventListener("click", (e) => {
 
 function openAddModal() {
   clearForm();
+  // Retry loading roles if they failed on page init
+  if (!rolesGrid.querySelector("input[type='checkbox']")) loadRoles();
   modalOverlay.classList.add("open");
 }
 
