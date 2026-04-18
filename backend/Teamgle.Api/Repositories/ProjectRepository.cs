@@ -2273,7 +2273,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                     / NULLIF((SELECT COUNT(*) FROM Employee_Shift es2
                                WHERE es2.employee_user_ID = u.user_ID
                                  AND es2.status           = 'manager_approved'), 0)
-                , 0)                                                                  AS RoleFitScore,
+                , 0)                                                                  AS RoleFitScore
 
             FROM  Employee_Shift es
             INNER JOIN [User]    u ON u.user_ID  = es.employee_user_ID
@@ -2298,23 +2298,31 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(candidatesSql, conn))
         {
-            cmd.Parameters.AddWithValue("@shiftId",    shiftId);
-            cmd.Parameters.AddWithValue("@shiftStart", shiftStart);
-            cmd.Parameters.AddWithValue("@shiftEnd",   shiftEnd);
+            cmd.Parameters.AddWithValue("@shiftId", shiftId);
             await conn.OpenAsync();
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
                 candidates.Add((
                     UserId:              reader.GetString(reader.GetOrdinal("UserId")),
-                    CostPerHour:         (double)reader.GetDecimal(reader.GetOrdinal("CostPerHour")),
+                    CostPerHour:         Convert.ToDouble(reader["CostPerHour"]),
                     RegisteredShifts:    reader.GetInt32(reader.GetOrdinal("RegisteredShifts")),
                     OfferedShifts:       reader.GetInt32(reader.GetOrdinal("OfferedShifts")),
-                    AttendanceAccuracy:  (double)reader.GetDecimal(reader.GetOrdinal("AttendanceAccuracy")),
-                    RoleFitScore:        (double)reader.GetDouble(reader.GetOrdinal("RoleFitScore"))
+                    AttendanceAccuracy:  Convert.ToDouble(reader["AttendanceAccuracy"]),
+                    RoleFitScore:        Convert.ToDouble(reader["RoleFitScore"])
                 ));
             }
         }
+
+        if (candidates.Count == 0)
+            return new AutoAssignResult
+            {
+                Required        = requiredQty,
+                AlreadyApproved = alreadyApproved,
+                Assigned        = 0,
+                Standby         = 0,
+                Warning         = "No applicants found for this shift."
+            };
 
         // Step 4: Score each candidate (all sub-scores normalised 0–1)
         // Helper: normalize a list of raw values to 0-1 range

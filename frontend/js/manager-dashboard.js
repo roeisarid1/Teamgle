@@ -1453,8 +1453,14 @@ function activateSection(name) {
     .querySelector(".page-content")
     .classList.toggle("chat-mode", name === "chats");
 
-  if (name === "customers") { if (allCustomers.length === 0) loadCustomers(); else renderCustomers(filterCustomers(allCustomers)); }
-  if (name === "projects")  { _initProjectFilters(); loadProjects(); }
+  if (name === "customers") {
+    if (allCustomers.length === 0) loadCustomers();
+    else renderCustomers(filterCustomers(allCustomers));
+  }
+  if (name === "projects") {
+    _initProjectFilters();
+    loadProjects();
+  }
   if (name === "create-project") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
 }
@@ -1468,32 +1474,33 @@ function _initChatSection() {
   initChat(container, profile, currentFirebaseUid);
 }
 
-
 // ── PROJECTS SECTION ────────────────────────────────────────────────────────
 
 let _allProjects = [];
 
 // ── Project filters state ──────────────────────────────────────────────────
-let _filterDateFrom   = null; // Date | null
-let _filterDateTo     = null; // Date | null
-let _filterStatuses   = new Set(); // empty = all
+let _filterDateFrom = null; // Date | null
+let _filterDateTo = null; // Date | null
+let _filterStatuses = new Set(); // empty = all
 
 function _applyProjectFilters() {
   if (!_allProjects) return;
   let projects = _allProjects;
 
   if (_filterDateFrom || _filterDateTo) {
-    projects = projects.filter(p => {
+    projects = projects.filter((p) => {
       const start = p.startDate ? new Date(p.startDate) : null;
-      const end   = p.endDate   ? new Date(p.endDate)   : null;
-      if (_filterDateFrom && end   && end   < _filterDateFrom) return false;
-      if (_filterDateTo   && start && start > _filterDateTo)   return false;
+      const end = p.endDate ? new Date(p.endDate) : null;
+      if (_filterDateFrom && end && end < _filterDateFrom) return false;
+      if (_filterDateTo && start && start > _filterDateTo) return false;
       return true;
     });
   }
 
   if (_filterStatuses.size > 0) {
-    projects = projects.filter(p => _filterStatuses.has(_computeProjectStatus(p)));
+    projects = projects.filter((p) =>
+      _filterStatuses.has(_computeProjectStatus(p)),
+    );
   }
 
   _renderProjectKanban(projects);
@@ -1501,24 +1508,29 @@ function _applyProjectFilters() {
 }
 
 function _updateFilterBtnState() {
-  const dateBtn   = document.getElementById("filter-date");
+  const dateBtn = document.getElementById("filter-date");
   const statusBtn = document.getElementById("filter-status");
-  if (dateBtn)   dateBtn.classList.toggle("btn-filter--active", !!(_filterDateFrom || _filterDateTo));
-  if (statusBtn) statusBtn.classList.toggle("btn-filter--active", _filterStatuses.size > 0);
+  if (dateBtn)
+    dateBtn.classList.toggle(
+      "btn-filter--active",
+      !!(_filterDateFrom || _filterDateTo),
+    );
+  if (statusBtn)
+    statusBtn.classList.toggle("btn-filter--active", _filterStatuses.size > 0);
 }
 
 let _projectFiltersInited = false;
 function _initProjectFilters() {
   if (_projectFiltersInited) return;
   _projectFiltersInited = true;
-  const dateBtn     = document.getElementById("filter-date");
-  const datePop     = document.getElementById("filter-date-popup");
-  const dateFrom    = document.getElementById("filter-date-from");
-  const dateTo      = document.getElementById("filter-date-to");
-  const dateApply   = document.getElementById("filter-date-apply");
-  const dateClear   = document.getElementById("filter-date-clear");
-  const statusBtn   = document.getElementById("filter-status");
-  const statusPop   = document.getElementById("filter-status-popup");
+  const dateBtn = document.getElementById("filter-date");
+  const datePop = document.getElementById("filter-date-popup");
+  const dateFrom = document.getElementById("filter-date-from");
+  const dateTo = document.getElementById("filter-date-to");
+  const dateApply = document.getElementById("filter-date-apply");
+  const dateClear = document.getElementById("filter-date-clear");
+  const statusBtn = document.getElementById("filter-status");
+  const statusPop = document.getElementById("filter-status-popup");
   const statusClear = document.getElementById("filter-status-clear");
 
   if (!dateBtn || !statusBtn) return;
@@ -1538,35 +1550,41 @@ function _initProjectFilters() {
     datePop.hidden = true;
     statusPop.hidden = true;
   });
-  datePop.addEventListener("click", e => e.stopPropagation());
-  statusPop.addEventListener("click", e => e.stopPropagation());
+  datePop.addEventListener("click", (e) => e.stopPropagation());
+  statusPop.addEventListener("click", (e) => e.stopPropagation());
 
   // Date apply
   dateApply.addEventListener("click", () => {
     _filterDateFrom = dateFrom.value ? new Date(dateFrom.value) : null;
-    _filterDateTo   = dateTo.value   ? new Date(dateTo.value)   : null;
+    _filterDateTo = dateTo.value ? new Date(dateTo.value) : null;
     if (_filterDateTo) _filterDateTo.setHours(23, 59, 59, 999);
     datePop.hidden = true;
     _applyProjectFilters();
   });
   dateClear.addEventListener("click", () => {
-    _filterDateFrom = null; _filterDateTo = null;
-    dateFrom.value = ""; dateTo.value = "";
+    _filterDateFrom = null;
+    _filterDateTo = null;
+    dateFrom.value = "";
+    dateTo.value = "";
     datePop.hidden = true;
     _applyProjectFilters();
   });
 
   // Status checkboxes — live filter on change
-  statusPop.querySelectorAll("input[type=checkbox]").forEach(cb => {
+  statusPop.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", () => {
       _filterStatuses = new Set(
-        [...statusPop.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value)
+        [...statusPop.querySelectorAll("input[type=checkbox]:checked")].map(
+          (c) => c.value,
+        ),
       );
       _applyProjectFilters();
     });
   });
   statusClear.addEventListener("click", () => {
-    statusPop.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+    statusPop
+      .querySelectorAll("input[type=checkbox]")
+      .forEach((cb) => (cb.checked = false));
     _filterStatuses = new Set();
     _applyProjectFilters();
   });
@@ -1614,11 +1632,21 @@ function _renderProjectKanban(projects) {
   for (const p of projects) {
     const computed = _computeProjectStatus(p, todayDate);
     switch (computed) {
-      case "draft":     buckets.draft.push(p);     break;
-      case "canceled":  buckets.completed.push(p); break;
-      case "completed": buckets.completed.push(p); break;
-      case "active":    buckets.today.push(p);     break;
-      default:          buckets.upcoming.push(p);  break; // planning
+      case "draft":
+        buckets.draft.push(p);
+        break;
+      case "canceled":
+        buckets.completed.push(p);
+        break;
+      case "completed":
+        buckets.completed.push(p);
+        break;
+      case "active":
+        buckets.today.push(p);
+        break;
+      default:
+        buckets.upcoming.push(p);
+        break; // planning
     }
   }
 
@@ -1632,27 +1660,38 @@ function _renderProjectKanban(projects) {
 
 // Compute display status from DB status + dates (no DB writes)
 function _computeProjectStatus(project, todayDate) {
-  if (project.status === "draft")    return "draft";
+  if (project.status === "draft") return "draft";
   if (project.status === "canceled") return "canceled";
   if (!project.startDate || !project.endDate) return "planning";
-  const start = new Date(project.startDate); start.setHours(0, 0, 0, 0);
-  const end   = new Date(project.endDate);   end.setHours(0, 0, 0, 0);
-  const today = todayDate ?? (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const start = new Date(project.startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(project.endDate);
+  end.setHours(0, 0, 0, 0);
+  const today =
+    todayDate ??
+    (() => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
   if (today < start) return "planning";
-  if (today > end)   return "completed";
+  if (today > end) return "completed";
   return "active";
 }
 
 function renderProjectCard(project) {
   const statusMap = {
-    draft:     { label: "Draft",     cls: "badge-pending" },
-    planning:  { label: "Planning",  cls: "badge-info"    },
-    active:    { label: "Active",    cls: "badge-active"  },
+    draft: { label: "Draft", cls: "badge-pending" },
+    planning: { label: "Planning", cls: "badge-info" },
+    active: { label: "Active", cls: "badge-active" },
     completed: { label: "Completed", cls: "badge-success" },
-    canceled:  { label: "Canceled",  cls: "badge-error"   },
+    canceled: { label: "Canceled", cls: "badge-error" },
   };
   const computed = _computeProjectStatus(project);
-  const badge = statusMap[computed] ?? { label: computed, cls: "badge-pending" };
+  const badge = statusMap[computed] ?? {
+    label: computed,
+    cls: "badge-pending",
+  };
   const fmt = (d) =>
     d
       ? new Date(d).toLocaleDateString("en-GB", {
@@ -1700,7 +1739,7 @@ function renderProjectCard(project) {
 document.getElementById("search-projects")?.addEventListener("input", (e) => {
   const q = e.target.value.trim().toLowerCase();
   const filtered = q
-    ? _allProjects.filter(p => (p.name || "").toLowerCase().includes(q))
+    ? _allProjects.filter((p) => (p.name || "").toLowerCase().includes(q))
     : _allProjects;
   _renderProjectKanban(filtered);
 });
@@ -1822,46 +1861,57 @@ function renderDashboardTab() {
   }
 
   const statusMeta = {
-    planning:  { label: "Planning",  cls: "ev-status--planning"  },
-    active:    { label: "Active",    cls: "ev-status--active"    },
+    planning: { label: "Planning", cls: "ev-status--planning" },
+    active: { label: "Active", cls: "ev-status--active" },
     completed: { label: "Completed", cls: "ev-status--completed" },
-    canceled:  { label: "Canceled",  cls: "ev-status--canceled"  },
+    canceled: { label: "Canceled", cls: "ev-status--canceled" },
   };
   const typeMeta = {
-    conference:  { icon: "groups",         label: "Conference"  },
-    exhibition:  { icon: "store",          label: "Exhibition"  },
-    concert:     { icon: "music_note",     label: "Concert"     },
-    gala:        { icon: "celebration",    label: "Gala"        },
-    corporate:   { icon: "business",       label: "Corporate"   },
-    wedding:     { icon: "favorite",       label: "Wedding"     },
-    workshop:    { icon: "construction",   label: "Workshop"    },
-    seminar:     { icon: "school",         label: "Seminar"     },
-    other:       { icon: "event",          label: "Event"       },
+    conference: { icon: "groups", label: "Conference" },
+    exhibition: { icon: "store", label: "Exhibition" },
+    concert: { icon: "music_note", label: "Concert" },
+    gala: { icon: "celebration", label: "Gala" },
+    corporate: { icon: "business", label: "Corporate" },
+    wedding: { icon: "favorite", label: "Wedding" },
+    workshop: { icon: "construction", label: "Workshop" },
+    seminar: { icon: "school", label: "Seminar" },
+    other: { icon: "event", label: "Event" },
   };
 
   const fmtDate = (iso) => {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
   const fmtTime = (iso) => {
     if (!iso) return "—";
     const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
   const daysBetween = (a, b) => {
     if (!a || !b) return null;
     return Math.round((new Date(b) - new Date(a)) / 86400000);
   };
 
-  const cards = events.map((ev, i) => {
-    const sm = statusMeta[ev.status] ?? { label: ev.status, cls: "ev-status--planning" };
-    const tm = typeMeta[ev.eventType?.toLowerCase()] ?? typeMeta.other;
-    const duration = daysBetween(ev.startTime, ev.endTime);
-    const durationLabel = duration != null
-      ? (duration === 0 ? "Same day" : `${duration} day${duration !== 1 ? "s" : ""}`)
-      : "";
+  const cards = events
+    .map((ev, i) => {
+      const sm = statusMeta[ev.status] ?? {
+        label: ev.status,
+        cls: "ev-status--planning",
+      };
+      const tm = typeMeta[ev.eventType?.toLowerCase()] ?? typeMeta.other;
+      const duration = daysBetween(ev.startTime, ev.endTime);
+      const durationLabel =
+        duration != null
+          ? duration === 0
+            ? "Same day"
+            : `${duration} day${duration !== 1 ? "s" : ""}`
+          : "";
 
-    return `
+      return `
       <div class="ev-card" style="--ev-index:${i}" data-event-id="${escapeHtml(ev.eventId)}">
         <div class="ev-card-accent"></div>
         <div class="ev-card-body">
@@ -1874,11 +1924,15 @@ function renderDashboardTab() {
           </div>
           <h3 class="ev-card-title">${escapeHtml(ev.name || "Untitled Event")}</h3>
           <div class="ev-card-meta">
-            ${ev.location ? `
+            ${
+              ev.location
+                ? `
               <div class="ev-meta-row">
                 <span class="material-symbols-outlined ev-meta-icon">location_on</span>
                 <span>${escapeHtml(ev.location)}</span>
-              </div>` : ""}
+              </div>`
+                : ""
+            }
             <div class="ev-meta-row">
               <span class="material-symbols-outlined ev-meta-icon">calendar_today</span>
               <span>${fmtDate(ev.startTime)}</span>
@@ -1891,7 +1945,8 @@ function renderDashboardTab() {
         </div>
         <div class="ev-card-index">${String(i + 1).padStart(2, "0")}</div>
       </div>`;
-  }).join("");
+    })
+    .join("");
 
   container.innerHTML = `<div class="ev-grid">${cards}</div>`;
 
@@ -1965,14 +2020,13 @@ function renderGantt(schedule) {
     return roleColorMap[roleName];
   }
 
-
   function fmt2(n) {
     return String(n).padStart(2, "0");
   }
   // Converts a UTC ISO string to the local datetime-local input format (YYYY-MM-DDTHH:mm)
   function toLocalDateTimeInput(isoStr) {
     const d = new Date(isoStr);
-    return `${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}T${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
+    return `${d.getFullYear()}-${fmt2(d.getMonth() + 1)}-${fmt2(d.getDate())}T${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
   }
   function fmtTime(isoStr) {
     if (!isoStr) return "";
@@ -1995,9 +2049,10 @@ function renderGantt(schedule) {
     let m = d.getHours() * 60 + d.getMinutes();
     if (refIsoStr) {
       const ref = new Date(refIsoStr);
-      const sameDay = d.getFullYear() === ref.getFullYear() &&
-                      d.getMonth()    === ref.getMonth()    &&
-                      d.getDate()     === ref.getDate();
+      const sameDay =
+        d.getFullYear() === ref.getFullYear() &&
+        d.getMonth() === ref.getMonth() &&
+        d.getDate() === ref.getDate();
       if (!sameDay && d > ref) m += 1440;
     }
     return m;
@@ -2011,28 +2066,33 @@ function renderGantt(schedule) {
 
       // Compute windowed axis: from earliest shift start to latest shift end
       let winStart = Infinity;
-      let winEnd   = 0;
-      ev.shifts.forEach(shift => {
+      let winEnd = 0;
+      ev.shifts.forEach((shift) => {
         const s = toMinutes(shift.startTime);
         const e = toMinutes(shift.endTime, shift.startTime);
         if (s < winStart) winStart = s;
-        if (e > winEnd)   winEnd   = e;
+        if (e > winEnd) winEnd = e;
       });
       // Fallback for empty events
-      if (!isFinite(winStart)) { winStart = 0; winEnd = 1440; }
+      if (!isFinite(winStart)) {
+        winStart = 0;
+        winEnd = 1440;
+      }
       // Pad 1h on each side, snap to 1h boundaries for clean labels
       winStart = Math.max(0, Math.floor((winStart - 60) / 60) * 60);
-      winEnd   = Math.ceil((winEnd + 60) / 60) * 60;
+      winEnd = Math.ceil((winEnd + 60) / 60) * 60;
       const spanMinutes = winEnd - winStart;
 
       // Build axis ticks — one per hour inside the window (max ~12 ticks)
       const tickStep = spanMinutes <= 480 ? 60 : 120; // 1h ticks for short spans, 2h for long
       const axisTicks = [];
       for (let m = winStart; m <= winEnd; m += tickStep) {
-        const pct   = ((m - winStart) / spanMinutes) * 100;
-        const hAbs  = Math.floor(m / 60);
+        const pct = ((m - winStart) / spanMinutes) * 100;
+        const hAbs = Math.floor(m / 60);
         const label = `${fmt2(hAbs % 24)}:00${hAbs >= 24 ? " +1" : ""}`;
-        axisTicks.push(`<div class="gantt-hour-tick" style="left:${pct.toFixed(2)}%">${label}</div>`);
+        axisTicks.push(
+          `<div class="gantt-hour-tick" style="left:${pct.toFixed(2)}%">${label}</div>`,
+        );
       }
 
       const rowsHtml =
@@ -2040,12 +2100,15 @@ function renderGantt(schedule) {
           ? `<div class="gantt-empty-row">No shifts defined for this event</div>`
           : ev.shifts
               .map((shift) => {
-                const color  = getColor(shift.roleName);
-                const leftM  = toMinutes(shift.startTime);
+                const color = getColor(shift.roleName);
+                const leftM = toMinutes(shift.startTime);
                 const rightM = toMinutes(shift.endTime, shift.startTime);
-                const left   = ((leftM  - winStart) / spanMinutes) * 100;
-                const width  = Math.max((rightM - leftM) / spanMinutes * 100, 2);
-                const label  = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
+                const left = ((leftM - winStart) / spanMinutes) * 100;
+                const width = Math.max(
+                  ((rightM - leftM) / spanMinutes) * 100,
+                  2,
+                );
+                const label = `${escapeHtml(shift.roleName)} ${shift.staffedCount}/${shift.requiredQuantity}`;
                 return `
             <div class="gantt-row">
               <div class="gantt-row-label">${escapeHtml(shift.roleName)}</div>
@@ -2172,7 +2235,8 @@ async function renderTasksTab() {
       if (col) col.innerHTML = "";
     });
     const openCol = document.getElementById("pd-col-open");
-    if (openCol) openCol.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
+    if (openCol)
+      openCol.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
   }
 }
 
@@ -2401,7 +2465,6 @@ function collapseRow(row) {
   row.classList.remove("pd-row--expanded");
   if (_expandedRow === row) _expandedRow = null;
 }
-
 
 function addNewTaskRow() {
   const list = document.getElementById("pd-col-open");
@@ -2833,7 +2896,10 @@ async function loadCustomers() {
   tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
   try {
     const token = await getToken();
-    console.log("[loadCustomers] token:", token ? token.substring(0, 30) + "..." : "NULL/UNDEFINED");
+    console.log(
+      "[loadCustomers] token:",
+      token ? token.substring(0, 30) + "..." : "NULL/UNDEFINED",
+    );
     const res = await fetch(`${API_BASE}/customers`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -3816,12 +3882,12 @@ let _projEndDateTouched = false; // true once the user manually changes End Date
 
 // ── Project date DOM refs (static elements) ───────────────────────────────
 const _projStartInput = document.getElementById("proj-start-date");
-const _projEndInput   = document.getElementById("proj-end-date");
+const _projEndInput = document.getElementById("proj-end-date");
 
 // ── Revalidate every event-date field against the current project range ────
 function revalidateEventDates() {
   const startDate = _projStartInput.value;
-  const endDate   = _projEndInput.value;
+  const endDate = _projEndInput.value;
 
   // Project-level: mark End Date red if it precedes Start Date
   const projEndFieldEl = document.getElementById("field-proj-end");
@@ -3829,14 +3895,18 @@ function revalidateEventDates() {
   projEndFieldEl?.classList.toggle("has-range-error", projDatesInvalid);
 
   document.querySelectorAll(".event-block").forEach((block) => {
-    const idx      = block.dataset.eventIdx;
+    const idx = block.dataset.eventIdx;
     const dateInput = document.getElementById(`event-date-${idx}`);
-    const fieldEl   = block.querySelector(`[data-field="event-date-${idx}"]`);
+    const fieldEl = block.querySelector(`[data-field="event-date-${idx}"]`);
     if (!dateInput || !fieldEl) return;
-    const dateVal  = dateInput.value;
+    const dateVal = dateInput.value;
     // Out-of-range only when all three dates are present
-    const outOfRange = !!(dateVal && startDate && endDate &&
-      (dateVal < startDate || dateVal > endDate));
+    const outOfRange = !!(
+      dateVal &&
+      startDate &&
+      endDate &&
+      (dateVal < startDate || dateVal > endDate)
+    );
     fieldEl.classList.toggle("has-range-error", outOfRange);
   });
 }
@@ -3852,17 +3922,18 @@ _projStartInput.addEventListener("change", () => {
   }
   // Auto-fill every untouched event date
   document.querySelectorAll(".event-block").forEach((block) => {
-    const idx       = block.dataset.eventIdx;
+    const idx = block.dataset.eventIdx;
     const dateInput = document.getElementById(`event-date-${idx}`);
     if (dateInput && !dateInput.dataset.touched) {
       dateInput.value = startVal;
       // Refresh the header summary for this block
-      const nameVal   = document.getElementById(`event-name-${idx}`)?.value.trim() || "";
+      const nameVal =
+        document.getElementById(`event-name-${idx}`)?.value.trim() || "";
       const summaryEl = document.getElementById(`event-summary-${idx}`);
       if (summaryEl) {
         const parts = [];
-        if (nameVal)   parts.push(nameVal);
-        if (startVal)  parts.push(startVal);
+        if (nameVal) parts.push(nameVal);
+        if (startVal) parts.push(startVal);
         summaryEl.textContent = parts.length ? ` · ${parts.join(" · ")}` : "";
       }
     }
@@ -3970,10 +4041,10 @@ function initCreateProjectForm() {
   // Clear project-level fields
   document.getElementById("proj-name").value = "";
   _projStartInput.value = "";
-  _projStartInput.max   = "";
-  _projEndInput.value   = "";
-  _projEndInput.min     = "";
-  _projEndDateTouched   = false;
+  _projStartInput.max = "";
+  _projEndInput.value = "";
+  _projEndInput.min = "";
+  _projEndDateTouched = false;
   document.getElementById("proj-customer").value = "";
   ["field-proj-name", "field-proj-start", "field-proj-end"].forEach((id) =>
     document.getElementById(id)?.classList.remove("has-error"),
@@ -4248,13 +4319,11 @@ async function appendEventBlock() {
     .querySelector(`#event-name-${idx}`)
     .addEventListener("input", updateSummary);
   // Event date: update summary + mark touched + revalidate range
-  block
-    .querySelector(`#event-date-${idx}`)
-    .addEventListener("change", () => {
-      document.getElementById(`event-date-${idx}`).dataset.touched = "1";
-      updateSummary();
-      revalidateEventDates();
-    });
+  block.querySelector(`#event-date-${idx}`).addEventListener("change", () => {
+    document.getElementById(`event-date-${idx}`).dataset.touched = "1";
+    updateSummary();
+    revalidateEventDates();
+  });
 
   // Default event date to project start date (if already chosen)
   const projStartVal = _projStartInput.value;
@@ -4379,12 +4448,13 @@ function collectProjectFormData() {
   // Block Create Project if any event date is outside the project range
   if (startDate && endDate) {
     document.querySelectorAll(".event-block").forEach((block) => {
-      const idx     = block.dataset.eventIdx;
+      const idx = block.dataset.eventIdx;
       const dateVal = document.getElementById(`event-date-${idx}`)?.value;
       if (dateVal && (dateVal < startDate || dateVal > endDate)) {
         valid = false;
         if (!errBanner.classList.contains("visible")) {
-          errBanner.textContent = "One or more event dates are outside the project date range.";
+          errBanner.textContent =
+            "One or more event dates are outside the project date range.";
           errBanner.classList.add("visible");
         }
       }
@@ -4926,8 +4996,9 @@ function renderStaffingTab() {
 
   // Fetch potential workers for each real event in background
   const events = currentProjectDetail?.events ?? [];
-  events.forEach(ev => {
-    if (currentProjectId) loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+  events.forEach((ev) => {
+    if (currentProjectId)
+      loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
     loadAndRenderEventWorkers(ev.eventId);
   });
 }
@@ -4948,22 +5019,24 @@ function _buildStaffingHTML() {
       </div>`;
   }
 
-  const eventsHtml = events.map(ev => {
-    const meta = _formatEventMeta(ev);
-    return `
+  const eventsHtml = events
+    .map((ev) => {
+      const meta = _formatEventMeta(ev);
+      return `
     <div class="ps-event-block" data-event-id="${escapeHtml(ev.eventId)}">
       <div class="ps-event-header">
         <span class="ps-event-name">${escapeHtml(ev.name)}</span>
         <span class="ps-event-meta">${escapeHtml(meta)}</span>
       </div>
       ${_buildPotentialSection(ev.eventId)}
-      ${_buildStaffingSection(ev.eventId, "awaiting",   "Awaiting Response", "clock",        "pending",  [], "awaiting")}
-      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants",  "inbox",        "pending",  [], "applicant")}
-      ${_buildStaffingSection(ev.eventId, "approved",   "Approved Workers",  "check-circle", "approved", [], "approved")}
-      ${_buildStaffingSection(ev.eventId, "hold",       "Hold / Standby",    "pause-circle", "hold",     [], "hold")}
-      ${_buildStaffingSection(ev.eventId, "rejected",   "Rejected Workers",  "x-circle",     "rejected", [], "rejected")}
+      ${_buildStaffingSection(ev.eventId, "awaiting", "Awaiting Response", "clock", "pending", [], "awaiting")}
+      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants", "inbox", "pending", [], "applicant")}
+      ${_buildStaffingSection(ev.eventId, "approved", "Approved Workers", "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(ev.eventId, "hold", "Hold / Standby", "pause-circle", "hold", [], "hold")}
+      ${_buildStaffingSection(ev.eventId, "rejected", "Rejected Workers", "x-circle", "rejected", [], "rejected")}
     </div>`;
-  }).join('');
+    })
+    .join("");
 
   return `
     <div class="ps-header">
@@ -4986,11 +5059,22 @@ function _formatEventMeta(ev) {
   const parts = [];
   if (ev.startTime) {
     const d = new Date(ev.startTime);
-    const datePart = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const startT = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const datePart = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    const startT = d.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
     let timePart = startT;
     if (ev.endTime) {
-      const endT = new Date(ev.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+      const endT = new Date(ev.endTime).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
       timePart += `–${endT}`;
     }
     parts.push(`${datePart} · ${timePart}`);
@@ -4999,15 +5083,25 @@ function _formatEventMeta(ev) {
   return parts.join(" · ");
 }
 
-function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, sectionType) {
-  const rows = workers.length === 0
-    ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
-    : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+function _buildStaffingSection(
+  eventId,
+  key,
+  title,
+  icon,
+  badgeType,
+  workers,
+  sectionType,
+) {
+  const rows =
+    workers.length === 0
+      ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+      : workers.map((w) => _buildWorkerRow(w, sectionType)).join("");
 
   // The Auto-Assign button only appears on the "applicants" section
-  const autoAssignBtn = key === "applicants"
-    ? `<button class="btn-auto-assign" data-action="auto-assign" data-event-id="${eventId}">⚡ Auto-Assign</button>`
-    : "";
+  const autoAssignBtn =
+    key === "applicants"
+      ? `<button class="btn-auto-assign" data-action="auto-assign" data-event-id="${eventId}">⚡ Auto-Assign</button>`
+      : "";
 
   return `
     <div class="ps-section" id="ps-section-${eventId}-${key}" data-pinned="false" data-section-type="${key}">
@@ -5032,8 +5126,9 @@ function _buildStaffingSection(eventId, key, title, icon, badgeType, workers, se
 }
 
 function _buildWorkerRow(worker, sectionType) {
-  const initials = ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
-  const name     = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
+  const initials =
+    ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
+  const name = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
 
   let btns = "";
   if (sectionType !== "awaiting") {
@@ -5068,16 +5163,19 @@ function _buildWorkerRow(worker, sectionType) {
 }
 
 function _renderEventWorkerSection(eventId, key, workers, sectionType) {
-  const body  = document.getElementById(`ps-body-${eventId}-${key}`);
-  const badge = document.querySelector(`#ps-section-${eventId}-${key} .ps-badge`);
+  const body = document.getElementById(`ps-body-${eventId}-${key}`);
+  const badge = document.querySelector(
+    `#ps-section-${eventId}-${key} .ps-badge`,
+  );
   if (!body) return;
 
   const tbody = body.querySelector("tbody");
   if (!tbody) return;
 
-  const rows = workers.length === 0
-    ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
-    : workers.map(w => _buildWorkerRow(w, sectionType)).join("");
+  const rows =
+    workers.length === 0
+      ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+      : workers.map((w) => _buildWorkerRow(w, sectionType)).join("");
 
   tbody.innerHTML = rows;
   if (badge) badge.textContent = workers.length;
@@ -5089,16 +5187,36 @@ async function loadAndRenderEventWorkers(eventId) {
     const token = await getToken();
     const res = await fetch(
       `${API_BASE}/events/${encodeURIComponent(eventId)}/workers`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error("Failed to load event workers");
     const data = await res.json();
 
-    _renderEventWorkerSection(eventId, "awaiting",   data.awaiting   ?? [], "awaiting");
-    _renderEventWorkerSection(eventId, "applicants", data.applicants ?? [], "applicant");
-    _renderEventWorkerSection(eventId, "approved",   data.approved   ?? [], "approved");
-    _renderEventWorkerSection(eventId, "hold",       data.hold       ?? [], "hold");
-    _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
+    _renderEventWorkerSection(
+      eventId,
+      "awaiting",
+      data.awaiting ?? [],
+      "awaiting",
+    );
+    _renderEventWorkerSection(
+      eventId,
+      "applicants",
+      data.applicants ?? [],
+      "applicant",
+    );
+    _renderEventWorkerSection(
+      eventId,
+      "approved",
+      data.approved ?? [],
+      "approved",
+    );
+    _renderEventWorkerSection(eventId, "hold", data.hold ?? [], "hold");
+    _renderEventWorkerSection(
+      eventId,
+      "rejected",
+      data.rejected ?? [],
+      "rejected",
+    );
     _renderOverlapWarnings(eventId, data.approved ?? []);
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
@@ -5107,12 +5225,12 @@ async function loadAndRenderEventWorkers(eventId) {
 
 function _shiftsOverlap(a, b) {
   const aStart = a.shiftStart ? new Date(a.shiftStart) : null;
-  const aEnd   = a.shiftEnd   ? new Date(a.shiftEnd)   : null;
+  const aEnd = a.shiftEnd ? new Date(a.shiftEnd) : null;
   const bStart = b.shiftStart ? new Date(b.shiftStart) : null;
-  const bEnd   = b.shiftEnd   ? new Date(b.shiftEnd)   : null;
+  const bEnd = b.shiftEnd ? new Date(b.shiftEnd) : null;
   if (!aStart || !bStart) return false;
-  const aEndEff = aEnd   ?? aStart;
-  const bEndEff = bEnd   ?? bStart;
+  const aEndEff = aEnd ?? aStart;
+  const bEndEff = bEnd ?? bStart;
   return aStart < bEndEff && bStart < aEndEff;
 }
 
@@ -5134,8 +5252,8 @@ function _renderOverlapWarnings(eventId, approved) {
           const name = `${shifts[i].firstName} ${shifts[i].lastName}`.trim();
           warnings.push(
             `<strong>${escapeHtml(name)}</strong> is approved for both ` +
-            `<em>${escapeHtml(shifts[i].roleName)}</em> and <em>${escapeHtml(shifts[j].roleName)}</em> ` +
-            `with overlapping shift times.`
+              `<em>${escapeHtml(shifts[i].roleName)}</em> and <em>${escapeHtml(shifts[j].roleName)}</em> ` +
+              `with overlapping shift times.`,
           );
         }
       }
@@ -5157,7 +5275,7 @@ function _renderOverlapWarnings(eventId, approved) {
     <i data-lucide="alert-triangle" style="flex-shrink:0;width:16px;height:16px"></i>
     <div>
       <strong>Shift overlap detected</strong>
-      <ul>${warnings.map(w => `<li>${w}</li>`).join("")}</ul>
+      <ul>${warnings.map((w) => `<li>${w}</li>`).join("")}</ul>
     </div>`;
   sectionEl.insertAdjacentElement("beforebegin", banner);
   if (window.lucide) lucide.createIcons();
@@ -5171,7 +5289,7 @@ function _startStaffingPoll() {
   }
   const events = currentProjectDetail?.events ?? [];
   _staffingPollInterval = setInterval(() => {
-    events.forEach(ev => loadAndRenderEventWorkers(ev.eventId));
+    events.forEach((ev) => loadAndRenderEventWorkers(ev.eventId));
   }, 15000);
 }
 
@@ -5186,7 +5304,13 @@ function _stopStaffingPoll() {
   }
 }
 
-async function _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn) {
+async function _handleWorkerStatusChange(
+  eventId,
+  fbUid,
+  shiftId,
+  newStatus,
+  btn,
+) {
   btn.disabled = true;
   try {
     const token = await getToken();
@@ -5194,41 +5318,54 @@ async function _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn
       `${API_BASE}/events/${encodeURIComponent(eventId)}/workers/${encodeURIComponent(fbUid)}`,
       {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ status: newStatus, shiftId }),
-      }
+      },
     );
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       // 409 = employee already approved in another shift of this event
       if (res.status === 409)
-        throw new Error(body.error ?? "This employee is already approved for another shift in this event.");
+        throw new Error(
+          body.error ??
+            "This employee is already approved for another shift in this event.",
+        );
       throw new Error("Failed to update status");
     }
     await loadAndRenderEventWorkers(eventId);
   } catch (err) {
     // btn may be detached after re-render — re-query by fbUid+shiftId
-    document.querySelectorAll(`.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"][data-shift-id="${CSS.escape(shiftId)}"] [data-action]`)
-      .forEach(b => { b.disabled = false; });
+    document
+      .querySelectorAll(
+        `.ps-row[data-worker-fbuid="${CSS.escape(fbUid)}"][data-shift-id="${CSS.escape(shiftId)}"] [data-action]`,
+      )
+      .forEach((b) => {
+        b.disabled = false;
+      });
     alert(err.message);
   }
 }
 
 async function _handleAutoAssign(eventId, btn) {
   // Find every shift ID that has applicants inside this event's applicants section
-  const section  = document.getElementById(`ps-section-${eventId}-applicants`);
-  const shiftIds = [...new Set(
-    [...section.querySelectorAll(".ps-row[data-shift-id]")]
-      .map(r => r.dataset.shiftId)
-      .filter(Boolean)
-  )];
+  const section = document.getElementById(`ps-section-${eventId}-applicants`);
+  const shiftIds = [
+    ...new Set(
+      [...section.querySelectorAll(".ps-row[data-shift-id]")]
+        .map((r) => r.dataset.shiftId)
+        .filter(Boolean),
+    ),
+  ];
 
   if (shiftIds.length === 0) {
     alert("No applicants to assign.");
     return;
   }
 
-  btn.disabled    = true;
+  btn.disabled = true;
   btn.textContent = "Assigning…";
 
   const token = await getToken();
@@ -5251,23 +5388,22 @@ async function _handleAutoAssign(eventId, btn) {
     }
 
     // Refresh the workers panel — this re-renders the button so reset it first
-    btn.disabled    = false;
+    btn.disabled = false;
     btn.textContent = "⚡ Auto-Assign";
     await loadAndRenderEventWorkers(eventId);
 
     // Build a short summary message for the manager
     const totalAssigned = results.reduce((s, r) => s + r.assigned, 0);
-    const totalStandby  = results.reduce((s, r) => s + r.standby, 0);
-    const warnings      = results.map(r => r.warning).filter(Boolean);
+    const totalStandby = results.reduce((s, r) => s + r.standby, 0);
+    const warnings = results.map((r) => r.warning).filter(Boolean);
 
     let msg = `✅ Auto-assign complete.\nAssigned: ${totalAssigned}  |  Standby: ${totalStandby}`;
     if (warnings.length > 0) msg += `\n\n⚠️ ${warnings.join("\n")}`;
     alert(msg);
-
   } catch (err) {
     console.error("Auto-assign failed:", err);
     alert(`Auto-assign failed: ${err.message}`);
-    btn.disabled    = false;
+    btn.disabled = false;
     btn.textContent = "⚡ Auto-Assign";
   }
 }
@@ -5284,15 +5420,18 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
     if (!res.ok) throw new Error("Failed to remove assignment");
 
     await loadAndRenderEventWorkers(eventId);
-    if (currentProjectId) await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+    if (currentProjectId)
+      await loadAndRenderPotentialWorkers(currentProjectId, eventId);
 
     // Auto-open the Potential Workers section so the returned worker is visible
-    const potentialSection = document.getElementById(`ps-section-${eventId}-potential`);
+    const potentialSection = document.getElementById(
+      `ps-section-${eventId}-potential`,
+    );
     if (potentialSection) {
       const potentialHdr = potentialSection.querySelector(".ps-section-hdr");
       if (potentialHdr) _setSectionOpen(potentialSection, potentialHdr, true);
@@ -5337,13 +5476,15 @@ function _buildPotentialSection(eventId) {
 
 // Called after fetch to replace loading state with real worker rows
 function _replacePotentialContent(eventId, workers) {
-  const body   = document.getElementById(`ps-body-${eventId}-potential`);
-  const badge  = document.getElementById(`ps-badge-${eventId}-potential`);
-  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  const body = document.getElementById(`ps-body-${eventId}-potential`);
+  const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+  const sendAll = document.querySelector(
+    `.ps-btn-send-all[data-event-id="${eventId}"]`,
+  );
   if (!body) return;
 
   badge.textContent = workers.length;
-  sendAll.disabled  = workers.length === 0;
+  sendAll.disabled = workers.length === 0;
 
   if (workers.length === 0) {
     body.innerHTML = `
@@ -5353,26 +5494,42 @@ function _replacePotentialContent(eventId, workers) {
     return;
   }
 
-  const rows = workers.map(w => {
-    const initials = (w.firstName[0] + (w.lastName[0] || "")).toUpperCase();
-    const costLabel = w.costPerHour ? `₪${Number(w.costPerHour).toFixed(0)}/hr` : "—";
+  const rows = workers
+    .map((w) => {
+      const initials = (w.firstName[0] + (w.lastName[0] || "")).toUpperCase();
+      const costLabel = w.costPerHour
+        ? `₪${Number(w.costPerHour).toFixed(0)}/hr`
+        : "—";
 
-    const shiftChecks = w.eligibleShifts.map(s => {
-      const isFull = s.activeAssignments >= s.requiredQuantity;
-      const timeLabel = s.startTime
-        ? new Date(s.startTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) +
-          (s.endTime ? "–" + new Date(s.endTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")
-        : "";
-      return `
+      const shiftChecks = w.eligibleShifts
+        .map((s) => {
+          const isFull = s.activeAssignments >= s.requiredQuantity;
+          const timeLabel = s.startTime
+            ? new Date(s.startTime).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }) +
+              (s.endTime
+                ? "–" +
+                  new Date(s.endTime).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  })
+                : "")
+            : "";
+          return `
         <label class="ps-shift-check">
           <input type="checkbox" data-shift-id="${escapeHtml(s.shiftId)}" checked>
           <span class="ps-role-chip">${escapeHtml(s.roleName)}</span>
           ${timeLabel ? `<span class="ps-shift-time">${timeLabel}</span>` : ""}
           ${isFull ? `<span class="ps-shift-full">Full ${s.activeAssignments}/${s.requiredQuantity}</span>` : `<span class="ps-shift-slots">${s.activeAssignments}/${s.requiredQuantity}</span>`}
         </label>`;
-    }).join("");
+        })
+        .join("");
 
-    return `
+      return `
       <tr class="ps-row ps-row--potential" data-worker-fbuid="${escapeHtml(w.fbUid)}" data-worker-id="${escapeHtml(w.userId)}">
         <td><div class="ps-cell-worker">
           <div class="ps-avatar ps-avatar--potential">${escapeHtml(initials)}</div>
@@ -5392,7 +5549,8 @@ function _replacePotentialContent(eventId, workers) {
           </button>
         </div></td>
       </tr>`;
-  }).join("");
+    })
+    .join("");
 
   body.innerHTML = `
     <table class="ps-table">
@@ -5411,14 +5569,15 @@ async function loadAndRenderPotentialWorkers(projectId, eventId) {
     const token = await getToken();
     const res = await fetch(
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error("Failed to load");
     const workers = await res.json();
     _replacePotentialContent(eventId, workers);
   } catch {
     const body = document.getElementById(`ps-body-${eventId}-potential`);
-    if (body) body.innerHTML = `
+    if (body)
+      body.innerHTML = `
       <table class="ps-table"><tbody>
         <tr><td colspan="4" class="ps-empty" style="color:var(--red)">Failed to load potential workers.</td></tr>
       </tbody></table>`;
@@ -5432,28 +5591,38 @@ function _attachPotentialWorkerHandlers(eventId) {
   if (!body) return;
 
   // Per-worker send request
-  body.querySelectorAll(".ps-btn--send-worker").forEach(btn => {
-    btn.addEventListener("click", async e => {
+  body.querySelectorAll(".ps-btn--send-worker").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const row   = btn.closest(".ps-row--potential");
+      const row = btn.closest(".ps-row--potential");
       const fbuid = row?.dataset.workerFbuid;
       if (!fbuid || !currentProjectId) return;
 
-      const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
-        .map(cb => cb.dataset.shiftId);
+      const shiftIds = [
+        ...row.querySelectorAll("input[data-shift-id]:checked"),
+      ].map((cb) => cb.dataset.shiftId);
       if (shiftIds.length === 0) {
         alert("Select at least one shift before sending.");
         return;
       }
 
-      await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+      await _sendOfferToWorker(
+        currentProjectId,
+        eventId,
+        fbuid,
+        shiftIds,
+        btn,
+        row,
+      );
     });
   });
 
   // Send to all
-  const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
+  const sendAll = document.querySelector(
+    `.ps-btn-send-all[data-event-id="${eventId}"]`,
+  );
   if (sendAll) {
-    sendAll.addEventListener("click", async e => {
+    sendAll.addEventListener("click", async (e) => {
       e.stopPropagation();
       sendAll.disabled = true;
       sendAll.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i> Sending…`;
@@ -5461,12 +5630,20 @@ function _attachPotentialWorkerHandlers(eventId) {
 
       const rows = [...body.querySelectorAll(".ps-row--potential")];
       for (const row of rows) {
-        const fbuid   = row.dataset.workerFbuid;
-        const shiftIds = [...row.querySelectorAll("input[data-shift-id]:checked")]
-          .map(cb => cb.dataset.shiftId);
+        const fbuid = row.dataset.workerFbuid;
+        const shiftIds = [
+          ...row.querySelectorAll("input[data-shift-id]:checked"),
+        ].map((cb) => cb.dataset.shiftId);
         if (!fbuid || shiftIds.length === 0) continue;
         const btn = row.querySelector(".ps-btn--send-worker");
-        await _sendOfferToWorker(currentProjectId, eventId, fbuid, shiftIds, btn, row);
+        await _sendOfferToWorker(
+          currentProjectId,
+          eventId,
+          fbuid,
+          shiftIds,
+          btn,
+          row,
+        );
       }
 
       sendAll.innerHTML = `<i data-lucide="check"></i> All Sent`;
@@ -5475,39 +5652,62 @@ function _attachPotentialWorkerHandlers(eventId) {
   }
 }
 
-async function _sendOfferToWorker(projectId, eventId, fbuid, shiftIds, btn, row) {
-  if (btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`; if (window.lucide) lucide.createIcons(); }
+async function _sendOfferToWorker(
+  projectId,
+  eventId,
+  fbuid,
+  shiftIds,
+  btn,
+  row,
+) {
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i>`;
+    if (window.lucide) lucide.createIcons();
+  }
   try {
     const token = await getToken();
     const res = await fetch(
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ shiftIds }),
-      }
+      },
     );
     if (!res.ok) throw new Error();
 
     // Fade out and remove the row
     row.classList.add("ps-row--fade-out");
-    row.addEventListener("animationend", () => {
-      row.remove();
-      // Update badge
-      const remaining = document.querySelectorAll(`#ps-body-${eventId}-potential .ps-row--potential`).length;
-      const badge = document.getElementById(`ps-badge-${eventId}-potential`);
-      if (badge) badge.textContent = remaining;
-      const sendAll = document.querySelector(`.ps-btn-send-all[data-event-id="${eventId}"]`);
-      if (sendAll && remaining === 0) sendAll.disabled = true;
-      // Show empty state if no rows left
-      if (remaining === 0) {
-        const body = document.getElementById(`ps-body-${eventId}-potential`);
-        if (body) body.innerHTML = `
+    row.addEventListener(
+      "animationend",
+      () => {
+        row.remove();
+        // Update badge
+        const remaining = document.querySelectorAll(
+          `#ps-body-${eventId}-potential .ps-row--potential`,
+        ).length;
+        const badge = document.getElementById(`ps-badge-${eventId}-potential`);
+        if (badge) badge.textContent = remaining;
+        const sendAll = document.querySelector(
+          `.ps-btn-send-all[data-event-id="${eventId}"]`,
+        );
+        if (sendAll && remaining === 0) sendAll.disabled = true;
+        // Show empty state if no rows left
+        if (remaining === 0) {
+          const body = document.getElementById(`ps-body-${eventId}-potential`);
+          if (body)
+            body.innerHTML = `
           <table class="ps-table"><tbody>
             <tr><td colspan="4" class="ps-empty">All available workers have been offered shifts.</td></tr>
           </tbody></table>`;
-      }
-    }, { once: true });
+        }
+      },
+      { once: true },
+    );
   } catch {
     if (btn) {
       btn.disabled = false;
@@ -5522,7 +5722,7 @@ function _initStaffingHandlers() {
   // Accordion: single-click opens/closes, double-click toggles pin
   let clickTimer = null;
 
-  document.querySelectorAll("[data-ps-section]").forEach(hdr => {
+  document.querySelectorAll("[data-ps-section]").forEach((hdr) => {
     hdr.addEventListener("click", () => {
       if (clickTimer !== null) {
         // Second click within 250ms → double-click → toggle pin
@@ -5539,11 +5739,13 @@ function _initStaffingHandlers() {
   });
 
   // Live search filter across all rows
-  document.getElementById("ps-search-input")?.addEventListener("input", e => {
+  document.getElementById("ps-search-input")?.addEventListener("input", (e) => {
     const q = e.target.value.toLowerCase();
-    document.querySelectorAll(".ps-root .ps-row").forEach(row => {
-      const name = row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
-      const role = row.querySelector(".ps-role-chip")?.textContent.toLowerCase() ?? "";
+    document.querySelectorAll(".ps-root .ps-row").forEach((row) => {
+      const name =
+        row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
+      const role =
+        row.querySelector(".ps-role-chip")?.textContent.toLowerCase() ?? "";
       row.style.display = name.includes(q) || role.includes(q) ? "" : "none";
     });
   });
@@ -5553,63 +5755,78 @@ function _initStaffingHandlers() {
   if (psRoot) {
     if (_staffingClickController) _staffingClickController.abort();
     _staffingClickController = new AbortController();
-    psRoot.addEventListener("click", async e => {
-      const btn = e.target.closest("[data-action]");
-      if (!btn) return;
+    psRoot.addEventListener(
+      "click",
+      async (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
 
-      // Skip potential-worker send-request button (handled separately)
-      if (btn.classList.contains("ps-btn--send-worker")) return;
+        // Skip potential-worker send-request button (handled separately)
+        if (btn.classList.contains("ps-btn--send-worker")) return;
 
-      e.stopPropagation();
+        e.stopPropagation();
 
-      const action = btn.dataset.action;
+        const action = btn.dataset.action;
 
-      // Auto-assign button lives in the section header, not inside a row
-      if (action === "auto-assign") {
-        const eventId = btn.dataset.eventId;
-        if (!eventId) return;
-        await _handleAutoAssign(eventId, btn);
-        return;
-      }
+        // Auto-assign button lives in the section header, not inside a row
+        if (action === "auto-assign") {
+          const eventId = btn.dataset.eventId;
+          if (!eventId) return;
+          await _handleAutoAssign(eventId, btn);
+          return;
+        }
 
-      const row    = btn.closest(".ps-row");
-      if (!row) return;
+        const row = btn.closest(".ps-row");
+        if (!row) return;
 
-      const fbUid   = row.dataset.workerFbuid;
-      const status  = row.dataset.workerStatus;
-      const shiftId = row.dataset.shiftId;
+        const fbUid = row.dataset.workerFbuid;
+        const status = row.dataset.workerStatus;
+        const shiftId = row.dataset.shiftId;
 
-      if (action === "message") {
-        if (!fbUid) return;
-        _initChatSection();          // ensure chat is initialized
-        activateSection("chats");
-        openChatWith(fbUid);
-        return;
-      }
+        if (action === "message") {
+          if (!fbUid) return;
+          _initChatSection(); // ensure chat is initialized
+          activateSection("chats");
+          openChatWith(fbUid);
+          return;
+        }
 
-      // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
-      const section   = row.closest(".ps-section");
-      const sectionId = section?.id ?? "";
-      const match     = sectionId.match(/^ps-section-(.+)-(applicants|approved|hold|rejected)$/);
-      const eventId   = match?.[1];
+        // Extract eventId from the parent section ID: ps-section-{eventId}-{key}
+        const section = row.closest(".ps-section");
+        const sectionId = section?.id ?? "";
+        const match = sectionId.match(
+          /^ps-section-(.+)-(applicants|approved|hold|rejected)$/,
+        );
+        const eventId = match?.[1];
 
-      if (!fbUid || !eventId || !shiftId) return;
+        if (!fbUid || !eventId || !shiftId) return;
 
-      if (action === "return-to-pool") {
-        await _handleReturnToPool(eventId, fbUid, shiftId, btn);
-        return;
-      }
+        if (action === "return-to-pool") {
+          await _handleReturnToPool(eventId, fbUid, shiftId, btn);
+          return;
+        }
 
-      const statusMap = {
-        approve: "manager_approved",
-        hold:    "manager_hold",
-        reject:  status === "manager_approved" ? "manager_approved_canceled" : "manager_reject",
-      };
-      const newStatus = statusMap[action];
-      if (!newStatus) return;
+        const statusMap = {
+          approve: "manager_approved",
+          hold: "manager_hold",
+          reject:
+            status === "manager_approved"
+              ? "manager_approved_canceled"
+              : "manager_reject",
+        };
+        const newStatus = statusMap[action];
+        if (!newStatus) return;
 
-      await _handleWorkerStatusChange(eventId, fbUid, shiftId, newStatus, btn);
-    }, { signal: _staffingClickController.signal });
+        await _handleWorkerStatusChange(
+          eventId,
+          fbUid,
+          shiftId,
+          newStatus,
+          btn,
+        );
+      },
+      { signal: _staffingClickController.signal },
+    );
   }
   // Note: send-request and send-all for potential workers are wired in
   // _attachPotentialWorkerHandlers(), called after each event's workers load.
@@ -5629,10 +5846,12 @@ function _setSectionOpen(section, hdr, open) {
 }
 
 function _toggleSectionOpen(hdr) {
-  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  const section = document.getElementById(
+    `ps-section-${hdr.dataset.psSection}`,
+  );
   if (!section) return;
 
-  const isOpen     = section.classList.contains("ps-section--open");
+  const isOpen = section.classList.contains("ps-section--open");
   const eventBlock = hdr.closest(".ps-event-block");
 
   if (isOpen) {
@@ -5640,7 +5859,7 @@ function _toggleSectionOpen(hdr) {
     _setSectionOpen(section, hdr, false);
   } else {
     // Close all non-pinned open sections in the same event block
-    eventBlock?.querySelectorAll(".ps-section--open").forEach(other => {
+    eventBlock?.querySelectorAll(".ps-section--open").forEach((other) => {
       if (other.dataset.pinned !== "true") {
         const otherHdr = other.querySelector(".ps-section-hdr");
         if (otherHdr) _setSectionOpen(other, otherHdr, false);
@@ -5652,7 +5871,9 @@ function _toggleSectionOpen(hdr) {
 }
 
 function _toggleSectionPin(hdr) {
-  const section = document.getElementById(`ps-section-${hdr.dataset.psSection}`);
+  const section = document.getElementById(
+    `ps-section-${hdr.dataset.psSection}`,
+  );
   if (!section) return;
   const chevron = hdr.querySelector(".ps-chevron");
 
@@ -5676,24 +5897,24 @@ function _toggleSectionPin(hdr) {
 //  EVENT DETAIL PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 
-let currentEventId   = null;
-let _edTasksData     = null; // cached tasks for current event
-let _edBriefsData    = null; // cached briefs for current event
-let _edExpandedRow   = null; // currently expanded task/brief row
+let currentEventId = null;
+let _edTasksData = null; // cached tasks for current event
+let _edBriefsData = null; // cached briefs for current event
+let _edExpandedRow = null; // currently expanded task/brief row
 let _edTaskFilterPriority = "all";
 
 // ── Back button ────────────────────────────────────────────────────────────
-document.getElementById("btn-back-from-event-detail")
+document
+  .getElementById("btn-back-from-event-detail")
   .addEventListener("click", () => {
     activateSection("project-detail");
   });
 
 // ── Tab switching ──────────────────────────────────────────────────────────
-document.getElementById("event-detail-tabs")
-  .addEventListener("click", (e) => {
-    const tab = e.target.closest("[data-etab]");
-    if (tab) activateEventTab(tab.dataset.etab);
-  });
+document.getElementById("event-detail-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest("[data-etab]");
+  if (tab) activateEventTab(tab.dataset.etab);
+});
 
 function activateEventTab(name) {
   document.querySelectorAll("#event-detail-tabs [data-etab]").forEach((t) => {
@@ -5702,36 +5923,44 @@ function activateEventTab(name) {
   document.querySelectorAll("[data-etab-panel]").forEach((p) => {
     p.style.display = p.dataset.etabPanel === name ? "" : "none";
   });
-  if (name === "workers")  renderEdWorkersTab();
-  if (name === "tasks")    renderEdTasksTab();
-  if (name === "briefs")   renderEdBriefsTab();
+  if (name === "workers") renderEdWorkersTab();
+  if (name === "tasks") renderEdTasksTab();
+  if (name === "briefs") renderEdBriefsTab();
   if (name === "expenses") renderEdExpensesTab();
-  if (name === "payroll")  renderEdPayrollTab();
-  if (name === "finance")  renderEdFinanceTab();
+  if (name === "payroll") renderEdPayrollTab();
+  if (name === "finance") renderEdFinanceTab();
 }
 
 // ── Open event detail ──────────────────────────────────────────────────────
 async function openEventDetail(eventId) {
-  currentEventId  = eventId;
-  _edTasksData    = null;
-  _edBriefsData   = null;
-  _edExpandedRow  = null;
+  currentEventId = eventId;
+  _edTasksData = null;
+  _edBriefsData = null;
+  _edExpandedRow = null;
   _edExpensesData = null;
-  _edPayrollData  = null;
+  _edPayrollData = null;
   _edTaskFilterPriority = "all";
 
   // Update header from cached project data
-  const ev = (currentProjectDetail?.events ?? []).find((e) => e.eventId === eventId);
-  document.getElementById("event-detail-project-name").textContent = currentProjectDetail?.name ?? "";
-  document.getElementById("event-detail-title").textContent = ev?.name ?? "Event";
-  document.getElementById("event-detail-subtitle").textContent = ev ? _edFormatSubtitle(ev) : "";
+  const ev = (currentProjectDetail?.events ?? []).find(
+    (e) => e.eventId === eventId,
+  );
+  document.getElementById("event-detail-project-name").textContent =
+    currentProjectDetail?.name ?? "";
+  document.getElementById("event-detail-title").textContent =
+    ev?.name ?? "Event";
+  document.getElementById("event-detail-subtitle").textContent = ev
+    ? _edFormatSubtitle(ev)
+    : "";
 
   activateSection("event-detail");
 
   // Reset priority filter pills
-  document.querySelectorAll("#ed-task-priority-filters .pd-filter-pill").forEach((p) => {
-    p.classList.toggle("active", p.dataset.value === "all");
-  });
+  document
+    .querySelectorAll("#ed-task-priority-filters .pd-filter-pill")
+    .forEach((p) => {
+      p.classList.toggle("active", p.dataset.value === "all");
+    });
 
   activateEventTab("workers");
 }
@@ -5740,15 +5969,33 @@ function _edFormatSubtitle(ev) {
   const parts = [];
 
   if (ev.startTime) {
-    parts.push(new Date(ev.startTime).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }));
+    parts.push(
+      new Date(ev.startTime).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+    );
   }
 
-  const statusLabels = { planning: "Planning", active: "Active", completed: "Completed", canceled: "Canceled" };
+  const statusLabels = {
+    planning: "Planning",
+    active: "Active",
+    completed: "Completed",
+    canceled: "Canceled",
+  };
   if (ev.status && statusLabels[ev.status]) parts.push(statusLabels[ev.status]);
 
   if (ev.startTime) {
-    const fmtT = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-    const timeStr = ev.endTime ? `${fmtT(ev.startTime)}–${fmtT(ev.endTime)}` : fmtT(ev.startTime);
+    const fmtT = (iso) =>
+      new Date(iso).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    const timeStr = ev.endTime
+      ? `${fmtT(ev.startTime)}–${fmtT(ev.endTime)}`
+      : fmtT(ev.startTime);
     parts.push(timeStr);
   }
 
@@ -5778,41 +6025,50 @@ async function renderEdWorkersTab() {
 
 function _workerStatusLabel(status) {
   const map = {
-    manager_approved:   "Approved",
+    manager_approved: "Approved",
     manager_offer_sent: "Offer Sent",
-    employee_request:   "Applied",
-    manager_hold:       "On Hold",
-    manager_reject:     "Rejected",
+    employee_request: "Applied",
+    manager_hold: "On Hold",
+    manager_reject: "Rejected",
   };
   return map[status] ?? status;
 }
 
 function _buildEdWorkersHTML(data) {
   const sections = [
-    { key: "approved",   label: "Approved",         color: "approved" },
-    { key: "awaiting",   label: "Awaiting Response", color: "pending"  },
-    { key: "applicants", label: "Applicants",        color: "pending"  },
-    { key: "hold",       label: "On Hold",           color: "hold"     },
-    { key: "rejected",   label: "Rejected",          color: "rejected" },
+    { key: "approved", label: "Approved", color: "approved" },
+    { key: "awaiting", label: "Awaiting Response", color: "pending" },
+    { key: "applicants", label: "Applicants", color: "pending" },
+    { key: "hold", label: "On Hold", color: "hold" },
+    { key: "rejected", label: "Rejected", color: "rejected" },
   ];
 
   const fmtTime = (iso) => {
     if (!iso) return "—";
     const d = new Date(iso);
-    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return d.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
   };
 
-  const rows = sections.map(({ key, label, color }) => {
-    const workers = data[key] ?? [];
-    if (workers.length === 0) return "";
-    const workerRows = workers.map((w) => `
+  const rows = sections
+    .map(({ key, label, color }) => {
+      const workers = data[key] ?? [];
+      if (workers.length === 0) return "";
+      const workerRows = workers
+        .map(
+          (w) => `
       <tr>
         <td>${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</td>
         <td>${escapeHtml(w.roleName)}</td>
         <td>${fmtTime(w.shiftStart)} – ${fmtTime(w.shiftEnd)}</td>
         <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(_workerStatusLabel(w.status))}</span></td>
-      </tr>`).join("");
-    return `
+      </tr>`,
+        )
+        .join("");
+      return `
       <div class="ed-worker-section">
         <h4 class="ed-worker-section-title">${escapeHtml(label)} <span class="ed-worker-count">${workers.length}</span></h4>
         <table class="ed-worker-table">
@@ -5820,10 +6076,15 @@ function _buildEdWorkersHTML(data) {
           <tbody>${workerRows}</tbody>
         </table>
       </div>`;
-  }).join("");
+    })
+    .join("");
 
-  const total = (data.approved?.length ?? 0) + (data.awaiting?.length ?? 0) +
-                (data.applicants?.length ?? 0) + (data.hold?.length ?? 0) + (data.rejected?.length ?? 0);
+  const total =
+    (data.approved?.length ?? 0) +
+    (data.awaiting?.length ?? 0) +
+    (data.applicants?.length ?? 0) +
+    (data.hold?.length ?? 0) +
+    (data.rejected?.length ?? 0);
 
   if (total === 0) {
     return '<div class="pd-empty-state">No workers assigned to this event yet.</div>';
@@ -5859,7 +6120,8 @@ async function renderEdTasksTab() {
       if (col) col.innerHTML = "";
     });
     const col = document.getElementById("ed-col-open");
-    if (col) col.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
+    if (col)
+      col.innerHTML = '<div class="pd-loading">Failed to load tasks.</div>';
   }
 }
 
@@ -5870,10 +6132,12 @@ function _edApplyTaskFilters() {
   if (_edExpandedRow) _edExpandedRow = null;
 
   const filtered = _edTasksData.filter(
-    (t) => _edTaskFilterPriority === "all" || t.priority === _edTaskFilterPriority,
+    (t) =>
+      _edTaskFilterPriority === "all" || t.priority === _edTaskFilterPriority,
   );
   filtered.sort(
-    (a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99),
+    (a, b) =>
+      (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99),
   );
 
   TASK_STATUSES.forEach((status) => {
@@ -5914,16 +6178,22 @@ function _edBuildTaskRow(task) {
         <div class="pd-select-field">
           <label class="pd-field-label">Status</label>
           <select class="pd-form-select" name="status">
-            ${["open","in_progress","done","canceled"]
-              .map((s) => `<option value="${s}"${task.status===s?" selected":""}>${s.replace("_"," ")}</option>`)
+            ${["open", "in_progress", "done", "canceled"]
+              .map(
+                (s) =>
+                  `<option value="${s}"${task.status === s ? " selected" : ""}>${s.replace("_", " ")}</option>`,
+              )
               .join("")}
           </select>
         </div>
         <div class="pd-select-field">
           <label class="pd-field-label">Priority</label>
           <select class="pd-form-select" name="priority">
-            ${["low","medium","high","urgent"]
-              .map((p) => `<option value="${p}"${task.priority===p?" selected":""}>${p}</option>`)
+            ${["low", "medium", "high", "urgent"]
+              .map(
+                (p) =>
+                  `<option value="${p}"${task.priority === p ? " selected" : ""}>${p}</option>`,
+              )
               .join("")}
           </select>
         </div>
@@ -5938,19 +6208,22 @@ function _edBuildTaskRow(task) {
 }
 
 function _edWireTaskRow(row, task) {
-  const summary     = row.querySelector(".pd-row-summary");
-  const form        = row.querySelector(".pd-row-form");
-  const contentIn   = row.querySelector('input[name="content"]');
-  const statusSel   = row.querySelector('select[name="status"]');
+  const summary = row.querySelector(".pd-row-summary");
+  const form = row.querySelector(".pd-row-form");
+  const contentIn = row.querySelector('input[name="content"]');
+  const statusSel = row.querySelector('select[name="status"]');
   const prioritySel = row.querySelector('select[name="priority"]');
-  const saveBtn     = row.querySelector(".pd-form-save-btn");
-  const cancelBtn   = row.querySelector(".pd-form-cancel-btn");
-  const deleteBtn   = row.querySelector(".pd-row-delete-btn");
+  const saveBtn = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+  const deleteBtn = row.querySelector(".pd-row-delete-btn");
 
   summary.addEventListener("click", (e) => {
     if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
     if (row.classList.contains("pd-row--deleting")) return;
-    if (_edExpandedRow === row) { _edCollapseRow(row); return; }
+    if (_edExpandedRow === row) {
+      _edCollapseRow(row);
+      return;
+    }
     if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
     _edExpandedRow = row;
     form.classList.add("expanded");
@@ -5963,17 +6236,22 @@ function _edWireTaskRow(row, task) {
     prioritySel.value !== task.priority;
 
   [contentIn, statusSel, prioritySel].forEach((el) =>
-    el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }),
+    el.addEventListener("input", () => {
+      saveBtn.disabled = !isDirty();
+    }),
   );
 
   cancelBtn.addEventListener("click", () => _edCollapseRow(row));
 
   saveBtn.addEventListener("click", async () => {
     if (!isDirty()) return;
-    const content  = contentIn.value.trim();
-    const status   = statusSel.value;
+    const content = contentIn.value.trim();
+    const status = statusSel.value;
     const priority = prioritySel.value;
-    if (!content) { contentIn.focus(); return; }
+    if (!content) {
+      contentIn.focus();
+      return;
+    }
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
     try {
@@ -5982,7 +6260,10 @@ function _edWireTaskRow(row, task) {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks/${encodeURIComponent(task.taskId)}`,
         {
           method: "PUT",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ content, status, priority }),
         },
       );
@@ -6000,7 +6281,8 @@ function _edWireTaskRow(row, task) {
   deleteBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (row.classList.contains("pd-row--deleting")) return;
-    if (_edExpandedRow && _edExpandedRow !== row) _edCollapseRow(_edExpandedRow);
+    if (_edExpandedRow && _edExpandedRow !== row)
+      _edCollapseRow(_edExpandedRow);
     if (_edExpandedRow === row) _edCollapseRow(row);
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
@@ -6014,23 +6296,25 @@ function _edWireTaskRow(row, task) {
       row.classList.remove("pd-row--deleting");
       confirm.remove();
     });
-    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      try {
-        const token = await getToken();
-        const res = await fetch(
-          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks/${encodeURIComponent(task.taskId)}`,
-          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) throw new Error();
-        _edTasksData = _edTasksData.filter((t) => t.taskId !== task.taskId);
-        if (_edExpandedRow === row) _edExpandedRow = null;
-        _edApplyTaskFilters();
-      } catch {
-        row.classList.remove("pd-row--deleting");
-        confirm.remove();
-      }
-    });
+    confirm
+      .querySelector(".btn-confirm-yes")
+      .addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          const token = await getToken();
+          const res = await fetch(
+            `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks/${encodeURIComponent(task.taskId)}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!res.ok) throw new Error();
+          _edTasksData = _edTasksData.filter((t) => t.taskId !== task.taskId);
+          if (_edExpandedRow === row) _edExpandedRow = null;
+          _edApplyTaskFilters();
+        } catch {
+          row.classList.remove("pd-row--deleting");
+          confirm.remove();
+        }
+      });
   });
 }
 
@@ -6047,17 +6331,22 @@ function _edAddNewTaskRow() {
   const colWrapper = list.closest(".pd-kanban-col");
   if (colWrapper) colWrapper.style.display = "";
 
-  const tempTask = { taskId: "", content: "", status: "open", priority: "medium" };
+  const tempTask = {
+    taskId: "",
+    content: "",
+    status: "open",
+    priority: "medium",
+  };
   const row = _edBuildTaskRow(tempTask);
   row.dataset.new = "true";
   row.querySelector(".pd-row-delete-btn").style.display = "none";
 
-  const form        = row.querySelector(".pd-row-form");
-  const contentIn   = row.querySelector('input[name="content"]');
-  const statusSel   = row.querySelector('select[name="status"]');
+  const form = row.querySelector(".pd-row-form");
+  const contentIn = row.querySelector('input[name="content"]');
+  const statusSel = row.querySelector('select[name="status"]');
   const prioritySel = row.querySelector('select[name="priority"]');
-  const saveBtn     = row.querySelector(".pd-form-save-btn");
-  const cancelBtn   = row.querySelector(".pd-form-cancel-btn");
+  const saveBtn = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
 
   cancelBtn.addEventListener("click", () => {
     if (_edExpandedRow === row) _edExpandedRow = null;
@@ -6069,13 +6358,18 @@ function _edAddNewTaskRow() {
   const newSaveBtn = saveBtn.cloneNode(true);
   saveBtn.replaceWith(newSaveBtn);
   newSaveBtn.disabled = true;
-  contentIn.addEventListener("input", () => { newSaveBtn.disabled = contentIn.value.trim() === ""; });
+  contentIn.addEventListener("input", () => {
+    newSaveBtn.disabled = contentIn.value.trim() === "";
+  });
 
   newSaveBtn.addEventListener("click", async () => {
-    const content  = contentIn.value.trim();
-    const status   = statusSel.value;
+    const content = contentIn.value.trim();
+    const status = statusSel.value;
     const priority = prioritySel.value;
-    if (!content) { contentIn.focus(); return; }
+    if (!content) {
+      contentIn.focus();
+      return;
+    }
     newSaveBtn.disabled = true;
     newSaveBtn.textContent = "Saving…";
     try {
@@ -6084,7 +6378,10 @@ function _edAddNewTaskRow() {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/tasks`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ content, status, priority }),
         },
       );
@@ -6114,21 +6411,27 @@ function _edAddNewTaskRow() {
 }
 
 // Wire event detail task/brief add buttons
-document.getElementById("ed-btn-add-task")
+document
+  .getElementById("ed-btn-add-task")
   .addEventListener("click", () => _edAddNewTaskRow());
-document.getElementById("ed-btn-add-brief")
+document
+  .getElementById("ed-btn-add-brief")
   .addEventListener("click", () => _edAddNewBriefRow());
 
 // Priority filters for event tasks
-document.getElementById("ed-task-priority-filters").addEventListener("click", (e) => {
-  const pill = e.target.closest(".pd-filter-pill");
-  if (!pill) return;
-  _edTaskFilterPriority = pill.dataset.value;
-  document.querySelectorAll("#ed-task-priority-filters .pd-filter-pill").forEach((p) => {
-    p.classList.toggle("active", p.dataset.value === _edTaskFilterPriority);
+document
+  .getElementById("ed-task-priority-filters")
+  .addEventListener("click", (e) => {
+    const pill = e.target.closest(".pd-filter-pill");
+    if (!pill) return;
+    _edTaskFilterPriority = pill.dataset.value;
+    document
+      .querySelectorAll("#ed-task-priority-filters .pd-filter-pill")
+      .forEach((p) => {
+        p.classList.toggle("active", p.dataset.value === _edTaskFilterPriority);
+      });
+    if (_edTasksData !== null) _edApplyTaskFilters();
   });
-  if (_edTasksData !== null) _edApplyTaskFilters();
-});
 
 // ── BRIEFS TAB ─────────────────────────────────────────────────────────────
 
@@ -6167,13 +6470,17 @@ function _edBuildBriefRow(brief) {
   row.dataset.briefId = brief.briefId;
 
   const authorName = brief.createdByManagerName ?? "Unknown";
-  const dateStr    = brief.createdAt ? formatBriefDate(brief.createdAt) : "";
-  const preview    = brief.content.length > 120 ? brief.content.slice(0, 120) + "…" : brief.content;
+  const dateStr = brief.createdAt ? formatBriefDate(brief.createdAt) : "";
+  const preview =
+    brief.content.length > 120
+      ? brief.content.slice(0, 120) + "…"
+      : brief.content;
 
   // Acknowledgment summary — always shown, X / Y format
-  const ackHtml = brief.totalRelevant > 0
-    ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
-    : "";
+  const ackHtml =
+    brief.totalRelevant > 0
+      ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
+      : "";
 
   row.innerHTML = `
     <div class="pd-row-summary">
@@ -6203,18 +6510,21 @@ function _edBuildBriefRow(brief) {
 }
 
 function _edWireBriefRow(row, brief) {
-  const summary   = row.querySelector(".pd-row-summary");
-  const form      = row.querySelector(".pd-row-form");
-  const titleIn   = row.querySelector('input[name="title"]');
+  const summary = row.querySelector(".pd-row-summary");
+  const form = row.querySelector(".pd-row-form");
+  const titleIn = row.querySelector('input[name="title"]');
   const contentIn = row.querySelector('textarea[name="content"]');
-  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const saveBtn = row.querySelector(".pd-form-save-btn");
   const cancelBtn = row.querySelector(".pd-form-cancel-btn");
   const deleteBtn = row.querySelector(".pd-row-delete-btn");
 
   summary.addEventListener("click", (e) => {
     if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
     if (row.classList.contains("pd-row--deleting")) return;
-    if (_edExpandedRow === row) { _edCollapseRow(row); return; }
+    if (_edExpandedRow === row) {
+      _edCollapseRow(row);
+      return;
+    }
     if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
     _edExpandedRow = row;
     form.classList.add("expanded");
@@ -6224,51 +6534,70 @@ function _edWireBriefRow(row, brief) {
     const ackListEl = form.querySelector(".ed-brief-ack-list");
     if (ackListEl && ackListEl.innerHTML === "") {
       ackListEl.innerHTML = '<span class="ed-ack-loading">Loading…</span>';
-      getToken().then(token =>
+      getToken().then((token) =>
         fetch(
           `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         )
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(acks => {
-          if (acks.length === 0) {
-            ackListEl.innerHTML = '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
-          } else {
-            const readCount = acks.filter(a => a.isRead).length;
-            const total     = acks.length;
-            const headerEl  = form.querySelector(".ed-ack-header");
-            if (headerEl) {
-              headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
-            }
-            ackListEl.innerHTML = acks.map(a => `
+          .then((r) => (r.ok ? r.json() : Promise.reject()))
+          .then((acks) => {
+            if (acks.length === 0) {
+              ackListEl.innerHTML =
+                '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
+            } else {
+              const readCount = acks.filter((a) => a.isRead).length;
+              const total = acks.length;
+              const headerEl = form.querySelector(".ed-ack-header");
+              if (headerEl) {
+                headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
+              }
+              ackListEl.innerHTML = acks
+                .map(
+                  (a) => `
               <div class="ed-ack-item${a.isRead ? " ed-ack-item--read" : ""}">
                 <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
-                ${a.isRead
-                  ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
-                  : `<span class="ed-ack-pending">Pending</span>`}
-              </div>`).join("");
-          }
-        })
-        .catch(() => { ackListEl.innerHTML = '<span class="ed-ack-empty">Failed to load.</span>'; })
+                ${
+                  a.isRead
+                    ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
+                    : `<span class="ed-ack-pending">Pending</span>`
+                }
+              </div>`,
+                )
+                .join("");
+            }
+          })
+          .catch(() => {
+            ackListEl.innerHTML =
+              '<span class="ed-ack-empty">Failed to load.</span>';
+          }),
       );
     }
   });
 
   const isDirty = () =>
-    titleIn.value.trim() !== brief.title || contentIn.value.trim() !== brief.content;
+    titleIn.value.trim() !== brief.title ||
+    contentIn.value.trim() !== brief.content;
 
   [titleIn, contentIn].forEach((el) =>
-    el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }),
+    el.addEventListener("input", () => {
+      saveBtn.disabled = !isDirty();
+    }),
   );
 
   cancelBtn.addEventListener("click", () => _edCollapseRow(row));
 
   saveBtn.addEventListener("click", async () => {
     if (!isDirty()) return;
-    const title   = titleIn.value.trim();
+    const title = titleIn.value.trim();
     const content = contentIn.value.trim();
-    if (!title)   { titleIn.focus();   return; }
-    if (!content) { contentIn.focus(); return; }
+    if (!title) {
+      titleIn.focus();
+      return;
+    }
+    if (!content) {
+      contentIn.focus();
+      return;
+    }
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
     try {
@@ -6277,7 +6606,10 @@ function _edWireBriefRow(row, brief) {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
         {
           method: "PUT",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ title, content }),
         },
       );
@@ -6285,10 +6617,13 @@ function _edWireBriefRow(row, brief) {
       const updated = await res.json();
       const idx = _edBriefsData.findIndex((b) => b.briefId === brief.briefId);
       if (idx !== -1) _edBriefsData[idx] = updated;
-      brief.title   = updated.title;
+      brief.title = updated.title;
       brief.content = updated.content;
       row.querySelector(".pd-brief-title-text").textContent = updated.title;
-      const p = updated.content.length > 120 ? updated.content.slice(0, 120) + "…" : updated.content;
+      const p =
+        updated.content.length > 120
+          ? updated.content.slice(0, 120) + "…"
+          : updated.content;
       row.querySelector(".pd-brief-preview-text").textContent = p;
       _edCollapseRow(row);
     } catch {
@@ -6300,7 +6635,8 @@ function _edWireBriefRow(row, brief) {
   deleteBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (row.classList.contains("pd-row--deleting")) return;
-    if (_edExpandedRow && _edExpandedRow !== row) _edCollapseRow(_edExpandedRow);
+    if (_edExpandedRow && _edExpandedRow !== row)
+      _edCollapseRow(_edExpandedRow);
     if (_edExpandedRow === row) _edCollapseRow(row);
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
@@ -6314,25 +6650,30 @@ function _edWireBriefRow(row, brief) {
       row.classList.remove("pd-row--deleting");
       confirm.remove();
     });
-    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      try {
-        const token = await getToken();
-        const res = await fetch(
-          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
-          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) throw new Error();
-        _edBriefsData = _edBriefsData.filter((b) => b.briefId !== brief.briefId);
-        if (_edExpandedRow === row) _edExpandedRow = null;
-        row.remove();
-        const list = document.getElementById("ed-brief-list");
-        if (list && _edBriefsData.length === 0) list.innerHTML = briefEmptyStateHtml();
-      } catch {
-        row.classList.remove("pd-row--deleting");
-        confirm.remove();
-      }
-    });
+    confirm
+      .querySelector(".btn-confirm-yes")
+      .addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          const token = await getToken();
+          const res = await fetch(
+            `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!res.ok) throw new Error();
+          _edBriefsData = _edBriefsData.filter(
+            (b) => b.briefId !== brief.briefId,
+          );
+          if (_edExpandedRow === row) _edExpandedRow = null;
+          row.remove();
+          const list = document.getElementById("ed-brief-list");
+          if (list && _edBriefsData.length === 0)
+            list.innerHTML = briefEmptyStateHtml();
+        } catch {
+          row.classList.remove("pd-row--deleting");
+          confirm.remove();
+        }
+      });
   });
 }
 
@@ -6341,33 +6682,51 @@ function _edAddNewBriefRow() {
   if (!list) return;
   if (list.querySelector('[data-new="true"]')) return;
 
-  const tempBrief = { briefId: "", title: "", content: "", createdAt: null, createdByManagerName: null };
+  const tempBrief = {
+    briefId: "",
+    title: "",
+    content: "",
+    createdAt: null,
+    createdByManagerName: null,
+  };
   const row = _edBuildBriefRow(tempBrief);
   row.dataset.new = "true";
 
-  const form      = row.querySelector(".pd-row-form");
-  const titleIn   = row.querySelector('input[name="title"]');
+  const form = row.querySelector(".pd-row-form");
+  const titleIn = row.querySelector('input[name="title"]');
   const contentIn = row.querySelector('textarea[name="content"]');
-  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const saveBtn = row.querySelector(".pd-form-save-btn");
   const cancelBtn = row.querySelector(".pd-form-cancel-btn");
 
   cancelBtn.addEventListener("click", () => {
     if (_edExpandedRow === row) _edExpandedRow = null;
     row.remove();
-    if (_edBriefsData !== null && _edBriefsData.length === 0) list.innerHTML = briefEmptyStateHtml();
+    if (_edBriefsData !== null && _edBriefsData.length === 0)
+      list.innerHTML = briefEmptyStateHtml();
   });
 
   const newSaveBtn = saveBtn.cloneNode(true);
   saveBtn.replaceWith(newSaveBtn);
   newSaveBtn.disabled = true;
-  const canSave = () => titleIn.value.trim() !== "" && contentIn.value.trim() !== "";
-  [titleIn, contentIn].forEach((el) => el.addEventListener("input", () => { newSaveBtn.disabled = !canSave(); }));
+  const canSave = () =>
+    titleIn.value.trim() !== "" && contentIn.value.trim() !== "";
+  [titleIn, contentIn].forEach((el) =>
+    el.addEventListener("input", () => {
+      newSaveBtn.disabled = !canSave();
+    }),
+  );
 
   newSaveBtn.addEventListener("click", async () => {
-    const title   = titleIn.value.trim();
+    const title = titleIn.value.trim();
     const content = contentIn.value.trim();
-    if (!title)   { titleIn.focus();   return; }
-    if (!content) { contentIn.focus(); return; }
+    if (!title) {
+      titleIn.focus();
+      return;
+    }
+    if (!content) {
+      contentIn.focus();
+      return;
+    }
     newSaveBtn.disabled = true;
     newSaveBtn.textContent = "Saving…";
     try {
@@ -6376,7 +6735,10 @@ function _edAddNewBriefRow() {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ title, content }),
         },
       );
@@ -6411,7 +6773,15 @@ function _edAddNewBriefRow() {
 
 let _edExpensesData = null;
 
-const EXPENSE_TYPES = ["venue","catering","equipment","transport","marketing","staff","other"];
+const EXPENSE_TYPES = [
+  "venue",
+  "catering",
+  "equipment",
+  "transport",
+  "marketing",
+  "staff",
+  "other",
+];
 
 async function renderEdExpensesTab() {
   const list = document.getElementById("ed-expense-list");
@@ -6439,7 +6809,8 @@ async function renderEdExpensesTab() {
 
 function _edRenderExpenseList(list) {
   if (_edExpensesData.length === 0) {
-    list.innerHTML = '<div class="pd-empty-state">No expenses recorded yet.</div>';
+    list.innerHTML =
+      '<div class="pd-empty-state">No expenses recorded yet.</div>';
     return;
   }
   list.innerHTML = "";
@@ -6448,7 +6819,10 @@ function _edRenderExpenseList(list) {
 }
 
 function _edBuildExpenseTotals() {
-  const total = (_edExpensesData ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+  const total = (_edExpensesData ?? []).reduce(
+    (s, e) => s + (e.amount ?? 0),
+    0,
+  );
   const div = document.createElement("div");
   div.className = "ed-expense-totals";
   div.innerHTML = `<span class="ed-expense-total-label">Total</span>
@@ -6458,7 +6832,11 @@ function _edBuildExpenseTotals() {
 
 function _fmtDate(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function _edBuildExpenseRow(exp) {
@@ -6481,7 +6859,7 @@ function _edBuildExpenseRow(exp) {
         <div class="pd-select-field">
           <label class="pd-field-label">Type</label>
           <select class="pd-form-select" name="expenseType">
-            ${EXPENSE_TYPES.map((t) => `<option value="${t}"${exp.expenseType===t?" selected":""}>${t}</option>`).join("")}
+            ${EXPENSE_TYPES.map((t) => `<option value="${t}"${exp.expenseType === t ? " selected" : ""}>${t}</option>`).join("")}
           </select>
         </div>
         <div class="pd-select-field">
@@ -6512,10 +6890,10 @@ function _edBuildExpenseRow(exp) {
 }
 
 function _edWireExpenseRow(row, exp) {
-  const summary   = row.querySelector(".ed-expense-summary");
-  const form      = row.querySelector(".ed-expense-form");
+  const summary = row.querySelector(".ed-expense-summary");
+  const form = row.querySelector(".ed-expense-form");
   const deleteBtn = row.querySelector(".ed-expense-delete");
-  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const saveBtn = row.querySelector(".pd-form-save-btn");
   const cancelBtn = row.querySelector(".pd-form-cancel-btn");
 
   const inputs = form.querySelectorAll("input,select,textarea");
@@ -6529,33 +6907,46 @@ function _edWireExpenseRow(row, exp) {
       row.classList.remove("pd-row--expanded");
     } else {
       // collapse any other open expense form
-      document.querySelectorAll(".ed-expense-form").forEach((f) => { f.style.display = "none"; });
-      document.querySelectorAll(".ed-expense-row").forEach((r) => r.classList.remove("pd-row--expanded"));
+      document.querySelectorAll(".ed-expense-form").forEach((f) => {
+        f.style.display = "none";
+      });
+      document
+        .querySelectorAll(".ed-expense-row")
+        .forEach((r) => r.classList.remove("pd-row--expanded"));
       form.style.display = "";
       row.classList.add("pd-row--expanded");
     }
   });
 
   const snapshot = () => ({
-    expenseType:  form.querySelector('[name="expenseType"]').value,
-    amount:       form.querySelector('[name="amount"]').value,
-    expenseDate:  form.querySelector('[name="expenseDate"]').value,
-    vendorName:   form.querySelector('[name="vendorName"]').value.trim(),
-    description:  form.querySelector('[name="description"]').value.trim(),
-    notes:        form.querySelector('[name="notes"]').value.trim(),
+    expenseType: form.querySelector('[name="expenseType"]').value,
+    amount: form.querySelector('[name="amount"]').value,
+    expenseDate: form.querySelector('[name="expenseDate"]').value,
+    vendorName: form.querySelector('[name="vendorName"]').value.trim(),
+    description: form.querySelector('[name="description"]').value.trim(),
+    notes: form.querySelector('[name="notes"]').value.trim(),
   });
   const isDirty = () => {
     const s = snapshot();
-    return s.expenseType !== exp.expenseType ||
+    return (
+      s.expenseType !== exp.expenseType ||
       String(s.amount) !== String(exp.amount ?? "") ||
-      s.expenseDate !== (exp.expenseDate ? exp.expenseDate.slice(0,10) : "") ||
+      s.expenseDate !== (exp.expenseDate ? exp.expenseDate.slice(0, 10) : "") ||
       s.vendorName !== (exp.vendorName ?? "") ||
       s.description !== (exp.description ?? "") ||
-      s.notes !== (exp.notes ?? "");
+      s.notes !== (exp.notes ?? "")
+    );
   };
 
-  inputs.forEach((el) => el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }));
-  cancelBtn.addEventListener("click", () => { form.style.display = "none"; row.classList.remove("pd-row--expanded"); });
+  inputs.forEach((el) =>
+    el.addEventListener("input", () => {
+      saveBtn.disabled = !isDirty();
+    }),
+  );
+  cancelBtn.addEventListener("click", () => {
+    form.style.display = "none";
+    row.classList.remove("pd-row--expanded");
+  });
 
   saveBtn.addEventListener("click", async () => {
     if (!isDirty()) return;
@@ -6576,20 +6967,30 @@ function _edWireExpenseRow(row, exp) {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses/${encodeURIComponent(exp.expenseId)}`,
         {
           method: "PUT",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(body),
         },
       );
       if (!res.ok) throw new Error();
       const updated = await res.json();
-      const idx = _edExpensesData.findIndex((e) => e.expenseId === exp.expenseId);
+      const idx = _edExpensesData.findIndex(
+        (e) => e.expenseId === exp.expenseId,
+      );
       if (idx !== -1) _edExpensesData[idx] = updated;
       Object.assign(exp, updated);
       // Refresh summary in-place
-      row.querySelector(".ed-expense-type-badge").textContent = updated.expenseType;
-      row.querySelector(".ed-expense-desc").textContent = updated.description || updated.vendorName || "—";
-      row.querySelector(".ed-expense-date").textContent = _fmtDate(updated.expenseDate);
-      row.querySelector(".ed-expense-amount").textContent = `₪${(updated.amount ?? 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+      row.querySelector(".ed-expense-type-badge").textContent =
+        updated.expenseType;
+      row.querySelector(".ed-expense-desc").textContent =
+        updated.description || updated.vendorName || "—";
+      row.querySelector(".ed-expense-date").textContent = _fmtDate(
+        updated.expenseDate,
+      );
+      row.querySelector(".ed-expense-amount").textContent =
+        `₪${(updated.amount ?? 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
       // Refresh totals
       const list = document.getElementById("ed-expense-list");
       list.querySelector(".ed-expense-totals")?.remove();
@@ -6620,29 +7021,35 @@ function _edWireExpenseRow(row, exp) {
       row.classList.remove("pd-row--deleting");
       confirm.remove();
     });
-    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      confirm.querySelector(".btn-confirm-yes").disabled = true;
-      try {
-        const token = await getToken();
-        const res = await fetch(
-          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses/${encodeURIComponent(exp.expenseId)}`,
-          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) throw new Error();
-        _edExpensesData = _edExpensesData.filter((x) => x.expenseId !== exp.expenseId);
-        const list = document.getElementById("ed-expense-list");
-        _edRenderExpenseList(list);
-      } catch {
-        row.classList.remove("pd-row--deleting");
-        confirm.innerHTML = `<span style="color:#ef4444">Delete failed. Try again.</span>
+    confirm
+      .querySelector(".btn-confirm-yes")
+      .addEventListener("click", async (e) => {
+        e.stopPropagation();
+        confirm.querySelector(".btn-confirm-yes").disabled = true;
+        try {
+          const token = await getToken();
+          const res = await fetch(
+            `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses/${encodeURIComponent(exp.expenseId)}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!res.ok) throw new Error();
+          _edExpensesData = _edExpensesData.filter(
+            (x) => x.expenseId !== exp.expenseId,
+          );
+          const list = document.getElementById("ed-expense-list");
+          _edRenderExpenseList(list);
+        } catch {
+          row.classList.remove("pd-row--deleting");
+          confirm.innerHTML = `<span style="color:#ef4444">Delete failed. Try again.</span>
           <button class="btn-confirm-no">Dismiss</button>`;
-        confirm.querySelector(".btn-confirm-no").addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          confirm.remove();
-        });
-      }
-    });
+          confirm
+            .querySelector(".btn-confirm-no")
+            .addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              confirm.remove();
+            });
+        }
+      });
   });
 }
 
@@ -6651,8 +7058,15 @@ function _edAddNewExpenseRow() {
   if (!list) return;
   if (list.querySelector(".ed-expense-row[data-new='true']")) return;
 
-  const tempExp = { expenseId: "", expenseType: "other", description: null, amount: null,
-                    expenseDate: null, vendorName: null, notes: null };
+  const tempExp = {
+    expenseId: "",
+    expenseType: "other",
+    description: null,
+    amount: null,
+    expenseDate: null,
+    vendorName: null,
+    notes: null,
+  };
   const row = _edBuildExpenseRow(tempExp);
   row.dataset.new = "true";
 
@@ -6671,7 +7085,8 @@ function _edAddNewExpenseRow() {
   cancelBtn.addEventListener("click", () => {
     row.remove();
     if (_edExpensesData !== null && _edExpensesData.length === 0) {
-      list.innerHTML = '<div class="pd-empty-state">No expenses recorded yet.</div>';
+      list.innerHTML =
+        '<div class="pd-empty-state">No expenses recorded yet.</div>';
     }
   });
 
@@ -6680,10 +7095,15 @@ function _edAddNewExpenseRow() {
     newSaveBtn.textContent = "Saving…";
     const body = {
       expenseType: form.querySelector('[name="expenseType"]').value,
-      description: form.querySelector('[name="description"]').value.trim() || null,
-      amount: form.querySelector('[name="amount"]').value !== "" ? parseFloat(form.querySelector('[name="amount"]').value) : null,
+      description:
+        form.querySelector('[name="description"]').value.trim() || null,
+      amount:
+        form.querySelector('[name="amount"]').value !== ""
+          ? parseFloat(form.querySelector('[name="amount"]').value)
+          : null,
       expenseDate: form.querySelector('[name="expenseDate"]').value || null,
-      vendorName: form.querySelector('[name="vendorName"]').value.trim() || null,
+      vendorName:
+        form.querySelector('[name="vendorName"]').value.trim() || null,
       notes: form.querySelector('[name="notes"]').value.trim() || null,
     };
     try {
@@ -6692,7 +7112,10 @@ function _edAddNewExpenseRow() {
         `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(body),
         },
       );
@@ -6708,15 +7131,20 @@ function _edAddNewExpenseRow() {
   });
 
   // Collapse any open expense form
-  document.querySelectorAll(".ed-expense-form").forEach((f) => { f.style.display = "none"; });
-  document.querySelectorAll(".ed-expense-row").forEach((r) => r.classList.remove("pd-row--expanded"));
+  document.querySelectorAll(".ed-expense-form").forEach((f) => {
+    f.style.display = "none";
+  });
+  document
+    .querySelectorAll(".ed-expense-row")
+    .forEach((r) => r.classList.remove("pd-row--expanded"));
   const emptyEl = list.querySelector(".pd-empty-state");
   if (emptyEl) emptyEl.remove();
   list.querySelector(".ed-expense-totals")?.remove();
   list.prepend(row);
 }
 
-document.getElementById("ed-btn-add-expense")
+document
+  .getElementById("ed-btn-add-expense")
   .addEventListener("click", () => _edAddNewExpenseRow());
 
 // ── PAYROLL TAB ────────────────────────────────────────────────────────────
@@ -6763,21 +7191,42 @@ function _fmtDuration(startIso, endIso) {
 function _edBuildPayrollRowHTML(item, idx) {
   const hasApproved = item.approvedAt != null;
   const hasReported = item.actualStart || item.actualEnd;
-  const duration    = _fmtDuration(item.actualStart, item.actualEnd);
-  const payStatus   = item.paymentStatus || "pending";
-  const _t = iso => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+  const duration = _fmtDuration(item.actualStart, item.actualEnd);
+  const payStatus = item.paymentStatus || "pending";
+  const _t = (iso) =>
+    iso
+      ? new Date(iso).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "—";
 
   // Hours status badge
   let hoursLabel, hoursCls;
-  if (hasApproved)      { hoursLabel = "Approved";     hoursCls = "ed-badge--approved"; }
-  else if (hasReported) { hoursLabel = "Submitted";    hoursCls = "ed-badge--pending";  }
-  else                  { hoursLabel = "Not Reported"; hoursCls = "ed-badge--unpaid";   }
+  if (hasApproved) {
+    hoursLabel = "Approved";
+    hoursCls = "ed-badge--approved";
+  } else if (hasReported) {
+    hoursLabel = "Submitted";
+    hoursCls = "ed-badge--pending";
+  } else {
+    hoursLabel = "Not Reported";
+    hoursCls = "ed-badge--unpaid";
+  }
 
   // Payment status badge
   let payLabel, payCls;
-  if (payStatus === "paid")     { payLabel = "Paid";     payCls = "ed-badge--paid";      }
-  else if (payStatus === "approved") { payLabel = "Approved"; payCls = "ed-badge--approved"; }
-  else                          { payLabel = "Pending";  payCls = "ed-badge--unpaid";    }
+  if (payStatus === "paid") {
+    payLabel = "Paid";
+    payCls = "ed-badge--paid";
+  } else if (payStatus === "approved") {
+    payLabel = "Approved";
+    payCls = "ed-badge--approved";
+  } else {
+    payLabel = "Pending";
+    payCls = "ed-badge--unpaid";
+  }
 
   const reportedHtml = hasReported
     ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
@@ -6787,18 +7236,18 @@ function _edBuildPayrollRowHTML(item, idx) {
     ? `<div class="ed-pr-fields-row">
         <div class="ed-pr-field">
           <label class="ed-pr-field-label">Actual Arrival</label>
-          <span class="ed-pr-field-val">${item.actualStart ? (new Date(item.actualStart)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+          <span class="ed-pr-field-val">${item.actualStart ? new Date(item.actualStart).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
         </div>
         <div class="ed-pr-field">
           <label class="ed-pr-field-label">Actual Departure</label>
-          <span class="ed-pr-field-val">${item.actualEnd ? (new Date(item.actualEnd)).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"}) : "—"}</span>
+          <span class="ed-pr-field-val">${item.actualEnd ? new Date(item.actualEnd).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
         </div>
         ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
       </div>`
     : `<p class="ed-pr-empty-state">Employee has not reported hours yet.</p>`;
 
   const approvedNote = hasApproved
-    ? `<p class="ed-pr-approved-note">Approved on ${new Date(item.approvedAt).toLocaleString("en-GB", {dateStyle:"short",timeStyle:"short"})}</p>`
+    ? `<p class="ed-pr-approved-note">Approved on ${new Date(item.approvedAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</p>`
     : "";
 
   // Pre-fill pay rate from employee default if not yet set
@@ -6872,9 +7321,12 @@ function _edBuildPayrollRowHTML(item, idx) {
             <div class="ed-pr-field">
               <label class="ed-pr-field-label">Payment Status</label>
               <select class="ed-pr-input ed-pr-select" name="paymentStatus">
-                ${["pending","approved","paid"].map(
-                  s => `<option value="${s}"${payStatus === s ? " selected" : ""}>${capitalize(s)}</option>`
-                ).join("")}
+                ${["pending", "approved", "paid"]
+                  .map(
+                    (s) =>
+                      `<option value="${s}"${payStatus === s ? " selected" : ""}>${capitalize(s)}</option>`,
+                  )
+                  .join("")}
               </select>
             </div>
           </div>
@@ -6889,7 +7341,9 @@ function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
     return '<div class="pd-empty-state">No approved workers for payroll.</div>';
   }
-  const rows = items.map((item, idx) => _edBuildPayrollRowHTML(item, idx)).join("");
+  const rows = items
+    .map((item, idx) => _edBuildPayrollRowHTML(item, idx))
+    .join("");
   return `<div class="ed-pr-list">${rows}</div>`;
 }
 
@@ -6901,12 +7355,14 @@ function _edWirePayrollSaveBtns() {
   root.onclick = async (e) => {
     // Review button toggle
     if (e.target.closest(".ed-pr-review-btn")) {
-      const row   = e.target.closest(".ed-pr-employee-row");
+      const row = e.target.closest(".ed-pr-employee-row");
       const panel = row?.querySelector(".ed-pr-panel");
       if (!panel) return;
       const isOpen = !panel.hidden;
       panel.hidden = isOpen;
-      e.target.closest(".ed-pr-review-btn").textContent = isOpen ? "Review" : "Close";
+      e.target.closest(".ed-pr-review-btn").textContent = isOpen
+        ? "Review"
+        : "Close";
       return;
     }
 
@@ -6914,14 +7370,14 @@ function _edWirePayrollSaveBtns() {
     const actionBtn = e.target.closest("[data-action]");
     if (!actionBtn) return;
 
-    const idx    = parseInt(actionBtn.dataset.idx, 10);
-    const item   = _edPayrollData[idx];
-    const panel  = actionBtn.closest(".ed-pr-panel");
-    const val    = (name) => panel.querySelector(`[name="${name}"]`)?.value ?? "";
-    const num    = (name) => val(name) !== "" ? parseFloat(val(name)) : null;
+    const idx = parseInt(actionBtn.dataset.idx, 10);
+    const item = _edPayrollData[idx];
+    const panel = actionBtn.closest(".ed-pr-panel");
+    const val = (name) => panel.querySelector(`[name="${name}"]`)?.value ?? "";
+    const num = (name) => (val(name) !== "" ? parseFloat(val(name)) : null);
     const action = actionBtn.dataset.action;
 
-    actionBtn.disabled    = true;
+    actionBtn.disabled = true;
     actionBtn.textContent = "Saving…";
 
     try {
@@ -6931,23 +7387,26 @@ function _edWirePayrollSaveBtns() {
       if (action === "approve") {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/approve`;
         body = {
-          approvedRegularHours:  num("approvedRegularHours"),
+          approvedRegularHours: num("approvedRegularHours"),
           approvedOvertimeHours: num("approvedOvertimeHours"),
         };
       } else {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`;
         body = {
           payRatePerHour: num("payRatePerHour"),
-          travelRefund:   num("travelRefund"),
-          bonusAmount:         num("bonusAmount"),
-          penaltyAmount:       num("penaltyAmount"),
-          paymentStatus:       val("paymentStatus") || "pending",
+          travelRefund: num("travelRefund"),
+          bonusAmount: num("bonusAmount"),
+          penaltyAmount: num("penaltyAmount"),
+          paymentStatus: val("paymentStatus") || "pending",
         };
       }
 
       const res = await fetch(endpoint, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
@@ -6965,8 +7424,9 @@ function _edWirePayrollSaveBtns() {
         row.replaceWith(newRow);
       }
     } catch {
-      actionBtn.textContent = action === "approve" ? "Approve Hours" : "Save Payroll";
-      actionBtn.disabled    = false;
+      actionBtn.textContent =
+        action === "approve" ? "Approve Hours" : "Save Payroll";
+      actionBtn.disabled = false;
     }
   };
 }
@@ -6981,47 +7441,59 @@ async function renderEdFinanceTab() {
   try {
     const token = await getToken();
     const [payrollRes, expensesRes] = await Promise.all([
-      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll`,   { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,  { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      ),
+      fetch(
+        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/expenses`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      ),
     ]);
     if (!payrollRes.ok || !expensesRes.ok) throw new Error();
-    const payroll  = await payrollRes.json();
+    const payroll = await payrollRes.json();
     const expenses = await expensesRes.json();
     root.innerHTML = _edBuildFinanceHTML(payroll, expenses);
   } catch {
-    root.innerHTML = '<div class="pd-loading">Failed to load finance data.</div>';
+    root.innerHTML =
+      '<div class="pd-loading">Failed to load finance data.</div>';
   }
 }
 
 function _edBuildFinanceHTML(payroll, expenses) {
-  const fmt = (n) => `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+  const fmt = (n) =>
+    `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
 
   // Finance only includes rows where hours are approved AND payment_status is approved or paid
-  const financePayroll = (payroll ?? []).filter(p =>
-    p.approvedAt && (p.paymentStatus === "approved" || p.paymentStatus === "paid")
+  const financePayroll = (payroll ?? []).filter(
+    (p) =>
+      p.approvedAt &&
+      (p.paymentStatus === "approved" || p.paymentStatus === "paid"),
   );
 
   // Labor cost per worker — Israeli law: first 8h regular, next 2h ×1.25, beyond ×1.50
   function calcLaborCost(totalHours, baseRate) {
     if (!totalHours || !baseRate) return { reg: 0, ot: 0 };
     const regHours = Math.min(totalHours, 8);
-    const otHours  = Math.max(0, totalHours - 8);
-    const tier1    = Math.min(otHours, 2) * baseRate * 1.25;
-    const tier2    = Math.max(0, otHours - 2) * baseRate * 1.50;
+    const otHours = Math.max(0, totalHours - 8);
+    const tier1 = Math.min(otHours, 2) * baseRate * 1.25;
+    const tier2 = Math.max(0, otHours - 2) * baseRate * 1.5;
     return { reg: regHours * baseRate, ot: tier1 + tier2 };
   }
 
   let totalLabor = 0;
-  const laborRows = financePayroll.map((p) => {
-    const baseRate   = p.payRatePerHour ?? p.defaultPayRate ?? 0;
-    const totalHours = (p.approvedRegularHours ?? 0) + (p.approvedOvertimeHours ?? 0);
-    const { reg, ot } = calcLaborCost(totalHours, baseRate);
-    const travel  = p.travelRefund  ?? 0;
-    const bonus   = p.bonusAmount   ?? 0;
-    const penalty = p.penaltyAmount ?? 0;
-    const total   = reg + ot + travel + bonus - penalty;
-    totalLabor   += total;
-    return `<tr>
+  const laborRows = financePayroll
+    .map((p) => {
+      const baseRate = p.payRatePerHour ?? p.defaultPayRate ?? 0;
+      const totalHours =
+        (p.approvedRegularHours ?? 0) + (p.approvedOvertimeHours ?? 0);
+      const { reg, ot } = calcLaborCost(totalHours, baseRate);
+      const travel = p.travelRefund ?? 0;
+      const bonus = p.bonusAmount ?? 0;
+      const penalty = p.penaltyAmount ?? 0;
+      const total = reg + ot + travel + bonus - penalty;
+      totalLabor += total;
+      return `<tr>
       <td>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</td>
       <td>${escapeHtml(p.roleName)}</td>
       <td>${fmt(reg)}</td>
@@ -7029,18 +7501,22 @@ function _edBuildFinanceHTML(payroll, expenses) {
       <td>${fmt(travel + bonus - penalty)}</td>
       <td><strong>${fmt(total)}</strong></td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
 
   // Expenses by type
   const byType = {};
   let totalExpenses = 0;
   (expenses ?? []).forEach((e) => {
     byType[e.expenseType] = (byType[e.expenseType] ?? 0) + (e.amount ?? 0);
-    totalExpenses += (e.amount ?? 0);
+    totalExpenses += e.amount ?? 0;
   });
-  const expenseRows = Object.entries(byType).map(([type, amt]) =>
-    `<tr><td>${escapeHtml(type)}</td><td>${fmt(amt)}</td></tr>`
-  ).join("");
+  const expenseRows = Object.entries(byType)
+    .map(
+      ([type, amt]) =>
+        `<tr><td>${escapeHtml(type)}</td><td>${fmt(amt)}</td></tr>`,
+    )
+    .join("");
 
   if (financePayroll.length === 0 && Object.keys(byType).length === 0) {
     return '<div class="pd-empty-state">No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.</div>';
@@ -7064,7 +7540,9 @@ function _edBuildFinanceHTML(payroll, expenses) {
       </div>
     </div>
 
-    ${payroll.length > 0 ? `
+    ${
+      payroll.length > 0
+        ? `
     <div class="ed-finance-section">
       <h4 class="ed-finance-section-title">Labor Breakdown</h4>
       <table class="ed-worker-table">
@@ -7072,9 +7550,13 @@ function _edBuildFinanceHTML(payroll, expenses) {
         <tbody>${laborRows}</tbody>
         <tfoot><tr><td colspan="5"><strong>Total Labor</strong></td><td><strong>${fmt(totalLabor)}</strong></td></tr></tfoot>
       </table>
-    </div>` : ""}
+    </div>`
+        : ""
+    }
 
-    ${expenses.length > 0 ? `
+    ${
+      expenses.length > 0
+        ? `
     <div class="ed-finance-section">
       <h4 class="ed-finance-section-title">Expenses by Category</h4>
       <table class="ed-worker-table">
@@ -7082,5 +7564,7 @@ function _edBuildFinanceHTML(payroll, expenses) {
         <tbody>${expenseRows}</tbody>
         <tfoot><tr><td><strong>Total Expenses</strong></td><td><strong>${fmt(totalExpenses)}</strong></td></tr></tfoot>
       </table>
-    </div>` : ""}`;
+    </div>`
+        : ""
+    }`;
 }
