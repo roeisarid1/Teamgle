@@ -2255,8 +2255,13 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 (SELECT COUNT(*) FROM Employee_Shift es2
                  WHERE  es2.employee_user_ID = u.user_ID)                             AS OfferedShifts,
 
-                -- Attendance accuracy: avg minutes diff between actual_start_time and scheduled start_time (lower = better)
-                ISNULL((SELECT AVG(ABS(DATEDIFF(minute, es2.actual_start_time, s2.start_time)))
+                -- Attendance accuracy: avg minutes late (early arrival = 0, not penalised)
+                ISNULL((SELECT AVG(
+                            CASE
+                                WHEN DATEDIFF(minute, s2.start_time, es2.actual_start_time) > 0
+                                THEN DATEDIFF(minute, s2.start_time, es2.actual_start_time)
+                                ELSE 0
+                            END)
                         FROM   Employee_Shift es2
                         INNER JOIN Shift s2 ON s2.Shift_ID = es2.shift_ID
                         WHERE  es2.employee_user_ID = u.user_ID
