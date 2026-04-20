@@ -8,7 +8,7 @@
 --   DOWN section  →  run to drop all procedures (rollback, at bottom of file).
 --
 -- NOTE: sp_GetManagerCompanyId is defined in sp_Customers.sql (shared).
--- NOTE: STRING_SPLIT requires SQL Server 2016+ (compatibility level 130+).
+-- NOTE: Uses XML splitting instead of STRING_SPLIT (compatible with SQL Server 2008+).
 -- =============================================================================
 
 
@@ -94,7 +94,7 @@ GO
 --               Accepts a comma-separated list of role IDs and returns the
 --               count that are valid (global or belonging to this company).
 --               C# compares the count against the expected number to validate.
---               Uses STRING_SPLIT (requires SQL Server 2016+, compat level 130).
+--               Uses XML splitting (compatible with SQL Server 2008+).
 -- =============================================================================
 CREATE OR ALTER PROCEDURE sp_ValidateRoleIds
     @roleIdsCsv NVARCHAR(MAX),
@@ -106,8 +106,12 @@ BEGIN
     SELECT COUNT(*) AS MatchCount
     FROM   Roll r
     LEFT JOIN Roll_company rc ON r.Roll_ID = rc.roll_ID
-    WHERE  r.Roll_ID IN (SELECT value FROM STRING_SPLIT(@roleIdsCsv, ','))
-      AND  (rc.company_ID IS NULL OR rc.company_ID = @companyId);
+    WHERE  r.Roll_ID IN (
+        SELECT RTRIM(LTRIM(Split.a.value('.', 'NVARCHAR(36)')))
+        FROM   (SELECT CAST('<X>' + REPLACE(@roleIdsCsv, ',', '</X><X>') + '</X>' AS XML)) AS A(xmlCol)
+        CROSS APPLY A.xmlCol.nodes('/X') AS Split(a)
+    )
+    AND (rc.company_ID IS NULL OR rc.company_ID = @companyId);
 END;
 GO
 
@@ -255,8 +259,9 @@ BEGIN
         IF @roleIdsCsv IS NOT NULL AND LEN(@roleIdsCsv) > 0
         BEGIN
             INSERT INTO Employee_Roll (employee_user_ID, roll_ID)
-            SELECT @userId, value
-            FROM   STRING_SPLIT(@roleIdsCsv, ',');
+            SELECT @userId, RTRIM(LTRIM(Split.a.value('.', 'NVARCHAR(36)')))
+            FROM   (SELECT CAST('<X>' + REPLACE(@roleIdsCsv, ',', '</X><X>') + '</X>' AS XML)) AS A(xmlCol)
+            CROSS APPLY A.xmlCol.nodes('/X') AS Split(a);
         END
 
         COMMIT TRANSACTION;
@@ -314,8 +319,9 @@ BEGIN
         IF @roleIdsCsv IS NOT NULL AND LEN(@roleIdsCsv) > 0
         BEGIN
             INSERT INTO Employee_Roll (employee_user_ID, roll_ID)
-            SELECT @userId, value
-            FROM   STRING_SPLIT(@roleIdsCsv, ',');
+            SELECT @userId, RTRIM(LTRIM(Split.a.value('.', 'NVARCHAR(36)')))
+            FROM   (SELECT CAST('<X>' + REPLACE(@roleIdsCsv, ',', '</X><X>') + '</X>' AS XML)) AS A(xmlCol)
+            CROSS APPLY A.xmlCol.nodes('/X') AS Split(a);
         END
 
         COMMIT TRANSACTION;
