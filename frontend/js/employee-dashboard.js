@@ -140,7 +140,7 @@ async function loadMyShifts() {
   _msLoading = true;
 
   // Show skeleton on all panels
-  ["offers", "upcoming", "needs-action", "history"].forEach(tab => {
+  ["offers", "upcoming", "history"].forEach(tab => {
     const el = document.getElementById(`ms-panel-${tab}`);
     if (el) el.innerHTML = renderSkeletons(2);
   });
@@ -163,12 +163,17 @@ async function loadMyShifts() {
     _msLoading = false;
   }
 
-  // Compute needs-action count (uses shared predicate, works once briefs are loaded)
-  const needsActionCount = (_msApplications ?? []).filter(_isNeedsAction).length;
+  // Compute unacked briefs on upcoming shifts (for badge)
+  const now = new Date();
+  const upcomingUnacked = (_msApplications ?? []).filter(s => {
+    if (s.status !== "manager_approved") return false;
+    const isFuture = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now;
+    return isFuture && getBriefsForShift(s).some(b => !b.isAcknowledged);
+  }).length;
 
-  // Update nav badge (offers + needs-action)
+  // Update nav badge (offers only)
   const pendingOffers = (_msOffers ?? []).length;
-  const totalBadge    = pendingOffers + needsActionCount;
+  const totalBadge    = pendingOffers + upcomingUnacked;
   shiftsBadge.textContent   = totalBadge;
   shiftsBadge.style.display = totalBadge > 0 ? "" : "none";
 
@@ -179,11 +184,11 @@ async function loadMyShifts() {
     offersBadge.style.display = pendingOffers > 0 ? "" : "none";
   }
 
-  // Needs Action tab badge
-  const naBadge = document.getElementById("ms-badge-needs-action");
-  if (naBadge) {
-    naBadge.textContent   = needsActionCount;
-    naBadge.style.display = needsActionCount > 0 ? "" : "none";
+  // Upcoming tab badge (unacked briefs)
+  const upcomingBadge = document.getElementById("ms-badge-upcoming");
+  if (upcomingBadge) {
+    upcomingBadge.textContent   = upcomingUnacked;
+    upcomingBadge.style.display = upcomingUnacked > 0 ? "" : "none";
   }
 
   renderActiveTab();
@@ -209,10 +214,9 @@ function activateMsTab(name, render = true) {
 
 function renderActiveTab() {
   switch (_msActiveTab) {
-    case "offers":       renderOffersTab();       break;
-    case "upcoming":     renderUpcomingTab();     break;
-    case "needs-action": renderNeedsActionTab();  break;
-    case "history":      renderHistoryTab();      break;
+    case "offers":   renderOffersTab();   break;
+    case "upcoming": renderUpcomingTab(); break;
+    case "history":  renderHistoryTab();  break;
     default: break;
   }
 }
@@ -340,11 +344,10 @@ async function renderUpcomingTab() {
     await _fetchApplications();
   }
 
-  const now     = new Date();
+  const now = new Date();
   const upcoming = (_msApplications ?? []).filter(s => {
     if (s.status !== "manager_approved") return false;
-    if (new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now) return false;
-    return !_isNeedsAction(s); // future shifts with unacked briefs go to Needs Action instead
+    return new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now;
   });
 
   if (upcoming.length === 0) {
@@ -411,20 +414,18 @@ async function renderHistoryTab() {
 
   const now = new Date();
 
-  // Only: approved + past + hours reported + no pending action
-  const completed = (_msApplications ?? []).filter(s =>
+  // All approved past shifts — whether or not hours are filled
+  const past = (_msApplications ?? []).filter(s =>
     s.status === "manager_approved" &&
-    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now &&
-    s.actualStart && s.actualEnd &&
-    !_isNeedsAction(s)
+    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
   );
 
-  if (completed.length === 0) {
-    panel.innerHTML = emptyState("archive", "No history yet.", "Shifts appear here once they're complete and hours have been reported.");
+  if (past.length === 0) {
+    panel.innerHTML = emptyState("archive", "No history yet.", "Past shifts will appear here — you can fill in your hours manually.");
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = completed.map(s => renderShiftCard(s, { hideAttendance: true })).join("");
+  panel.innerHTML = past.map(s => renderShiftCard(s, { showAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -687,15 +688,11 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        // Update cache + UI
-        if (cached) cached[field] = nowIso;
-        const noteEl = btn.closest(".ms-clock-btn-wrap")?.querySelector(".ms-clock-recorded, .ms-clock-hint");
-        if (noteEl) {
-          noteEl.className = "ms-clock-recorded";
-          noteEl.textContent = `Recorded: ${fmtTime(nowIso)}`;
-        }
-        if (statusEl) { statusEl.textContent = "Saved ✓"; }
-        setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 2500);
+        if (statusEl) { statusEl.textContent = "Saved ✓"; statusEl.style.display = ""; }
+        setTimeout(async () => {
+          if (statusEl) statusEl.style.display = "none";
+          await _refreshShiftsData();
+        }, 1200);
 
       } catch {
         btn.disabled = false;
@@ -722,40 +719,9 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        // Update local brief cache
-        const cached = (_msBriefs ?? []).find(b => b.briefId === briefId);
-        if (cached) { cached.isAcknowledged = true; cached.acknowledgedAt = new Date().toISOString(); }
-
-        // Update UI in-place
-        item.classList.add("ms-brief-item--acked");
-        btn.remove();
-        item.querySelector(".brief-unread-dot")?.remove();
-        const titleRow = item.querySelector(".ms-brief-item-header");
-        if (titleRow) {
-          const badge = document.createElement("span");
-          badge.className = "brief-acked-badge";
-          badge.textContent = "✓ Acknowledged";
-          titleRow.appendChild(badge);
-        }
-
-        // Refresh unread count in the briefs toggle
-        const section = item.closest(".ms-briefs-section");
-        if (section) {
-          const remaining = section.querySelectorAll(".ms-brief-item:not(.ms-brief-item--acked)").length;
-          const unreadEl  = section.querySelector(".ms-briefs-unread");
-          const allReadEl = section.querySelector(".ms-briefs-all-read");
-          if (remaining === 0) {
-            if (unreadEl) { unreadEl.className = "ms-briefs-all-read"; unreadEl.textContent = "All briefs acknowledged"; }
-          } else if (unreadEl) {
-            unreadEl.textContent = `${remaining} unread brief${remaining !== 1 ? "s" : ""}`;
-          }
-          if (allReadEl && remaining === 0) allReadEl.textContent = "All briefs acknowledged";
-        }
-
-        // Update nav badge
-        const unreadTotal = (_msBriefs ?? []).filter(b => !b.isAcknowledged).length + (_msOffers?.length ?? 0);
-        shiftsBadge.textContent   = unreadTotal;
-        shiftsBadge.style.display = unreadTotal > 0 ? "" : "none";
+        btn.textContent = "✓ Acknowledged";
+        // Brief acked — refresh full data after short delay
+        setTimeout(() => _refreshShiftsData(), 800);
 
       } catch {
         btn.disabled    = false;
@@ -794,22 +760,10 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        // Update cache
-        const cached = (_msApplications ?? []).find(s => s.shiftId === shiftId);
-        if (cached) {
-          cached.actualStart = startVal || null;
-          cached.actualEnd   = endVal   || null;
-        }
-
-        // Update reported badge
-        const titleRow = section.querySelector(".ms-time-report-title");
-        const pendBadge = titleRow?.querySelector(".ms-time-pending-badge");
-        if (pendBadge) { pendBadge.className = "ms-time-reported-badge"; pendBadge.textContent = "Reported"; }
-
         if (statusEl) { statusEl.textContent = "Saved ✓"; statusEl.style.display = ""; }
         btn.textContent = "Save Hours";
         btn.disabled    = false;
-        setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 3000);
+        setTimeout(() => _refreshShiftsData(), 1200);
 
       } catch {
         if (statusEl) { statusEl.textContent = "Failed — try again"; statusEl.style.display = ""; }
@@ -818,6 +772,14 @@ function wireShiftCards(panel) {
       }
     });
   });
+}
+
+// Invalidate caches and reload the active tab
+async function _refreshShiftsData() {
+  _msOffers       = null;
+  _msApplications = null;
+  _msBriefs       = null;
+  await loadMyShifts();
 }
 
 // ────────────────────────────────────────────────────────────────────────────

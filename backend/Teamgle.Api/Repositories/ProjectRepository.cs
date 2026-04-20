@@ -254,13 +254,15 @@ public class ProjectRepository : IProjectRepository
         // Query 2: events for this project
         const string eventSql = """
             SELECT
-                e.event_ID    AS EventId,
-                e.name        AS Name,
-                e.location    AS Location,
-                e.start_time  AS StartTime,
-                e.end_time    AS EndTime,
-                e.status      AS Status,
-                e.event_type  AS EventType
+                e.event_ID        AS EventId,
+                e.name            AS Name,
+                e.location        AS Location,
+                e.start_time      AS StartTime,
+                e.end_time        AS EndTime,
+                e.status          AS Status,
+                e.event_type      AS EventType,
+                e.planned_budget  AS PlannedBudget,
+                e.expected_revenue AS ExpectedRevenue
             FROM Event e
             WHERE e.project_ID = @projId
             ORDER BY e.start_time
@@ -275,13 +277,15 @@ public class ProjectRepository : IProjectRepository
             {
                 detail.Events.Add(new EventDetailItem
                 {
-                    EventId   = reader.GetString(reader.GetOrdinal("EventId")),
-                    Name      = reader.GetString(reader.GetOrdinal("Name")),
-                    Location  = reader.IsDBNull(reader.GetOrdinal("Location"))  ? null : reader.GetString(reader.GetOrdinal("Location")),
-                    StartTime = reader.IsDBNull(reader.GetOrdinal("StartTime")) ? null : reader.GetDateTime(reader.GetOrdinal("StartTime")),
-                    EndTime   = reader.IsDBNull(reader.GetOrdinal("EndTime"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndTime")),
-                    Status    = reader.GetString(reader.GetOrdinal("Status")),
-                    EventType = reader.IsDBNull(reader.GetOrdinal("EventType")) ? null : reader.GetString(reader.GetOrdinal("EventType")),
+                    EventId         = reader.GetString(reader.GetOrdinal("EventId")),
+                    Name            = reader.GetString(reader.GetOrdinal("Name")),
+                    Location        = reader.IsDBNull(reader.GetOrdinal("Location"))        ? null : reader.GetString(reader.GetOrdinal("Location")),
+                    StartTime       = reader.IsDBNull(reader.GetOrdinal("StartTime"))       ? null : reader.GetDateTime(reader.GetOrdinal("StartTime")),
+                    EndTime         = reader.IsDBNull(reader.GetOrdinal("EndTime"))         ? null : reader.GetDateTime(reader.GetOrdinal("EndTime")),
+                    Status          = reader.GetString(reader.GetOrdinal("Status")),
+                    EventType       = reader.IsDBNull(reader.GetOrdinal("EventType"))       ? null : reader.GetString(reader.GetOrdinal("EventType")),
+                    PlannedBudget   = reader.IsDBNull(reader.GetOrdinal("PlannedBudget"))   ? null : reader.GetDecimal(reader.GetOrdinal("PlannedBudget")),
+                    ExpectedRevenue = reader.IsDBNull(reader.GetOrdinal("ExpectedRevenue")) ? null : reader.GetDecimal(reader.GetOrdinal("ExpectedRevenue")),
                 });
             }
         }

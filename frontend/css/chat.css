@@ -140,9 +140,16 @@
 }
 
 .conv-item.active {
-  background: var(--blue-light);
-  border-left: 3px solid var(--green);
-  padding-left: 9px;
+  background: var(--blue-50, #F5F7FF);
+  position: relative;
+}
+.conv-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--blue);
+  border-radius: 0 2px 2px 0;
 }
 
 .conv-item.has-unread .conv-name {
@@ -735,6 +742,7 @@
   background: var(--blue);
   color: #fff;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 8px rgba(79,110,247,.25);
 }
 
 /* ── Message timestamp ───────────────────────────────────────────────────── */

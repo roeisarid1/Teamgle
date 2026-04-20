@@ -195,17 +195,25 @@ function renderRoles(roles) {
 
 // ── Search helpers ─────────────────────────────────────────────────────────
 function filterEmployees(list) {
-  const q = (document.getElementById("employee-search")?.value ?? "")
-    .trim()
-    .toLowerCase();
-  if (!q) return list;
+  const q          = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
+  const salaryMax  = parseFloat(document.getElementById("emp-filter-salary-max")?.value ?? "");
+  const statusVal  = (document.getElementById("emp-filter-status")?.value ?? "").toLowerCase();
+
+  const hasFilter  = q || !isNaN(salaryMax) || statusVal;
+  const clearBtn   = document.getElementById("emp-filter-clear");
+  if (clearBtn) clearBtn.style.display = hasFilter ? "" : "none";
+
   return list.filter((e) => {
-    const full = `${e.firstName} ${e.lastName}`.toLowerCase();
-    return (
-      full.startsWith(q) ||
-      e.firstName.toLowerCase().startsWith(q) ||
-      e.lastName.toLowerCase().startsWith(q)
-    );
+    if (q) {
+      const full = `${e.firstName} ${e.lastName}`.toLowerCase();
+      if (!full.includes(q) && !e.firstName.toLowerCase().includes(q) && !e.lastName.toLowerCase().includes(q)) return false;
+    }
+    if (!isNaN(salaryMax) && e.costPerHour != null && e.costPerHour > salaryMax) return false;
+    if (statusVal) {
+      const empStatus = (e.status ?? "active").toLowerCase();
+      if (empStatus !== statusVal) return false;
+    }
+    return true;
   });
 }
 
@@ -220,6 +228,21 @@ function filterCustomers(list) {
 }
 
 document.getElementById("employee-search")?.addEventListener("input", () => {
+  renderEmployees(filterEmployees(allEmployees));
+});
+document.getElementById("emp-filter-salary-max")?.addEventListener("input", () => {
+  renderEmployees(filterEmployees(allEmployees));
+});
+document.getElementById("emp-filter-status")?.addEventListener("change", () => {
+  renderEmployees(filterEmployees(allEmployees));
+});
+document.getElementById("emp-filter-clear")?.addEventListener("click", () => {
+  const s = document.getElementById("employee-search");
+  const m = document.getElementById("emp-filter-salary-max");
+  const st = document.getElementById("emp-filter-status");
+  if (s) s.value = "";
+  if (m) m.value = "";
+  if (st) st.value = "";
   renderEmployees(filterEmployees(allEmployees));
 });
 
@@ -1442,8 +1465,8 @@ document.querySelectorAll(".nav-item[data-section]").forEach((item) => {
 });
 
 function activateSection(name) {
-  // Stop staffing poll whenever we leave the project detail view
-  if (name !== "project-detail") _stopStaffingPoll();
+  // Stop staffing poll whenever we leave both event-detail and project-detail
+  if (name !== "project-detail" && name !== "event-detail") _stopStaffingPoll();
 
   document.querySelectorAll(".nav-item[data-section]").forEach((el) => {
     el.classList.toggle("active", el.dataset.section === name);
@@ -1457,10 +1480,7 @@ function activateSection(name) {
     .querySelector(".page-content")
     .classList.toggle("chat-mode", name === "chats");
 
-  if (name === "customers") {
-    if (allCustomers.length === 0) loadCustomers();
-    else renderCustomers(filterCustomers(allCustomers));
-  }
+  if (name === "customers") loadCustomers();
   if (name === "projects") {
     _initProjectFilters();
     loadProjects();
@@ -1783,7 +1803,7 @@ document.querySelectorAll(".pd-tab").forEach((tab) => {
 });
 
 function activateProjectTab(name) {
-  if (name !== "employees") _stopStaffingPoll();
+  _stopStaffingPoll();
   document.querySelectorAll(".pd-tab").forEach((t) => {
     t.classList.toggle("active", t.dataset.tab === name);
   });
@@ -1793,7 +1813,7 @@ function activateProjectTab(name) {
   if (name === "dashboard") renderDashboardTab();
   if (name === "tasks") renderTasksTab();
   if (name === "brief") renderBriefTab();
-  if (name === "employees") renderStaffingTab();
+  if (name === "finance") renderProjectFinanceTab();
   if (name === "schedule" && currentProjectId) {
     loadProjectSchedule(currentProjectId);
   }
@@ -2565,6 +2585,113 @@ function addNewTaskRow() {
     row.classList.add("pd-row--expanded");
     contentIn.focus();
   });
+}
+
+// ── PROJECT FINANCE TAB ──────────────────────────────────────────────────────
+
+async function renderProjectFinanceTab() {
+  const root = document.getElementById("pd-finance-root");
+  if (!root) return;
+  root.innerHTML = '<div class="pd-loading">Loading project finances…</div>';
+
+  const events = currentProjectDetail?.events ?? [];
+  if (events.length === 0) {
+    root.innerHTML = '<div class="pd-empty-state">No events in this project yet.</div>';
+    return;
+  }
+
+  try {
+    const token = await getToken();
+    const fmt = (n) => `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+
+    // Fetch payroll + expenses for all events in parallel
+    const results = await Promise.all(events.map(async (ev) => {
+      const [prRes, exRes] = await Promise.all([
+        fetch(`${API_BASE}/events/${encodeURIComponent(ev.eventId)}/payroll`,  { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/events/${encodeURIComponent(ev.eventId)}/expenses`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const payroll  = prRes.ok ? await prRes.json()  : [];
+      const expenses = exRes.ok ? await exRes.json()  : [];
+      return { ev, payroll, expenses };
+    }));
+
+    function calcLaborCost(totalHours, baseRate) {
+      if (!totalHours || !baseRate) return 0;
+      const regHours = Math.min(totalHours, 8);
+      const otHours  = Math.max(0, totalHours - 8);
+      const tier1    = Math.min(otHours, 2) * baseRate * 1.25;
+      const tier2    = Math.max(0, otHours - 2) * baseRate * 1.5;
+      return regHours * baseRate + tier1 + tier2;
+    }
+
+    let totalPlanned  = 0;
+    let totalRevenue  = 0;
+    let totalLabor    = 0;
+    let totalExpenses = 0;
+
+    const rows = results.map(({ ev, payroll, expenses }) => {
+      const finPay = (payroll ?? []).filter(p =>
+        p.approvedAt && (p.paymentStatus === "approved" || p.paymentStatus === "paid")
+      );
+      const labor = finPay.reduce((sum, p) => {
+        const baseRate = p.payRatePerHour ?? p.defaultPayRate ?? 0;
+        const hrs = (p.approvedRegularHours ?? 0) + (p.approvedOvertimeHours ?? 0);
+        return sum + calcLaborCost(hrs, baseRate) + (p.travelRefund ?? 0) + (p.bonusAmount ?? 0) - (p.penaltyAmount ?? 0);
+      }, 0);
+      const expTotal = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+      const total    = labor + expTotal;
+
+      if (ev.plannedBudget)   totalPlanned  += ev.plannedBudget;
+      if (ev.expectedRevenue) totalRevenue  += ev.expectedRevenue;
+      totalLabor    += labor;
+      totalExpenses += expTotal;
+
+      const profitLoss = (ev.expectedRevenue ?? 0) - total;
+      const plCls = profitLoss >= 0 ? "pf-positive" : "pf-negative";
+
+      return `<tr>
+        <td>${escapeHtml(ev.name)}</td>
+        <td>${ev.plannedBudget  != null ? fmt(ev.plannedBudget)  : "—"}</td>
+        <td>${ev.expectedRevenue != null ? fmt(ev.expectedRevenue) : "—"}</td>
+        <td>${fmt(labor)}</td>
+        <td>${fmt(expTotal)}</td>
+        <td><strong>${fmt(total)}</strong></td>
+        <td class="${plCls}">${ev.expectedRevenue != null ? `${profitLoss >= 0 ? "+" : ""}${fmt(profitLoss)}` : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    const grandTotal  = totalLabor + totalExpenses;
+    const profitTotal = totalRevenue - grandTotal;
+    const profitCls   = profitTotal >= 0 ? "ed-finance-card--profit" : "ed-finance-card--loss";
+
+    root.innerHTML = `
+      <div class="ed-finance-cards">
+        ${totalPlanned  > 0 ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">Total Planned Budget</div><div class="ed-finance-card-value">${fmt(totalPlanned)}</div></div>` : ""}
+        ${totalRevenue  > 0 ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">Total Expected Revenue</div><div class="ed-finance-card-value">${fmt(totalRevenue)}</div></div>` : ""}
+        <div class="ed-finance-card"><div class="ed-finance-card-label">Total Labor Cost</div><div class="ed-finance-card-value">${fmt(totalLabor)}</div></div>
+        <div class="ed-finance-card"><div class="ed-finance-card-label">Total Expenses</div><div class="ed-finance-card-value">${fmt(totalExpenses)}</div></div>
+        <div class="ed-finance-card ed-finance-card--total"><div class="ed-finance-card-label">Grand Total Cost</div><div class="ed-finance-card-value">${fmt(grandTotal)}</div></div>
+        ${totalRevenue > 0 ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">Profit / Loss</div><div class="ed-finance-card-value">${profitTotal >= 0 ? "+" : ""}${fmt(profitTotal)}</div></div>` : ""}
+      </div>
+      <div class="ed-finance-section">
+        <h4 class="ed-finance-section-title">Breakdown by Event</h4>
+        <table class="ed-worker-table">
+          <thead><tr><th>Event</th><th>Budget</th><th>Revenue</th><th>Labor</th><th>Expenses</th><th>Total Cost</th><th>P/L</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr>
+            <td><strong>Total</strong></td>
+            <td>${totalPlanned  > 0 ? fmt(totalPlanned)  : "—"}</td>
+            <td>${totalRevenue  > 0 ? fmt(totalRevenue)  : "—"}</td>
+            <td>${fmt(totalLabor)}</td>
+            <td>${fmt(totalExpenses)}</td>
+            <td><strong>${fmt(grandTotal)}</strong></td>
+            <td class="${profitCls}">${totalRevenue > 0 ? `${profitTotal >= 0 ? "+" : ""}${fmt(profitTotal)}` : "—"}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  } catch {
+    root.innerHTML = '<div class="pd-loading">Failed to load finance data.</div>';
+  }
 }
 
 // ── BRIEFS TAB ───────────────────────────────────────────────────────────────
@@ -5942,12 +6069,14 @@ document.getElementById("event-detail-tabs").addEventListener("click", (e) => {
 });
 
 function activateEventTab(name) {
+  if (name !== "staffing") _stopStaffingPoll();
   document.querySelectorAll("#event-detail-tabs [data-etab]").forEach((t) => {
     t.classList.toggle("active", t.dataset.etab === name);
   });
   document.querySelectorAll("[data-etab-panel]").forEach((p) => {
     p.style.display = p.dataset.etabPanel === name ? "" : "none";
   });
+  if (name === "staffing") renderEdStaffingTab();
   if (name === "workers") renderEdWorkersTab();
   if (name === "tasks") renderEdTasksTab();
   if (name === "briefs") renderEdBriefsTab();
@@ -5987,7 +6116,7 @@ async function openEventDetail(eventId) {
       p.classList.toggle("active", p.dataset.value === "all");
     });
 
-  activateEventTab("workers");
+  activateEventTab("staffing");
 }
 
 function _edFormatSubtitle(ev) {
@@ -6025,6 +6154,47 @@ function _edFormatSubtitle(ev) {
   }
 
   return parts.join(" | ");
+}
+
+// ── STAFFING TAB (per-event) ───────────────────────────────────────────────
+
+function renderEdStaffingTab() {
+  const root = document.getElementById("ed-staffing-root");
+  if (!root) return;
+
+  const ev = (currentProjectDetail?.events ?? []).find(
+    (e) => e.eventId === currentEventId,
+  );
+
+  root.innerHTML = `
+    <div class="ps-header">
+      <div class="ps-header-info">
+        <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
+        <p class="ps-header-desc">Manage worker assignments for this event's shifts.</p>
+      </div>
+      <div class="ps-header-actions">
+        <div class="ps-search-wrap">
+          <i data-lucide="search" class="ps-search-icon"></i>
+          <input type="text" class="ps-search" id="ps-search-input" placeholder="Search workers…">
+        </div>
+      </div>
+    </div>
+    <div class="ps-event-block" data-event-id="${escapeHtml(currentEventId)}">
+      ${_buildPotentialSection(currentEventId)}
+      ${_buildStaffingSection(currentEventId, "awaiting",   "Awaiting Response",  "clock",        "pending",  [], "awaiting")}
+      ${_buildStaffingSection(currentEventId, "applicants", "Shift Applicants",   "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(currentEventId, "approved",   "Approved Workers",   "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(currentEventId, "hold",       "Hold / Standby",     "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(currentEventId, "rejected",   "Rejected Workers",   "x-circle",     "rejected", [], "rejected")}
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+  _initStaffingHandlers();
+  _startStaffingPoll();
+
+  if (currentProjectId)
+    loadAndRenderPotentialWorkers(currentProjectId, currentEventId);
+  loadAndRenderEventWorkers(currentEventId);
 }
 
 // ── WORKERS TAB ────────────────────────────────────────────────────────────
@@ -7310,12 +7480,8 @@ function _edBuildPayrollRowHTML(item, idx) {
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours"
                      value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—">
             </div>
-            <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Overtime Hours</label>
-              <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedOvertimeHours"
-                     value="${item.approvedOvertimeHours ?? ""}" min="0" step="0.5" placeholder="—">
-            </div>
           </div>
+          <p class="ed-pr-ot-note">Overtime is calculated automatically (first 2h ×1.25, beyond ×1.50)</p>
           <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
         </div>
 
@@ -7413,7 +7579,6 @@ function _edWirePayrollSaveBtns() {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/approve`;
         body = {
           approvedRegularHours: num("approvedRegularHours"),
-          approvedOvertimeHours: num("approvedOvertimeHours"),
         };
       } else {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`;
@@ -7489,6 +7654,13 @@ function _edBuildFinanceHTML(payroll, expenses) {
   const fmt = (n) =>
     `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
 
+  // Pull planned budget / expected revenue from cached event data
+  const ev = (currentProjectDetail?.events ?? []).find(
+    (e) => e.eventId === currentEventId,
+  );
+  const plannedBudget    = ev?.plannedBudget    ?? null;
+  const expectedRevenue  = ev?.expectedRevenue  ?? null;
+
   // Finance only includes rows where hours are approved AND payment_status is approved or paid
   const financePayroll = (payroll ?? []).filter(
     (p) =>
@@ -7549,8 +7721,13 @@ function _edBuildFinanceHTML(payroll, expenses) {
 
   const grandTotal = totalLabor + totalExpenses;
 
+  const profitLoss = (expectedRevenue ?? 0) - grandTotal;
+  const profitCls  = profitLoss >= 0 ? "ed-finance-card--profit" : "ed-finance-card--loss";
+
   return `
     <div class="ed-finance-cards">
+      ${plannedBudget  !== null ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">Planned Budget</div><div class="ed-finance-card-value">${fmt(plannedBudget)}</div></div>` : ""}
+      ${expectedRevenue !== null ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">Expected Revenue</div><div class="ed-finance-card-value">${fmt(expectedRevenue)}</div></div>` : ""}
       <div class="ed-finance-card">
         <div class="ed-finance-card-label">Total Labor Cost</div>
         <div class="ed-finance-card-value">${fmt(totalLabor)}</div>
@@ -7560,9 +7737,10 @@ function _edBuildFinanceHTML(payroll, expenses) {
         <div class="ed-finance-card-value">${fmt(totalExpenses)}</div>
       </div>
       <div class="ed-finance-card ed-finance-card--total">
-        <div class="ed-finance-card-label">Grand Total</div>
+        <div class="ed-finance-card-label">Grand Total Cost</div>
         <div class="ed-finance-card-value">${fmt(grandTotal)}</div>
       </div>
+      ${expectedRevenue !== null ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">Profit / Loss</div><div class="ed-finance-card-value">${profitLoss >= 0 ? "+" : ""}${fmt(profitLoss)}</div></div>` : ""}
     </div>
 
     ${
