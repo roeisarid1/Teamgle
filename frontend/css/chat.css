@@ -73,7 +73,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(91,123,240,.35);
+  box-shadow: 0 2px 8px rgba(79,110,247,.35);
   white-space: nowrap;
 }
 
@@ -103,7 +103,7 @@
 
 .chat-search-input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.1);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.1);
   background-color: #fff;
 }
 
@@ -283,7 +283,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(91,123,240,.35);
+  box-shadow: 0 2px 8px rgba(79,110,247,.35);
 }
 
 .btn-start-chat:hover {
@@ -794,7 +794,7 @@
 
 .chat-textarea-wrap:focus-within {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.1);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.1);
   background: #fff;
 }
 
@@ -828,7 +828,7 @@
   justify-content: center;
   flex-shrink: 0;
   transition: background var(--transition), transform var(--transition);
-  box-shadow: 0 2px 8px rgba(91,123,240,.35);
+  box-shadow: 0 2px 8px rgba(79,110,247,.35);
 }
 
 .btn-send:hover:not(:disabled) {

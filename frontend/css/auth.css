@@ -44,7 +44,7 @@ body {
 .auth-card {
   background: #fff;
   border-radius: var(--radius-card);
-  box-shadow: 0 8px 40px rgba(91,123,240,.13), 0 2px 8px rgba(0,0,0,.06);
+  box-shadow: 0 8px 40px rgba(79,110,247,.13), 0 2px 8px rgba(0,0,0,.06);
   width: 100%;
   max-width: 440px;
   overflow: hidden;
@@ -205,7 +205,7 @@ body {
 
 .field input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.13);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.13);
   background: #fff;
 }
 
@@ -223,13 +223,13 @@ body {
   transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
   margin-top: 4px;
   letter-spacing: .01em;
-  box-shadow: 0 4px 14px rgba(91,123,240,.35);
+  box-shadow: 0 4px 14px rgba(79,110,247,.35);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--blue-dark);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(91,123,240,.4);
+  box-shadow: 0 6px 18px rgba(79,110,247,.4);
 }
 
 .btn-primary:active:not(:disabled) {

@@ -348,27 +348,27 @@ body {
   padding: 7px 10px;
   font-size: 13px;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   outline: none;
   transition: border-color var(--transition);
 }
 .emp-filter-input:focus,
-.emp-filter-select:focus { border-color: var(--blue); }
+.emp-filter-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
 .emp-filter-input { width: 100px; }
 .emp-filter-clear {
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  transition: border-color var(--transition), color var(--transition);
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
 }
-.emp-filter-clear:hover { border-color: var(--red); color: var(--red); }
+.emp-filter-clear:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
 
 .search-input {
   width: 100%;
@@ -385,7 +385,7 @@ body {
 
 .search-input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
 }
 
 .search-input::placeholder { color: var(--text-muted); }
@@ -533,7 +533,7 @@ tbody tr:hover { background: var(--blue-50); }
 
 .add-role-inline input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
 }
 
 .btn-save-role {
@@ -639,7 +639,7 @@ tbody tr:hover { background: var(--blue-50); }
 
 .field input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
   background: #fff;
 }
 
@@ -768,7 +768,7 @@ tbody tr:hover { background: var(--blue-50); }
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid var(--blue);
-  box-shadow: 0 2px 10px rgba(91,123,240,.25);
+  box-shadow: 0 2px 10px rgba(79,110,247,.25);
 }
 
 .btn-remove-file {
@@ -823,7 +823,7 @@ tbody tr:hover { background: var(--blue-50); }
 
 .doc-title-select:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
 }
 
 .doc-file-area {
@@ -1037,7 +1037,7 @@ thead th:last-child {
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid var(--blue);
-  box-shadow: 0 2px 10px rgba(91,123,240,.25);
+  box-shadow: 0 2px 10px rgba(79,110,247,.25);
 }
 
 .view-profile-initials {
@@ -1136,7 +1136,7 @@ thead th:last-child {
 
 .field textarea:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
   background: #fff;
 }
 
@@ -1187,7 +1187,7 @@ thead th:last-child {
 }
 
 .contacts-table tbody tr:last-child td { border-bottom: none; }
-.contacts-table tbody tr:hover { background: #fafbff; }
+.contacts-table tbody tr:hover { background: var(--blue-50); }
 
 /* ── Empty-state CTA ──────────────────────────────────────────────────────── */
 .empty-state-cta {
@@ -1198,7 +1198,7 @@ thead th:last-child {
   padding: 28px 24px;
   border: 2px dashed var(--border);
   border-radius: var(--radius);
-  background: #fafbff;
+  background: var(--blue-50);
   text-align: center;
   margin-top: 8px;
 }
@@ -1951,7 +1951,7 @@ tr.expanded-row > td {
 }
 .field select:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(91,123,240,.12);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.12);
   background: #fff;
 }
 
@@ -2191,7 +2191,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 1.5px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  background: #fafbff;
+  background: var(--blue-50);
 }
 
 .optional-section-header {
@@ -2199,7 +2199,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #f4f6ff;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
@@ -2342,7 +2342,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 2px dashed var(--border);
   border-radius: 10px;
   margin: 16px 20px;
-  background: #fafbff;
+  background: var(--blue-50);
 }
 
 /* ── Project Detail Tab Navigation ──────────────────────────────────────── */
@@ -2493,7 +2493,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex: 1;
   position: relative;
   height: 36px;
-  background: #fafbff;
+  background: var(--blue-50);
   min-width: 400px;
 }
 
@@ -3011,7 +3011,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* ── Status filter chips ─────────────────────────────────────────────────── */
 .pd-filter-pill--open::before        { content:""; width:6px; height:6px; border-radius:50%; background:#94a3b8; flex-shrink:0; }
-.pd-filter-pill--in_progress::before { content:""; width:6px; height:6px; border-radius:50%; background:#5B7BF0; flex-shrink:0; }
+.pd-filter-pill--in_progress::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--blue); flex-shrink:0; }
 .pd-filter-pill--done::before        { content:""; width:6px; height:6px; border-radius:50%; background:#22c55e; flex-shrink:0; }
 .pd-filter-pill--canceled::before    { content:""; width:6px; height:6px; border-radius:50%; background:#f87171; flex-shrink:0; }
 
@@ -3142,6 +3142,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ── Project Staffing — Employees Tab ──────────────────────────────────────── */
 
 .ps-root { padding: 4px 0; }
+#pd-finance-root { padding: 4px 0; }
 
 /* Header */
 .ps-header {
@@ -3226,7 +3227,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Per-section accent colors: left border + header tint (keyed by data-section-type) */
-[data-section-type="potential"]  { border-left-color: #5B7BF0; }
+[data-section-type="potential"]  { border-left-color: var(--blue); }
 [data-section-type="applicants"] { border-left-color: #f97316; }
 [data-section-type="approved"]   { border-left-color: #22c55e; }
 [data-section-type="hold"]       { border-left-color: #a78bfa; }
@@ -3238,7 +3239,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 [data-section-type="hold"]       .ps-section-hdr { background: #f5f3ff; }
 [data-section-type="rejected"]   .ps-section-hdr { background: #fff1f2; }
 
-[data-section-type="potential"]  .ps-section-icon { color: #5B7BF0; }
+[data-section-type="potential"]  .ps-section-icon { color: var(--blue); }
 [data-section-type="applicants"] .ps-section-icon { color: #f97316; }
 [data-section-type="approved"]   .ps-section-icon { color: #22c55e; }
 [data-section-type="hold"]       .ps-section-icon { color: #a78bfa; }
@@ -3393,7 +3394,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   transition: background var(--transition);
 }
 .ps-table tbody tr:last-child { border-bottom: none; }
-.ps-table tbody tr:hover { background: #fafbff; }
+.ps-table tbody tr:hover { background: var(--blue-50); }
 .ps-table td {
   padding: 11px 16px;
   vertical-align: middle;
@@ -3567,7 +3568,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .offer-card:hover {
-  box-shadow: 0 4px 16px rgba(91,123,240,.12);
+  box-shadow: 0 4px 16px rgba(79,110,247,.12);
   transform: translateY(-1px);
 }
 
@@ -3893,7 +3894,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
    ─────────────────────────────────────────────────────────────────────────── */
 #section-project-detail,
 #section-event-detail {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   font-size: 16px;
 }
 
@@ -5126,7 +5127,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex-shrink: 0;
 }
 .ms-status-step--done  .ms-status-dot  { background: #6ee7b7; border-color: #6ee7b7; }
-.ms-status-step--current .ms-status-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,123,240,.2); }
+.ms-status-step--current .ms-status-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,110,247,.2); }
 .ms-status-label {
   font-size: 11px;
   color: var(--text-muted);
