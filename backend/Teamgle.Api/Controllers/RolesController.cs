@@ -1,7 +1,6 @@
 using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Mvc;
-using Teamgle.Api.BL;
-using Teamgle.Api.DAL;
+using Teamgle.Api.Services;
 
 namespace Teamgle.Api.Controllers;
 
@@ -9,11 +8,20 @@ namespace Teamgle.Api.Controllers;
 [Route("api/roles")]
 public class RolesController : ControllerBase
 {
+    private readonly IEmployeeService _employeeService;
+    private readonly ILogger<RolesController> _logger;
+
+    public RolesController(IEmployeeService employeeService, ILogger<RolesController> logger)
+    {
+        _employeeService = employeeService;
+        _logger = logger;
+    }
+
     private async Task<string?> GetFirebaseUidAsync()
     {
         var authHeader = Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader == null || !authHeader.StartsWith("Bearer ")) return null;
-        string idToken = authHeader["Bearer ".Length..].Trim();
+        var idToken = authHeader["Bearer ".Length..].Trim();
         try { return (await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken)).Uid; }
         catch { return null; }
     }
@@ -22,36 +30,32 @@ public class RolesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetRoles()
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        return Ok(dal.GetAllRoles(companyId));
+        try
+        {
+            return Ok(await _employeeService.GetRolesAsync(uid));
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error fetching roles"); return StatusCode(500, new { error = "Unexpected error." }); }
     }
 
     // POST /api/roles
     [HttpPost]
-    public async Task<IActionResult> CreateRole([FromBody] Role role)
+    public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequest request)
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        if (string.IsNullOrWhiteSpace(role.RollName))
-            return BadRequest(new { error = "Role name is required." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        if (dal.RoleNameExistsForCompany(role.RollName.Trim(), companyId))
-            return Conflict(new { error = $"A role named '{role.RollName}' already exists." });
-
-        dal.CreateRole(role.RollName, companyId);
-        return Ok(new { message = $"Role '{role.RollName}' created successfully." });
+        try
+        {
+            await _employeeService.CreateRoleAsync(uid, request.RoleName);
+            return Ok(new { message = $"Role '{request.RoleName}' created successfully." });
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)   { return Conflict(new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error creating role"); return StatusCode(500, new { error = "Unexpected error." }); }
     }
 }
+
+public record CreateRoleRequest(string RoleName);

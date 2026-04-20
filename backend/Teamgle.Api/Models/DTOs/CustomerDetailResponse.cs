@@ -1,6 +1,6 @@
-namespace Teamgle.Api.BL;
+namespace Teamgle.Api.Models.DTOs;
 
-public class Customer
+public class CustomerDetailResponse
 {
     public string CustomerId { get; set; } = string.Empty;
     public string CustomerCompanyName { get; set; } = string.Empty;
@@ -13,5 +13,5 @@ public class Customer
     public string? PaymentTerms { get; set; }
     public string? Notes { get; set; }
     public DateTime? CreatedAt { get; set; }
-    public List<ContactPerson> Contacts { get; set; } = [];
+    public List<ContactPersonResponse> Contacts { get; set; } = [];
 }

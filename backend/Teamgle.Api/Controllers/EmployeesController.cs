@@ -1,7 +1,7 @@
 using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Mvc;
-using Teamgle.Api.BL;
-using Teamgle.Api.DAL;
+using Teamgle.Api.Models.DTOs;
+using Teamgle.Api.Services;
 
 namespace Teamgle.Api.Controllers;
 
@@ -9,11 +9,20 @@ namespace Teamgle.Api.Controllers;
 [Route("api/employees")]
 public class EmployeesController : ControllerBase
 {
+    private readonly IEmployeeService _employeeService;
+    private readonly ILogger<EmployeesController> _logger;
+
+    public EmployeesController(IEmployeeService employeeService, ILogger<EmployeesController> logger)
+    {
+        _employeeService = employeeService;
+        _logger = logger;
+    }
+
     private async Task<string?> GetFirebaseUidAsync()
     {
         var authHeader = Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader == null || !authHeader.StartsWith("Bearer ")) return null;
-        string idToken = authHeader["Bearer ".Length..].Trim();
+        var idToken = authHeader["Bearer ".Length..].Trim();
         try { return (await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken)).Uid; }
         catch { return null; }
     }
@@ -22,106 +31,76 @@ public class EmployeesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetEmployees()
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        return Ok(dal.GetEmployeesByCompany(companyId));
+        try
+        {
+            return Ok(await _employeeService.GetEmployeesForManagerAsync(uid));
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error fetching employees"); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 
     // POST /api/employees/create
     [HttpPost("create")]
-    public async Task<IActionResult> CreateEmployee([FromBody] Employee emp)
+    public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeRequest request)
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        if (string.IsNullOrWhiteSpace(emp.FirstName))  return BadRequest(new { error = "First name is required." });
-        if (string.IsNullOrWhiteSpace(emp.LastName))   return BadRequest(new { error = "Last name is required." });
-        if (string.IsNullOrWhiteSpace(emp.Email))      return BadRequest(new { error = "Email is required." });
-        if (emp.CostPerHour < 0)                       return BadRequest(new { error = "Cost per hour cannot be negative." });
-        if (emp.RoleIds == null || emp.RoleIds.Count == 0)
-            return BadRequest(new { error = "At least one role must be selected." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        if (dal.EmailExists(emp.Email.Trim().ToLower()))
-            return Conflict(new { error = "An employee with this email already exists." });
-
-        if (!dal.RoleIdsExist(emp.RoleIds, companyId))
-            return BadRequest(new { error = "One or more selected roles are invalid." });
-
-        string employeeId = dal.CreateEmployee(companyId, emp);
-        return Ok(new { message = "Employee created successfully.", employeeId });
+        try
+        {
+            var employeeId = await _employeeService.CreateEmployeeAsync(uid, request);
+            return Ok(new { message = "Employee created successfully.", employeeId });
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)   { return Conflict(new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error creating employee"); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 
     // GET /api/employees/{id}
     [HttpGet("{id}")]
     public async Task<IActionResult> GetEmployee(string id)
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        Employee? employee = dal.GetEmployeeById(id, companyId);
-        if (employee == null) return NotFound(new { error = "Employee not found." });
-
-        return Ok(employee);
+        try
+        {
+            return Ok(await _employeeService.GetEmployeeByIdAsync(uid, id));
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error fetching employee {Id}", id); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 
     // PUT /api/employees/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateEmployee(string id, [FromBody] Employee emp)
+    public async Task<IActionResult> UpdateEmployee(string id, [FromBody] UpdateEmployeeRequest request)
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        if (string.IsNullOrWhiteSpace(emp.FirstName))  return BadRequest(new { error = "First name is required." });
-        if (string.IsNullOrWhiteSpace(emp.LastName))   return BadRequest(new { error = "Last name is required." });
-        if (emp.CostPerHour < 0)                       return BadRequest(new { error = "Cost per hour cannot be negative." });
-        if (emp.RoleIds == null || emp.RoleIds.Count == 0)
-            return BadRequest(new { error = "At least one role must be selected." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        if (!dal.RoleIdsExist(emp.RoleIds, companyId))
-            return BadRequest(new { error = "One or more selected roles are invalid." });
-
-        try { dal.UpdateEmployee(id, companyId, emp); }
+        try
+        {
+            await _employeeService.UpdateEmployeeAsync(uid, id, request);
+            return Ok(new { message = "Employee updated successfully." });
+        }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
-
-        return Ok(new { message = "Employee updated successfully." });
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex) { _logger.LogError(ex, "Error updating employee {Id}", id); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 
     // DELETE /api/employees/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteEmployee(string id)
     {
-        string? uid = await GetFirebaseUidAsync();
+        var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
-
-        EmployeeDAL dal = new EmployeeDAL();
-
-        string? companyId = dal.GetManagerCompanyId(uid);
-        if (companyId == null) return StatusCode(403, new { error = "User is not a registered manager." });
-
-        try { dal.DeleteEmployee(id, companyId); }
+        try
+        {
+            await _employeeService.DeleteEmployeeAsync(uid, id);
+            return Ok(new { message = "Employee deleted successfully." });
+        }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
-
-        return Ok(new { message = "Employee deleted successfully." });
+        catch (Exception ex) { _logger.LogError(ex, "Error deleting employee {Id}", id); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 }
