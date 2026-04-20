@@ -279,11 +279,16 @@ BEGIN
 
     BEGIN TRANSACTION;
     BEGIN TRY
-        -- Step 1: delete all contact persons for this customer first
+        -- Step 1: detach any projects that reference this customer
+        UPDATE Project
+        SET    customer_ID = NULL
+        WHERE  customer_ID = @customerId;
+
+        -- Step 2: delete all contact persons for this customer
         DELETE FROM ContactPerson
         WHERE  customer_company_ID = @customerId;
 
-        -- Step 2: delete the customer (company_ID guard = ownership check)
+        -- Step 3: delete the customer (company_ID guard = ownership check)
         DELETE FROM Customer
         WHERE  customer_ID = @customerId
           AND  company_ID  = @companyId;

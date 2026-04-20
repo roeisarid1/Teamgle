@@ -417,6 +417,39 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
+        // Fetch the event's start/end times (and verify ownership)
+        const string fetchEventSql = """
+            SELECT e.start_time, e.end_time
+            FROM Shift s
+            INNER JOIN Event   e ON e.event_ID = s.event_ID
+            INNER JOIN Project p ON p.Proj_ID  = e.project_ID
+            WHERE s.Shift_ID = @shiftId
+              AND p.Proj_ID IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
+              )
+            """;
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        DateTime evtStart, evtEnd;
+        await using (var fetchCmd = new SqlCommand(fetchEventSql, conn))
+        {
+            fetchCmd.Parameters.AddWithValue("@shiftId",     shiftId);
+            fetchCmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+            await using var reader = await fetchCmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                throw new KeyNotFoundException("Shift not found.");
+            evtStart = reader.GetDateTime(0);
+            evtEnd   = reader.GetDateTime(1);
+        }
+
+        if (request.StartTime < evtStart || request.EndTime > evtEnd)
+            throw new ArgumentException("Shift times must fall within the event's start and end times.");
+
         // UPDATE only if the shift belongs to a project the authenticated manager owns
         const string sql = """
             UPDATE Shift
@@ -440,7 +473,6 @@ public class ProjectRepository : IProjectRepository
               )
             """;
 
-        await using var conn = new SqlConnection(_connectionString);
         await using var cmd  = new SqlCommand(sql, conn);
 
         cmd.Parameters.AddWithValue("@shiftId",          shiftId);
@@ -450,7 +482,6 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@startTime",        request.StartTime);
         cmd.Parameters.AddWithValue("@endTime",          request.EndTime);
 
-        await conn.OpenAsync();
         var rows = await cmd.ExecuteNonQueryAsync();
 
         if (rows == 0)
@@ -502,9 +533,9 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Verify the event belongs to a project in the manager's company
+        // Fetch event times and verify ownership in one query
         const string checkSql = """
-            SELECT e.event_ID
+            SELECT e.start_time, e.end_time
             FROM Event e
             INNER JOIN Project p ON p.Proj_ID = e.project_ID
             WHERE e.event_ID = @eventId
@@ -519,14 +550,20 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
+        DateTime evtStart, evtEnd;
         await using (var checkCmd = new SqlCommand(checkSql, conn))
         {
             checkCmd.Parameters.AddWithValue("@eventId",     eventId);
             checkCmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
-            var found = await checkCmd.ExecuteScalarAsync();
-            if (found == null)
+            await using var reader = await checkCmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
                 throw new KeyNotFoundException("Event not found.");
+            evtStart = reader.GetDateTime(0);
+            evtEnd   = reader.GetDateTime(1);
         }
+
+        if (request.StartTime < evtStart || request.EndTime > evtEnd)
+            throw new ArgumentException("Shift times must fall within the event's start and end times.");
 
         const string insertSql = """
             INSERT INTO Shift

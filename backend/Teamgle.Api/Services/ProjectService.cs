@@ -55,6 +55,12 @@ public class ProjectService : IProjectService
         {
             if (string.IsNullOrWhiteSpace(eventRequest.Name))
                 throw new ArgumentException("Event name is required.");
+            if (eventRequest.EndTime <= eventRequest.StartTime)
+                throw new ArgumentException($"Event '{eventRequest.Name}': end time must be after start time.");
+            if (request.StartDate.HasValue && eventRequest.StartTime.Date < request.StartDate.Value.Date)
+                throw new ArgumentException($"Event '{eventRequest.Name}': start time is before the project start date.");
+            if (request.EndDate.HasValue && eventRequest.EndTime.Date > request.EndDate.Value.Date)
+                throw new ArgumentException($"Event '{eventRequest.Name}': end time is after the project end date.");
 
             var eventId = await _projectRepo.CreateEventAsync(projId, eventRequest);
 
@@ -64,6 +70,12 @@ public class ProjectService : IProjectService
                     throw new ArgumentException("Shift role is required.");
                 if (shiftRequest.RequiredQuantity < 1)
                     throw new ArgumentException("Shift required quantity must be at least 1.");
+                if (shiftRequest.EndTime <= shiftRequest.StartTime)
+                    throw new ArgumentException("Shift end time must be after start time.");
+                if (shiftRequest.StartTime < eventRequest.StartTime)
+                    throw new ArgumentException($"A shift in event '{eventRequest.Name}' starts before the event.");
+                if (shiftRequest.EndTime > eventRequest.EndTime)
+                    throw new ArgumentException($"A shift in event '{eventRequest.Name}' ends after the event.");
 
                 await _projectRepo.CreateShiftAsync(eventId, shiftRequest);
             }

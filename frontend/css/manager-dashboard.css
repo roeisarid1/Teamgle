@@ -1980,9 +1980,35 @@ tr.expanded-row > td {
   gap: 10px;
 }
 
+/* Datetime group: date + time side by side */
+.datetime-group {
+  display: flex;
+  gap: 6px;
+}
+.datetime-group .dt-date {
+  flex: 1.4;
+  min-width: 0;
+}
+.datetime-group .dt-time {
+  flex: 1;
+  min-width: 0;
+}
+.datetime-field > label {
+  font-weight: 600;
+}
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 .shift-row {
   display: grid;
-  grid-template-columns: 1fr 80px 1fr 1fr auto;
+  grid-template-columns: 1.5fr 70px 1.6fr 1.6fr auto;
   gap: 10px;
   align-items: flex-end;
 }
@@ -2012,6 +2038,7 @@ tr.expanded-row > td {
   .cp-header-right { flex-direction: row; justify-content: flex-end; }
   .shift-row { grid-template-columns: 1fr 1fr; gap: 8px; }
   .shift-row .btn-remove-shift { grid-column: 2; justify-self: end; }
+  .datetime-group { flex-direction: column; gap: 4px; }
 }
 
 @media (max-width: 480px) {
@@ -2194,7 +2221,7 @@ tr.expanded-row > td {
 /* ── Shifts as compact table ─────────────────────────────────────────────── */
 .shifts-col-headers {
   display: grid;
-  grid-template-columns: 1fr 80px 1fr 1fr 34px;
+  grid-template-columns: 1.5fr 70px 1.6fr 1.6fr 34px;
   gap: 10px;
   padding: 6px 14px 4px;
   border-bottom: 1px solid #e8ecfd;

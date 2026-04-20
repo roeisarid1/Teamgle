@@ -12,7 +12,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile } from "./chat-service.js";
 import { initChat, destroyChat, openChatWith } from "./chat-ui.js";
-import { attachTimePicker } from "./time-picker.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -79,7 +78,6 @@ const empPhone = document.getElementById("emp-phone");
 const empCost = document.getElementById("emp-cost");
 
 // File upload DOM refs
-const profileUploadZone = document.getElementById("profile-upload-zone");
 const profileFileInput = document.getElementById("profile-file-input");
 const profilePreview = document.getElementById("profile-preview");
 const profilePlaceholder = document.getElementById("profile-placeholder");
@@ -800,6 +798,16 @@ btnSave.addEventListener("click", async () => {
     return;
   }
 
+  const incompleteDocs = documentFiles.filter(
+    (d) => d && (d.file || d.title) && !(d.file && d.title),
+  );
+  if (incompleteDocs.length > 0) {
+    showError(
+      "Please select a title and a file for every document row, or remove incomplete rows.",
+    );
+    return;
+  }
+
   if (editingEmployeeId) {
     await handleSaveEdit(firstName, lastName, phoneNum, costPerHour, roleIds);
   } else {
@@ -1159,8 +1167,6 @@ async function submitNewRole(input, row) {
 }
 
 // ── Profile image ──────────────────────────────────────────────────────────
-profileUploadZone.addEventListener("click", () => profileFileInput.click());
-
 profileFileInput.addEventListener("change", () => {
   const file = profileFileInput.files[0];
   if (!file) return;
@@ -1241,8 +1247,10 @@ function addDocumentRow() {
     </select>
     <div class="doc-file-area">
       <span class="doc-file-name">No file chosen</span>
-      <button type="button" class="btn-pick-file">Choose File</button>
-      <input type="file" accept=".pdf,.doc,.docx" hidden />
+      <label class="btn-pick-file">
+        Choose File
+        <input type="file" accept=".pdf,.doc,.docx" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden" />
+      </label>
     </div>
     <button type="button" class="btn-remove-doc" title="Remove">✕</button>
   `;
@@ -1250,14 +1258,11 @@ function addDocumentRow() {
   const select = item.querySelector(".doc-title-select");
   const fileInput = item.querySelector("input[type='file']");
   const fileNameSpan = item.querySelector(".doc-file-name");
-  const pickBtn = item.querySelector(".btn-pick-file");
   const removeBtn = item.querySelector(".btn-remove-doc");
 
   select.addEventListener("change", () => {
     if (documentFiles[idx]) documentFiles[idx].title = select.value;
   });
-
-  pickBtn.addEventListener("click", () => fileInput.click());
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files[0];
@@ -1316,8 +1321,10 @@ function addCustomerDocumentRow() {
     </select>
     <div class="doc-file-area">
       <span class="doc-file-name">No file chosen</span>
-      <button type="button" class="btn-pick-file">Choose File</button>
-      <input type="file" accept=".pdf,.doc,.docx" hidden />
+      <label class="btn-pick-file">
+        Choose File
+        <input type="file" accept=".pdf,.doc,.docx" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden" />
+      </label>
     </div>
     <button type="button" class="btn-remove-doc" title="Remove">✕</button>
   `;
@@ -1325,14 +1332,11 @@ function addCustomerDocumentRow() {
   const select = item.querySelector(".doc-title-select");
   const fileInput = item.querySelector("input[type='file']");
   const fileNameSpan = item.querySelector(".doc-file-name");
-  const pickBtn = item.querySelector(".btn-pick-file");
   const removeBtn = item.querySelector(".btn-remove-doc");
 
   select.addEventListener("change", () => {
     if (custDocumentFiles[idx]) custDocumentFiles[idx].title = select.value;
   });
-
-  pickBtn.addEventListener("click", () => fileInput.click());
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files[0];
@@ -3151,6 +3155,16 @@ document
       return;
     }
 
+    const incompleteCustDocs = custDocumentFiles.filter(
+      (d) => d && (d.file || d.title) && !(d.file && d.title),
+    );
+    if (incompleteCustDocs.length > 0) {
+      errorEl.textContent =
+        "Please select a title and a file for every document row, or remove incomplete rows.";
+      errorEl.style.display = "block";
+      return;
+    }
+
     const body = {
       customerCompanyName: name,
       companyPhone: phone || null,
@@ -3896,8 +3910,8 @@ function revalidateEventDates() {
 
   document.querySelectorAll(".event-block").forEach((block) => {
     const idx = block.dataset.eventIdx;
-    const dateInput = document.getElementById(`event-date-${idx}`);
-    const fieldEl = block.querySelector(`[data-field="event-date-${idx}"]`);
+    const dateInput = document.getElementById(`event-start-date-${idx}`);
+    const fieldEl = block.querySelector(`[data-field="event-start-date-${idx}"]`);
     if (!dateInput || !fieldEl) return;
     const dateVal = dateInput.value;
     // Out-of-range only when all three dates are present
@@ -3923,9 +3937,11 @@ _projStartInput.addEventListener("change", () => {
   // Auto-fill every untouched event date
   document.querySelectorAll(".event-block").forEach((block) => {
     const idx = block.dataset.eventIdx;
-    const dateInput = document.getElementById(`event-date-${idx}`);
-    if (dateInput && !dateInput.dataset.touched) {
-      dateInput.value = startVal;
+    const startDateInput = document.getElementById(`event-start-date-${idx}`);
+    const endDateInput = document.getElementById(`event-end-date-${idx}`);
+    if (startDateInput && !startDateInput.dataset.touched) {
+      startDateInput.value = startVal;
+      if (endDateInput && !endDateInput.dataset.touched) endDateInput.value = startVal;
       // Refresh the header summary for this block
       const nameVal =
         document.getElementById(`event-name-${idx}`)?.value.trim() || "";
@@ -4188,23 +4204,25 @@ async function appendEventBlock() {
         <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
       </div>
       <div class="form-row">
-        <div class="field" data-field="event-date-${idx}">
-          <label>Date <span class="req">*</span></label>
-          <input type="date" id="event-date-${idx}" />
+        <div class="field datetime-field" data-field="event-start-date-${idx}">
+          <label>Start <span class="req">*</span></label>
+          <div class="datetime-group">
+            <input type="date" id="event-start-date-${idx}" class="dt-date" />
+            <input type="time" id="event-start-time-${idx}" class="dt-time" step="300" />
+          </div>
         </div>
-        <div class="field">
-          <label>Location</label>
-          <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
+        <div class="field datetime-field" data-field="event-end-date-${idx}">
+          <label>End <span class="req">*</span></label>
+          <div class="datetime-group">
+            <input type="date" id="event-end-date-${idx}" class="dt-date" />
+            <input type="time" id="event-end-time-${idx}" class="dt-time" step="300" />
+          </div>
         </div>
       </div>
       <div class="form-row">
-        <div class="field" data-field="event-start-${idx}">
-          <label>Start Time <span class="req">*</span></label>
-          <input type="time" id="event-start-${idx}" step="300" />
-        </div>
-        <div class="field" data-field="event-end-${idx}">
-          <label>End Time <span class="req">*</span></label>
-          <input type="time" id="event-end-${idx}" step="300" />
+        <div class="field">
+          <label>Location</label>
+          <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
         </div>
       </div>
       <div class="form-row">
@@ -4251,8 +4269,8 @@ async function appendEventBlock() {
         <div class="shifts-col-headers">
           <span>Role</span>
           <span>Qty</span>
-          <span>Start</span>
-          <span>End</span>
+          <span>Start (date &amp; time)</span>
+          <span>End (date &amp; time)</span>
           <span></span>
         </div>
         <div class="shifts-list" id="shifts-list-${idx}">
@@ -4264,10 +4282,6 @@ async function appendEventBlock() {
 
   document.getElementById("events-container").appendChild(block);
   lucide.createIcons(); // re-run so any new lucide icons render
-
-  // Attach time picker to the event's time inputs
-  attachTimePicker(document.getElementById(`event-start-${idx}`));
-  attachTimePicker(document.getElementById(`event-end-${idx}`));
 
   // Collapse all previous event blocks when a new one is added
   const allBlocks = document.querySelectorAll(".event-block");
@@ -4303,11 +4317,11 @@ async function appendEventBlock() {
       appendShiftRow(idx, roles);
     });
 
-  // Live summary: update header summary from name + date inputs
+  // Live summary: update header summary from name + start date inputs
   const updateSummary = () => {
     const nameVal =
       document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-    const dateVal = document.getElementById(`event-date-${idx}`)?.value || "";
+    const dateVal = document.getElementById(`event-start-date-${idx}`)?.value || "";
     const summaryEl = document.getElementById(`event-summary-${idx}`);
     if (!summaryEl) return;
     const parts = [];
@@ -4318,17 +4332,18 @@ async function appendEventBlock() {
   block
     .querySelector(`#event-name-${idx}`)
     .addEventListener("input", updateSummary);
-  // Event date: update summary + mark touched + revalidate range
-  block.querySelector(`#event-date-${idx}`).addEventListener("change", () => {
-    document.getElementById(`event-date-${idx}`).dataset.touched = "1";
+  // Event start date: update summary + mark touched + revalidate range
+  block.querySelector(`#event-start-date-${idx}`).addEventListener("change", () => {
+    document.getElementById(`event-start-date-${idx}`).dataset.touched = "1";
     updateSummary();
     revalidateEventDates();
   });
 
-  // Default event date to project start date (if already chosen)
+  // Default event start/end dates to project start date (if already chosen)
   const projStartVal = _projStartInput.value;
   if (projStartVal) {
-    document.getElementById(`event-date-${idx}`).value = projStartVal;
+    document.getElementById(`event-start-date-${idx}`).value = projStartVal;
+    document.getElementById(`event-end-date-${idx}`).value = projStartVal;
     updateSummary();
   }
 
@@ -4386,13 +4401,19 @@ function appendShiftRow(eventIdx, roles) {
       <label>Qty *</label>
       <input type="number" placeholder="1" min="1" value="1" />
     </div>
-    <div class="field">
-      <label>Start Time *</label>
-      <input type="time" step="300" />
+    <div class="field datetime-field">
+      <label>Start *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-start-date" />
+        <input type="time" class="dt-time shift-start-time" step="300" />
+      </div>
     </div>
-    <div class="field">
-      <label>End Time *</label>
-      <input type="time" step="300" />
+    <div class="field datetime-field">
+      <label>End *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-end-date" />
+        <input type="time" class="dt-time shift-end-time" step="300" />
+      </div>
     </div>
     <button class="btn-remove-shift" type="button" title="Remove shift">×</button>
   `;
@@ -4401,10 +4422,7 @@ function appendShiftRow(eventIdx, roles) {
     .querySelector(".btn-remove-shift")
     .addEventListener("click", () => row.remove());
 
-  // Capture time inputs before attaching picker (type changes from "time" to "text")
-  const rowTimeInputs = Array.from(row.querySelectorAll('input[type="time"]'));
   list.appendChild(row);
-  rowTimeInputs.forEach(attachTimePicker);
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
@@ -4445,21 +4463,13 @@ function collectProjectFormData() {
     valid = false;
   }
 
-  // Block Create Project if any event date is outside the project range
-  if (startDate && endDate) {
-    document.querySelectorAll(".event-block").forEach((block) => {
-      const idx = block.dataset.eventIdx;
-      const dateVal = document.getElementById(`event-date-${idx}`)?.value;
-      if (dateVal && (dateVal < startDate || dateVal > endDate)) {
-        valid = false;
-        if (!errBanner.classList.contains("visible")) {
-          errBanner.textContent =
-            "One or more event dates are outside the project date range.";
-          errBanner.classList.add("visible");
-        }
-      }
-    });
-  }
+  const showError = (msg) => {
+    if (!errBanner.classList.contains("visible")) {
+      errBanner.textContent = msg;
+      errBanner.classList.add("visible");
+    }
+    valid = false;
+  };
 
   // Event blocks
   document.querySelectorAll(".event-block").forEach((block) => {
@@ -4467,9 +4477,10 @@ function collectProjectFormData() {
 
     const evtName =
       document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-    const evtStart = document.getElementById(`event-start-${idx}`)?.value || "";
-    const evtEnd = document.getElementById(`event-end-${idx}`)?.value || "";
-    const evtDate = document.getElementById(`event-date-${idx}`)?.value || "";
+    const evtStartDate = document.getElementById(`event-start-date-${idx}`)?.value || "";
+    const evtStartTime = document.getElementById(`event-start-time-${idx}`)?.value || "";
+    const evtEndDate = document.getElementById(`event-end-date-${idx}`)?.value || "";
+    const evtEndTime = document.getElementById(`event-end-time-${idx}`)?.value || "";
     const location =
       document.getElementById(`event-location-${idx}`)?.value.trim() || null;
     const evtType = document.getElementById(`event-type-${idx}`)?.value || null;
@@ -4478,59 +4489,78 @@ function collectProjectFormData() {
     const revenue = document.getElementById(`event-revenue-${idx}`)?.value;
 
     if (!evtName) {
-      block
-        .querySelector(`[data-field="event-name-${idx}"]`)
-        ?.classList.add("has-error");
+      block.querySelector(`[data-field="event-name-${idx}"]`)?.classList.add("has-error");
       valid = false;
     }
-    if (!evtDate) {
-      block
-        .querySelector(`[data-field="event-date-${idx}"]`)
-        ?.classList.add("has-error");
+    if (!evtStartDate || !evtStartTime) {
+      block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
       valid = false;
     }
-    if (!evtStart) {
-      block
-        .querySelector(`[data-field="event-start-${idx}"]`)
-        ?.classList.add("has-error");
-      valid = false;
-    }
-    if (!evtEnd) {
-      block
-        .querySelector(`[data-field="event-end-${idx}"]`)
-        ?.classList.add("has-error");
+    if (!evtEndDate || !evtEndTime) {
+      block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
       valid = false;
     }
 
-    // Combine date + time into ISO datetime
-    const startDateTime =
-      evtDate && evtStart
-        ? new Date(`${evtDate}T${evtStart}`).toISOString()
-        : null;
-    const endDateTime =
-      evtDate && evtEnd ? new Date(`${evtDate}T${evtEnd}`).toISOString() : null;
+    // Combine date + time into Date objects for range checks
+    const evtStartDT = evtStartDate && evtStartTime ? new Date(`${evtStartDate}T${evtStartTime}`) : null;
+    const evtEndDT   = evtEndDate   && evtEndTime   ? new Date(`${evtEndDate}T${evtEndTime}`)     : null;
+
+    if (evtStartDT && evtEndDT) {
+      if (evtEndDT <= evtStartDT) {
+        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
+        showError(`Event ${idx}: end must be after start.`);
+      }
+      if (startDate && evtStartDate < startDate) {
+        block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
+        showError(`Event ${idx}: start is before the project start date.`);
+      }
+      if (endDate && evtEndDate > endDate) {
+        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
+        showError(`Event ${idx}: end is after the project end date.`);
+      }
+    }
+
+    const startDateTime = evtStartDT ? evtStartDT.toISOString() : null;
+    const endDateTime   = evtEndDT   ? evtEndDT.toISOString()   : null;
 
     // Collect shifts
     const shifts = [];
     block.querySelectorAll(".shift-row").forEach((row) => {
-      const inputs = row.querySelectorAll("input, select");
-      const rollId = inputs[0].value;
-      const qty = parseInt(inputs[1].value, 10) || 1;
-      const shtStart = inputs[2].value;
-      const shtEnd = inputs[3].value;
+      const rollId = row.querySelector("select")?.value || "";
+      const qty = parseInt(row.querySelector('input[type="number"]')?.value, 10) || 1;
+      const shtStartDate = row.querySelector(".shift-start-date")?.value || "";
+      const shtStartTime = row.querySelector(".shift-start-time")?.value || "";
+      const shtEndDate = row.querySelector(".shift-end-date")?.value || "";
+      const shtEndTime = row.querySelector(".shift-end-time")?.value || "";
 
-      if (!rollId || !shtStart || !shtEnd) {
-        inputs[0].closest(".field")?.classList.add("has-error");
+      if (!rollId || !shtStartDate || !shtStartTime || !shtEndDate || !shtEndTime) {
+        row.querySelector(".field")?.classList.add("has-error");
         valid = false;
       }
 
-      // Combine parent event's date with shift time to form a full ISO datetime
-      const shiftDate = evtDate || new Date().toISOString().slice(0, 10);
+      const shtStartDT = shtStartDate && shtStartTime ? new Date(`${shtStartDate}T${shtStartTime}`) : null;
+      const shtEndDT   = shtEndDate   && shtEndTime   ? new Date(`${shtEndDate}T${shtEndTime}`)     : null;
+
+      if (shtStartDT && shtEndDT) {
+        if (shtEndDT <= shtStartDT) {
+          row.querySelector(".field")?.classList.add("has-error");
+          showError(`A shift in event ${idx}: end must be after start.`);
+        }
+        if (evtStartDT && shtStartDT < evtStartDT) {
+          row.querySelector(".field")?.classList.add("has-error");
+          showError(`A shift in event ${idx}: starts before the event.`);
+        }
+        if (evtEndDT && shtEndDT > evtEndDT) {
+          row.querySelector(".field")?.classList.add("has-error");
+          showError(`A shift in event ${idx}: ends after the event.`);
+        }
+      }
+
       shifts.push({
         rollId,
         requiredQuantity: qty,
-        startTime: new Date(`${shiftDate}T${shtStart}`).toISOString(),
-        endTime: new Date(`${shiftDate}T${shtEnd}`).toISOString(),
+        startTime: shtStartDT ? shtStartDT.toISOString() : null,
+        endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
       });
     });
 
@@ -4978,11 +5008,6 @@ document
     }
   });
 
-// ── Attach time picker to all static time inputs ────────────────────────────
-attachTimePicker(document.getElementById("shift-edit-start"));
-attachTimePicker(document.getElementById("shift-edit-end"));
-attachTimePicker(document.getElementById("shift-add-start"));
-attachTimePicker(document.getElementById("shift-add-end"));
 
 // ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
 
