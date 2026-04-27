@@ -107,7 +107,10 @@
     <div class="section-card page-section" id="section-employees" data-section="employees" style="display:none">
       <div class="section-header">
         <h2>👥 Employees</h2>
-        <button class="btn-primary" id="btn-add-employee">+ Add Employee</button>
+        <button class="btn-primary btn-with-icon" id="btn-add-employee">
+          <i data-lucide="user-plus"></i>
+          Add Employee
+        </button>
       </div>
       <div class="emp-filter-bar">
         <input type="search" class="search-input" id="employee-search"
@@ -154,7 +157,10 @@
     <div class="section-card page-section" id="section-customers" data-section="customers" style="display:none">
       <div class="section-header">
         <h2>🏢 Customers</h2>
-        <button class="btn-primary" id="btn-add-customer">+ Add Customer</button>
+        <button class="btn-primary btn-with-icon" id="btn-add-customer">
+          <i data-lucide="building-2"></i>
+          Add Customer
+        </button>
       </div>
       <div class="search-bar">
         <input type="search" class="search-input" id="customer-search"
@@ -189,7 +195,10 @@
         <div class="events-header-actions">
           <input type="search" class="search-input events-search" id="search-projects"
             placeholder="Search projects…" autocomplete="off" />
-          <button class="btn-primary" id="btn-create-project">+ Create Project</button>
+          <button class="btn-primary btn-with-icon" id="btn-create-project">
+            <i data-lucide="folder-plus"></i>
+            Create Project
+          </button>
         </div>
       </div>
 
@@ -261,8 +270,14 @@
           </div>
         </div>
         <div class="cp-header-right">
-          <button class="btn-cancel" id="btn-save-draft" type="button">Save Draft</button>
-          <button class="btn-primary" id="btn-submit-project" type="button">Create Project</button>
+          <button class="btn-cancel btn-with-icon" id="btn-save-draft" type="button">
+            <i data-lucide="save"></i>
+            Save Draft
+          </button>
+          <button class="btn-primary btn-with-icon" id="btn-submit-project" type="button">
+            <i data-lucide="folder-plus"></i>
+            Create Project
+          </button>
         </div>
       </div>
 
@@ -297,7 +312,10 @@
                   <option value="">— None —</option>
                 </select>
               </div>
-              <button class="btn-add-inline" id="btn-proj-new-customer" type="button">＋ New Customer</button>
+              <button class="btn-add-inline btn-with-icon" id="btn-proj-new-customer" type="button">
+                <i data-lucide="building-2"></i>
+                New Customer
+              </button>
             </div>
           </div>
         </div>
@@ -308,7 +326,10 @@
             <span class="form-section-title">Events</span>
             <div class="form-section-header-actions">
               <button class="btn-link" id="btn-collapse-events" type="button">Collapse all</button>
-              <button class="btn-add-shift" id="btn-add-event" type="button">＋ Add Event</button>
+              <button class="btn-add-shift btn-with-icon" id="btn-add-event" type="button">
+                <i data-lucide="calendar-plus"></i>
+                Add Event
+              </button>
             </div>
           </div>
           <div class="form-section-body" id="events-container">
@@ -551,8 +572,18 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
 
       <div class="modal-header">
-        <h3 id="modal-title">Add New Employee</h3>
-        <button class="btn-close" id="modal-close" aria-label="Close">×</button>
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-blue">
+            <i data-lucide="user-plus"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="modal-title">Add New Employee</h3>
+            <p class="modal-subtitle">Team member details, roles, and optional documents</p>
+          </div>
+        </div>
+        <button class="btn-close" id="modal-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
       <div class="modal-body grouped">
@@ -592,7 +623,9 @@
           <div class="field">
             <div class="roles-label-row">
               <label>Assign roles <span class="req">*</span> (select at least one)</label>
-              <button type="button" id="btn-add-role" class="btn-add-role">+ New Role</button>
+              <button type="button" id="btn-add-role" class="btn-add-role btn-with-icon">
+                <i data-lucide="plus"></i> New Role
+              </button>
             </div>
             <div class="roles-grid" id="roles-grid">
               <span style="color:#6b7280;font-size:13px">Loading roles…</span>
@@ -615,7 +648,10 @@
             <label>Profile Image</label>
             <label class="profile-upload-zone" id="profile-upload-zone" for="profile-file-input">
               <div class="upload-zone-inner" id="profile-placeholder">
-                <span class="upload-icon">🖼️</span>
+                <svg class="upload-zone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4"/>
+                  <path d="M20 21a8 8 0 1 0-16 0"/>
+                </svg>
                 <span>Click to upload profile image</span>
                 <span class="upload-hint">JPG, PNG, WEBP · max 5 MB</span>
               </div>
@@ -629,7 +665,9 @@
           <div class="field">
             <div class="roles-label-row">
               <label>Documents</label>
-              <button type="button" id="btn-add-doc" class="btn-add-role">+ Add Document</button>
+              <button type="button" id="btn-add-doc" class="btn-add-role btn-with-icon">
+                <i data-lucide="paperclip"></i> Add Document
+              </button>
             </div>
             <!-- existing files shown only in edit mode -->
             <div id="existing-docs-section" style="display:none">
@@ -648,7 +686,9 @@
 
       <div class="modal-footer">
         <button class="btn-cancel" id="modal-cancel">Cancel</button>
-        <button class="btn-primary" id="btn-save-employee">Save Employee</button>
+        <button class="btn-primary btn-with-icon" id="btn-save-employee">
+          <i data-lucide="check"></i> Save Employee
+        </button>
       </div>
 
     </div>
@@ -660,7 +700,7 @@
 
       <div class="modal-header">
         <h3 id="view-modal-title">Employee Details</h3>
-        <button class="btn-close" id="view-modal-close" aria-label="Close">×</button>
+        <button class="btn-close" id="view-modal-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="view-modal-body">
@@ -680,7 +720,7 @@
 
       <div class="modal-header">
         <h3 id="delete-modal-title">Delete Employee</h3>
-        <button class="btn-close" id="delete-modal-close" aria-label="Close">×</button>
+        <button class="btn-close" id="delete-modal-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
@@ -701,8 +741,18 @@
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="customer-form-title">
 
       <div class="modal-header">
-        <h3 id="customer-form-title">Add New Customer</h3>
-        <button class="btn-close" id="customer-form-close" aria-label="Close">×</button>
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-green">
+            <i data-lucide="building-2"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="customer-form-title">Add New Customer</h3>
+            <p class="modal-subtitle">Company details, billing info, and optional contacts</p>
+          </div>
+        </div>
+        <button class="btn-close" id="customer-form-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
       <div class="modal-body grouped">
@@ -817,7 +867,9 @@
             <div class="optional-section-body">
               <div class="roles-label-row" style="margin-bottom:4px">
                 <span style="font-size:12px;color:var(--text-muted)">Attach contracts, certificates, or any relevant files.</span>
-                <button type="button" id="btn-cust-add-doc" class="btn-add-role">+ Add Document</button>
+                <button type="button" id="btn-cust-add-doc" class="btn-add-role btn-with-icon">
+                  <i data-lucide="paperclip"></i> Add Document
+                </button>
               </div>
               <div id="cust-docs-list" class="documents-list"></div>
             </div>
@@ -830,7 +882,9 @@
 
       <div class="modal-footer">
         <button class="btn-cancel" id="customer-form-cancel">Cancel</button>
-        <button class="btn-primary" id="btn-save-customer">Save Customer</button>
+        <button class="btn-primary btn-with-icon" id="btn-save-customer">
+          <i data-lucide="check"></i> Save Customer
+        </button>
       </div>
 
     </div>
@@ -842,7 +896,7 @@
 
       <div class="modal-header">
         <h3 id="customer-view-title">Customer Details</h3>
-        <button class="btn-close" id="customer-view-close" aria-label="Close">×</button>
+        <button class="btn-close" id="customer-view-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="customer-view-body">
@@ -862,7 +916,7 @@
 
       <div class="modal-header">
         <h3 id="customer-delete-title">Delete Customer</h3>
-        <button class="btn-close" id="customer-delete-close" aria-label="Close">×</button>
+        <button class="btn-close" id="customer-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
@@ -883,8 +937,18 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="contact-form-title">
 
       <div class="modal-header">
-        <h3 id="contact-form-title">Add Contact Person</h3>
-        <button class="btn-close" id="contact-form-close" aria-label="Close">×</button>
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-teal">
+            <i data-lucide="user-round"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="contact-form-title">Add Contact Person</h3>
+            <p class="modal-subtitle">Add a contact person associated with this customer</p>
+          </div>
+        </div>
+        <button class="btn-close" id="contact-form-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
       <div class="modal-body">
@@ -929,7 +993,9 @@
 
       <div class="modal-footer">
         <button class="btn-cancel" id="contact-form-cancel">Cancel</button>
-        <button class="btn-primary" id="btn-save-contact">Save Contact</button>
+        <button class="btn-primary btn-with-icon" id="btn-save-contact">
+          <i data-lucide="check"></i> Save Contact
+        </button>
       </div>
 
     </div>
@@ -941,7 +1007,7 @@
 
       <div class="modal-header">
         <h3 id="contact-view-title">Contact Details</h3>
-        <button class="btn-close" id="contact-view-close" aria-label="Close">×</button>
+        <button class="btn-close" id="contact-view-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="contact-view-body">
@@ -961,7 +1027,7 @@
 
       <div class="modal-header">
         <h3 id="contact-delete-title">Delete Contact</h3>
-        <button class="btn-close" id="contact-delete-close" aria-label="Close">×</button>
+        <button class="btn-close" id="contact-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
@@ -984,35 +1050,53 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shift-edit-title">
 
       <div class="modal-header">
-        <h3 id="shift-edit-title">Edit Shift</h3>
-        <button class="btn-close" id="shift-edit-close" aria-label="Close">×</button>
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-blue">
+            <i data-lucide="pencil"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="shift-edit-title">Edit Shift</h3>
+            <p class="modal-subtitle">Update role, timing, or required staff count</p>
+          </div>
+        </div>
+        <button class="btn-close" id="shift-edit-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
-      <div class="modal-body">
-        <div class="field">
-          <label for="shift-edit-role">Role</label>
-          <select id="shift-edit-role" style="padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--card);width:100%"></select>
-        </div>
-        <div class="form-row">
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Role &amp; Staffing</p>
           <div class="field">
-            <label for="shift-edit-start">Start Time</label>
-            <input type="datetime-local" id="shift-edit-start" step="300" />
+            <label for="shift-edit-role">Role <span class="req">*</span></label>
+            <select id="shift-edit-role"></select>
           </div>
           <div class="field">
-            <label for="shift-edit-end">End Time</label>
-            <input type="datetime-local" id="shift-edit-end" step="300" />
+            <label for="shift-edit-qty">Required Staff Count <span class="req">*</span></label>
+            <input type="number" id="shift-edit-qty" min="1" />
           </div>
         </div>
-        <div class="field">
-          <label for="shift-edit-qty">Required Quantity</label>
-          <input type="number" id="shift-edit-qty" min="1" />
+        <div class="form-group">
+          <p class="form-group-title">Time Window</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="shift-edit-start">Start Time <span class="req">*</span></label>
+              <input type="datetime-local" id="shift-edit-start" step="300" />
+            </div>
+            <div class="field">
+              <label for="shift-edit-end">End Time <span class="req">*</span></label>
+              <input type="datetime-local" id="shift-edit-end" step="300" />
+            </div>
+          </div>
         </div>
         <div id="shift-edit-error" class="msg-error" role="alert"></div>
       </div>
 
       <div class="modal-footer">
         <button class="btn-cancel" id="shift-edit-cancel">Cancel</button>
-        <button class="btn-primary" id="btn-save-shift">Save</button>
+        <button class="btn-primary btn-with-icon" id="btn-save-shift">
+          <i data-lucide="check"></i> Save Changes
+        </button>
       </div>
 
     </div>
@@ -1024,7 +1108,7 @@
 
       <div class="modal-header">
         <h3 id="shift-delete-title">Delete Shift</h3>
-        <button class="btn-close" id="shift-delete-close" aria-label="Close">×</button>
+        <button class="btn-close" id="shift-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
@@ -1045,35 +1129,53 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shift-add-title">
 
       <div class="modal-header">
-        <h3 id="shift-add-title">Add Shift</h3>
-        <button class="btn-close" id="shift-add-close" aria-label="Close">×</button>
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-amber">
+            <i data-lucide="clock-plus"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="shift-add-title">Add Shift</h3>
+            <p class="modal-subtitle">Set role, time window, and required staff count</p>
+          </div>
+        </div>
+        <button class="btn-close" id="shift-add-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
-      <div class="modal-body">
-        <div class="field">
-          <label for="shift-add-role">Role</label>
-          <select id="shift-add-role" style="padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--card);width:100%"></select>
-        </div>
-        <div class="form-row">
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Role &amp; Staffing</p>
           <div class="field">
-            <label for="shift-add-start">Start Time</label>
-            <input type="time" id="shift-add-start" step="300" />
+            <label for="shift-add-role">Role <span class="req">*</span></label>
+            <select id="shift-add-role"></select>
           </div>
           <div class="field">
-            <label for="shift-add-end">End Time</label>
-            <input type="time" id="shift-add-end" step="300" />
+            <label for="shift-add-qty">Required Staff Count <span class="req">*</span></label>
+            <input type="number" id="shift-add-qty" min="1" value="1" />
           </div>
         </div>
-        <div class="field">
-          <label for="shift-add-qty">Required Quantity</label>
-          <input type="number" id="shift-add-qty" min="1" value="1" />
+        <div class="form-group">
+          <p class="form-group-title">Time Window</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="shift-add-start">Start Time <span class="req">*</span></label>
+              <input type="time" id="shift-add-start" step="300" />
+            </div>
+            <div class="field">
+              <label for="shift-add-end">End Time <span class="req">*</span></label>
+              <input type="time" id="shift-add-end" step="300" />
+            </div>
+          </div>
         </div>
         <div id="shift-add-error" class="msg-error" role="alert"></div>
       </div>
 
       <div class="modal-footer">
         <button class="btn-cancel" id="shift-add-cancel">Cancel</button>
-        <button class="btn-primary" id="btn-save-shift-add">Save</button>
+        <button class="btn-primary btn-with-icon" id="btn-save-shift-add">
+          <i data-lucide="plus"></i> Add Shift
+        </button>
       </div>
 
     </div>

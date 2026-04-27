@@ -607,8 +607,8 @@ async function openEditModal(employeeId) {
   editingEmployeeId = employeeId;
 
   document.getElementById("modal-title").textContent = "Edit Employee";
-  btnSave.textContent = "Save Changes";
-  btnSave.dataset.orig = "Save Changes";
+  btnSave.innerHTML = `${_ICON.check} Save Changes`;
+  delete btnSave.dataset.origHtml;
   empEmail.disabled = true;
   empEmail.style.opacity = "0.6";
 
@@ -648,7 +648,7 @@ async function openEditModal(employeeId) {
     showError("Failed to load employee details. Please try again.");
   } finally {
     btnSave.disabled = false;
-    btnSave.textContent = "Save Changes";
+    btnSave.innerHTML = `${_ICON.check} Save Changes`;
   }
 }
 
@@ -782,8 +782,8 @@ function clearForm() {
   // Reset edit mode
   editingEmployeeId = null;
   document.getElementById("modal-title").textContent = "Add New Employee";
-  btnSave.textContent = "Save Employee";
-  btnSave.dataset.orig = "Save Employee";
+  btnSave.innerHTML = `${_ICON.check} Save Employee`;
+  delete btnSave.dataset.origHtml;
   btnSave.disabled = false;
   empEmail.disabled = false;
   empEmail.style.opacity = "";
@@ -1426,6 +1426,14 @@ btnLogout.addEventListener("click", async () => {
 });
 
 // ── Utilities ──────────────────────────────────────────────────────────────
+
+// Inline SVG snippets for btn icon restoration after loading state
+const _ICON = {
+  check:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>',
+  plus:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+};
+
 function showError(msg) {
   formError.textContent = msg;
   formError.style.display = "block";
@@ -1433,8 +1441,15 @@ function showError(msg) {
 
 function setLoading(btn, loading) {
   btn.disabled = loading;
-  btn.dataset.orig = btn.dataset.orig || btn.textContent;
-  btn.textContent = loading ? "Saving…" : btn.dataset.orig;
+  if (loading) {
+    if (!btn.dataset.origHtml) btn.dataset.origHtml = btn.innerHTML;
+    btn.textContent = "Saving…";
+  } else {
+    if (btn.dataset.origHtml) {
+      btn.innerHTML = btn.dataset.origHtml;
+      delete btn.dataset.origHtml;
+    }
+  }
 }
 
 function isValidEmail(email) {
@@ -3191,7 +3206,7 @@ function clearCustomerForm() {
   document.getElementById("customer-form-title").textContent =
     "Add New Customer";
   const btn = document.getElementById("btn-save-customer");
-  btn.textContent = "Save Customer";
+  btn.innerHTML = `${_ICON.check} Save Customer`;
   btn.disabled = false;
 }
 
@@ -3241,7 +3256,7 @@ async function openCustomerFormModal(customerId) {
         "Failed to load customer data.";
       document.getElementById("cust-form-error").style.display = "block";
     } finally {
-      btn.textContent = "Save Changes";
+      btn.innerHTML = `${_ICON.check} Save Changes`;
       btn.disabled = false;
     }
   }
@@ -3772,7 +3787,7 @@ function clearContactForm() {
   document.getElementById("contact-form-title").textContent =
     "Add Contact Person";
   const btn = document.getElementById("btn-save-contact");
-  btn.textContent = "Save Contact";
+  btn.innerHTML = `${_ICON.check} Save Contact`;
   btn.disabled = false;
   delete btn.dataset.customerId;
 }
@@ -3809,7 +3824,7 @@ async function openContactFormModal(customerId, contactId) {
         "Failed to load contact data.";
       document.getElementById("ct-form-error").style.display = "block";
     } finally {
-      btn.textContent = "Save Changes";
+      btn.innerHTML = `${_ICON.check} Save Changes`;
       btn.disabled = false;
     }
   }
@@ -4323,7 +4338,9 @@ async function appendEventBlock() {
         <span class="event-block-label">Event ${idx}</span>
         <span class="event-block-summary" id="event-summary-${idx}"></span>
       </div>
-      <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}">×</button>
+      <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}" aria-label="Remove event">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="event-block-body">
       <div class="field" data-field="event-name-${idx}">
@@ -4391,7 +4408,10 @@ async function appendEventBlock() {
       <div class="shifts-subsection">
         <div class="shifts-subheader">
           <span class="shifts-subheader-label">Shifts</span>
-          <button class="btn-add-shift" type="button" data-add-shift="${idx}">＋ Add Shift</button>
+          <button class="btn-add-shift btn-with-icon" type="button" data-add-shift="${idx}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Shift
+          </button>
         </div>
         <div class="shifts-col-headers">
           <span>Role</span>
@@ -4542,7 +4562,9 @@ function appendShiftRow(eventIdx, roles) {
         <input type="time" class="dt-time shift-end-time" step="300" />
       </div>
     </div>
-    <button class="btn-remove-shift" type="button" title="Remove shift">×</button>
+    <button class="btn-remove-shift" type="button" title="Remove shift" aria-label="Remove shift">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
   `;
 
   row
@@ -4758,7 +4780,7 @@ document
       errBanner.classList.add("visible");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Create Project";
+      btn.innerHTML = `${_ICON.folder} Create Project`;
     }
   });
 
@@ -4927,7 +4949,7 @@ document
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.textContent = "Save";
+      btn.innerHTML = `${_ICON.check} Save Changes`;
     }
   });
 
@@ -5131,7 +5153,7 @@ document
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.textContent = "Save";
+      btn.innerHTML = `${_ICON.plus} Add Shift`;
     }
   });
 

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Font Demo</title>
+  <link rel="stylesheet" href="css/manager-dashboard.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body style="padding:40px;background:var(--bg)">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;max-width:900px">
+
+    <!-- Add Employee form snippet -->
+    <div class="modal" style="position:static;max-height:none;box-shadow:0 4px 24px rgba(79,110,247,.12)">
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-blue">
+            <i data-lucide="user-plus"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3>Add New Employee</h3>
+            <p class="modal-subtitle">Team member details, roles, and optional documents</p>
+          </div>
+        </div>
+        <button class="btn-close" aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Identity</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="d-fn">First Name <span class="req">*</span></label>
+              <input type="text" id="d-fn" placeholder="e.g. Jane" />
+            </div>
+            <div class="field">
+              <label for="d-ln">Last Name <span class="req">*</span></label>
+              <input type="text" id="d-ln" placeholder="e.g. Doe" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="d-em">Email Address <span class="req">*</span></label>
+            <input type="email" id="d-em" placeholder="employee@company.com" />
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="d-ph">Phone</label>
+              <input type="tel" id="d-ph" placeholder="+1 234 567 8900" />
+            </div>
+            <div class="field">
+              <label for="d-co">Cost / hr (₪) <span class="req">*</span></label>
+              <input type="number" id="d-co" placeholder="0.00" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-primary btn-with-icon">
+          <i data-lucide="check"></i> Save Employee
+        </button>
+      </div>
+    </div>
+
+    <!-- Add Shift modal snippet -->
+    <div class="modal" style="position:static;max-height:none;box-shadow:0 4px 24px rgba(79,110,247,.12)">
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-amber">
+            <i data-lucide="clock-plus"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3>Add Shift</h3>
+            <p class="modal-subtitle">Set role, time window, and required staff count</p>
+          </div>
+        </div>
+        <button class="btn-close" aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Role &amp; Staffing</p>
+          <div class="field">
+            <label>Role <span class="req">*</span></label>
+            <select>
+              <option value="">— Select role —</option>
+              <option>Photographer</option>
+              <option>Host</option>
+              <option>Security</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Required Staff Count <span class="req">*</span></label>
+            <input type="number" value="2" min="1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <p class="form-group-title">Time Window</p>
+          <div class="form-row">
+            <div class="field">
+              <label>Start Time <span class="req">*</span></label>
+              <input type="time" value="09:00" step="300" />
+            </div>
+            <div class="field">
+              <label>End Time <span class="req">*</span></label>
+              <input type="time" value="17:00" step="300" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-primary btn-with-icon">
+          <i data-lucide="plus"></i> Add Shift
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Create Project header strip -->
+  <div style="max-width:900px;margin-top:32px">
+    <div class="cp-header">
+      <div class="cp-header-left">
+        <button class="cp-back-btn" type="button">
+          <i data-lucide="arrow-left"></i> Back
+        </button>
+        <div>
+          <div class="cp-title">Create New Project</div>
+          <div class="cp-subtitle">Fill in the project details below</div>
+        </div>
+      </div>
+      <div class="cp-header-right">
+        <button class="btn-cancel btn-with-icon" type="button">
+          <i data-lucide="save"></i> Save Draft
+        </button>
+        <button class="btn-primary btn-with-icon" type="button">
+          <i data-lucide="folder-plus"></i> Create Project
+        </button>
+      </div>
+    </div>
+
+    <div class="cp-body" style="margin-top:16px">
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <span class="form-section-title">Project Details</span>
+        </div>
+        <div class="form-section-body">
+          <div class="field">
+            <label>Project Name *</label>
+            <input type="text" placeholder="e.g. Annual Gala 2025" />
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label>Start Date *</label>
+              <input type="date" />
+            </div>
+            <div class="field">
+              <label>End Date *</label>
+              <input type="date" />
+            </div>
+          </div>
+          <div class="customer-field-row">
+            <div class="field">
+              <label>Customer</label>
+              <select><option value="">— None —</option><option>Acme Corp</option></select>
+            </div>
+            <button class="btn-add-inline btn-with-icon" type="button">
+              <i data-lucide="building-2"></i> New Customer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <span class="form-section-title">Events</span>
+          <div class="form-section-header-actions">
+            <button class="btn-link" type="button">Collapse all</button>
+            <button class="btn-add-shift btn-with-icon" type="button">
+              <i data-lucide="calendar-plus"></i> Add Event
+            </button>
+          </div>
+        </div>
+        <div class="form-section-body">
+          <div class="event-block">
+            <div class="event-block-header">
+              <div class="event-block-header-inner">
+                <span class="event-block-chevron">▾</span>
+                <span class="event-block-label">Event 1</span>
+                <span class="event-block-summary"> · Cocktail Hour · 2025-06-15</span>
+              </div>
+              <button class="btn-remove-block" type="button" aria-label="Remove event">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="event-block-body">
+              <div class="field">
+                <label>Event Name *</label>
+                <input type="text" value="Cocktail Hour" />
+              </div>
+              <div class="shifts-subsection">
+                <div class="shifts-subheader">
+                  <span class="shifts-subheader-label">Shifts</span>
+                  <button class="btn-add-shift btn-with-icon" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Shift
+                  </button>
+                </div>
+                <div class="shifts-col-headers">
+                  <span>Role</span><span>Qty</span><span>Start</span><span>End</span><span></span>
+                </div>
+                <div class="shifts-list">
+                  <div class="shift-row">
+                    <div class="field"><select><option>Photographer</option></select></div>
+                    <div class="field"><input type="number" value="2" /></div>
+                    <div class="field datetime-field">
+                      <div class="datetime-group">
+                        <input type="date" class="dt-date" value="2025-06-15" />
+                        <input type="time" class="dt-time" value="09:00" step="300" />
+                      </div>
+                    </div>
+                    <div class="field datetime-field">
+                      <div class="datetime-group">
+                        <input type="date" class="dt-date" value="2025-06-15" />
+                        <input type="time" class="dt-time" value="17:00" step="300" />
+                      </div>
+                    </div>
+                    <button class="btn-remove-shift" type="button" aria-label="Remove shift">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
