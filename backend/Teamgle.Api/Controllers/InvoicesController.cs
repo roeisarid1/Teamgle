@@ -23,7 +23,6 @@ public class InvoicesController : ControllerBase
         var authHeader = Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader == null || !authHeader.StartsWith("Bearer "))
             return null;
-
         var idToken = authHeader["Bearer ".Length..].Trim();
         try
         {
@@ -41,8 +40,7 @@ public class InvoicesController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var invoices = await _invoiceService.GetInvoicesAsync(uid);
-            return Ok(invoices);
+            return Ok(await _invoiceService.GetInvoicesAsync(uid));
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
         catch (Exception ex)
@@ -65,6 +63,7 @@ public class InvoicesController : ControllerBase
             return Ok(invoice);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching invoice {Id}", invoiceId);
@@ -84,6 +83,7 @@ public class InvoicesController : ControllerBase
             return StatusCode(201, invoice);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
@@ -105,6 +105,7 @@ public class InvoicesController : ControllerBase
             return Ok(invoice);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
@@ -126,6 +127,7 @@ public class InvoicesController : ControllerBase
             return Ok(invoice);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
@@ -154,12 +156,6 @@ public class InvoicesController : ControllerBase
         }
     }
 }
-
-// ── Sub-resource endpoints on existing controllers ────────────────────────────
-// GET /api/projects/{projectId}/invoices
-// GET /api/events/{eventId}/invoices
-// GET /api/customers/{customerId}/invoices
-// These live in a separate controller to keep routing clean.
 
 [ApiController]
 public class InvoiceSubResourceController : ControllerBase
@@ -195,10 +191,10 @@ public class InvoiceSubResourceController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var invoices = await _invoiceService.GetInvoicesByProjectAsync(projectId, uid);
-            return Ok(invoices);
+            return Ok(await _invoiceService.GetInvoicesByProjectAsync(projectId, uid));
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching invoices for project {Id}", projectId);
@@ -214,10 +210,10 @@ public class InvoiceSubResourceController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var invoices = await _invoiceService.GetInvoicesByEventAsync(eventId, uid);
-            return Ok(invoices);
+            return Ok(await _invoiceService.GetInvoicesByEventAsync(eventId, uid));
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching invoices for event {Id}", eventId);
@@ -233,10 +229,10 @@ public class InvoiceSubResourceController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var invoices = await _invoiceService.GetInvoicesByCustomerAsync(customerId, uid);
-            return Ok(invoices);
+            return Ok(await _invoiceService.GetInvoicesByCustomerAsync(customerId, uid));
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching invoices for customer {Id}", customerId);

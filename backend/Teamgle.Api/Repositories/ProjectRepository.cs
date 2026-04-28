@@ -212,6 +212,7 @@ public class ProjectRepository : IProjectRepository
                 p.start_date              AS StartDate,
                 p.end_date                AS EndDate,
                 p.status                  AS Status,
+                p.customer_ID             AS CustomerId,
                 c.customer_company_name   AS CustomerName
             FROM Project p
             LEFT  JOIN Customer c ON c.customer_ID = p.customer_ID
@@ -244,6 +245,7 @@ public class ProjectRepository : IProjectRepository
                     StartDate    = reader.IsDBNull(reader.GetOrdinal("StartDate"))    ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
                     EndDate      = reader.IsDBNull(reader.GetOrdinal("EndDate"))      ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
                     Status       = reader.GetString(reader.GetOrdinal("Status")),
+                    CustomerId   = reader.IsDBNull(reader.GetOrdinal("CustomerId"))   ? null : reader.GetString(reader.GetOrdinal("CustomerId")),
                     CustomerName = reader.IsDBNull(reader.GetOrdinal("CustomerName")) ? null : reader.GetString(reader.GetOrdinal("CustomerName")),
                 };
             }

@@ -15,6 +15,36 @@
 
 
 -- =============================================================================
+-- SCHEMA  —  Create Invoice table if it doesn't exist
+--            Run this before the stored procedures below.
+-- =============================================================================
+
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Invoice')
+BEGIN
+    CREATE TABLE Invoice (
+        invoice_ID     NVARCHAR(50)   NOT NULL PRIMARY KEY,
+        event_ID       NVARCHAR(50)   NULL,
+        project_ID     NVARCHAR(50)   NULL,
+        customer_ID    NVARCHAR(50)   NOT NULL,
+        invoice_number NVARCHAR(100)  NOT NULL,
+        invoice_date   DATE           NOT NULL,
+        due_date       DATE           NOT NULL,
+        invoice_amount DECIMAL(18,2)  NOT NULL,
+        paid_amount    DECIMAL(18,2)  NOT NULL DEFAULT 0,
+        payment_status NVARCHAR(50)   NOT NULL DEFAULT 'draft',
+        payment_date   DATE           NULL,
+        created_at     DATETIME2      NOT NULL DEFAULT GETDATE(),
+        notes          NVARCHAR(MAX)  NULL,
+        CONSTRAINT FK_Invoice_Customer FOREIGN KEY (customer_ID) REFERENCES Customer(customer_ID),
+        CONSTRAINT FK_Invoice_Project  FOREIGN KEY (project_ID)  REFERENCES Project(Proj_ID),
+        CONSTRAINT FK_Invoice_Event    FOREIGN KEY (event_ID)    REFERENCES [Event](event_ID),
+        CONSTRAINT CHK_Invoice_Status  CHECK (payment_status IN ('draft','sent','partial','paid','overdue','cancelled'))
+    );
+END;
+GO
+
+
+-- =============================================================================
 -- UP  —  Create (or replace) all stored procedures
 -- =============================================================================
 

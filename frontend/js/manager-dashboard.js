@@ -7988,7 +7988,7 @@ async function openInvoiceModal(opts = {}) {
     if (opts.prefillProjectId)  await _invLoadEventDropdown(opts.prefillProjectId, opts.prefillEventId || null);
     _setVal("inv-project",   opts.prefillProjectId  || "");
     _setVal("inv-event",     opts.prefillEventId    || "");
-    _setVal("inv-number",    _generateInvoiceNumber());
+    _setVal("inv-number",    "");
     _setVal("inv-status",    "draft");
     _setVal("inv-date",      today);
     _setVal("inv-due-date",  due30);
@@ -8000,11 +8000,6 @@ async function openInvoiceModal(opts = {}) {
   lucide.createIcons();
 }
 
-function _generateInvoiceNumber() {
-  const y = new Date().getFullYear();
-  const n = String(_allInvoices.length + 1).padStart(3, "0");
-  return `INV-${y}-${n}`;
-}
 
 function _setVal(id, val) {
   const el = document.getElementById(id);

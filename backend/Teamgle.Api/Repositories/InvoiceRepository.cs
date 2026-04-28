@@ -14,6 +14,23 @@ public class InvoiceRepository : IInvoiceRepository
             ?? throw new InvalidOperationException("ConnectionStrings:myProjDB is not set.");
     }
 
+    // ── Convert RAISERROR messages to typed exceptions ────────────────────
+    // Controllers already map: UnauthorizedAccessException→403, ArgumentException→400,
+    // KeyNotFoundException→404, generic Exception→500.
+    private static void ThrowForSqlError(SqlException ex)
+    {
+        var msg = ex.Message;
+        if (msg.Contains("not a registered manager") ||
+            msg.Contains("access denied")            ||
+            msg.Contains("does not belong to your company"))
+            throw new UnauthorizedAccessException(msg);
+
+        if (msg.Contains("not found"))
+            throw new KeyNotFoundException(msg);
+
+        throw new ArgumentException(msg);
+    }
+
     // ── Map a reader row to InvoiceResponse ───────────────────────────────
     private static InvoiceResponse MapInvoice(SqlDataReader r) => new()
     {
@@ -56,9 +73,13 @@ public class InvoiceRepository : IInvoiceRepository
             { CommandType = CommandType.StoredProcedure };
         cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            list.Add(MapInvoice(reader));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                list.Add(MapInvoice(reader));
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); }
         return list;
     }
 
@@ -71,9 +92,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@invoiceId",    invoiceId);
         cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync()) return MapInvoice(reader);
-        return null;
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync()) return MapInvoice(reader);
+            return null;
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); throw; }
     }
 
     // ── sp_CreateInvoice ──────────────────────────────────────────────────
@@ -97,9 +122,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@notes",         (object?)request.Notes ?? DBNull.Value);
 
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync()) return MapInvoice(reader);
-        return null;
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync()) return MapInvoice(reader);
+            return null;
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); throw; }
     }
 
     // ── sp_UpdateInvoice ──────────────────────────────────────────────────
@@ -119,9 +148,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@notes",         (object?)request.Notes ?? DBNull.Value);
 
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync()) return MapInvoice(reader);
-        return null;
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync()) return MapInvoice(reader);
+            return null;
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); throw; }
     }
 
     // ── sp_RecordInvoicePayment ───────────────────────────────────────────
@@ -138,9 +171,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@paymentStatus", (object?)request.PaymentStatus ?? DBNull.Value);
 
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync()) return MapInvoice(reader);
-        return null;
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync()) return MapInvoice(reader);
+            return null;
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); throw; }
     }
 
     // ── sp_DeleteInvoice (soft-cancel) ────────────────────────────────────
@@ -170,9 +207,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@projectId",    projectId);
         cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            list.Add(MapInvoice(reader));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                list.Add(MapInvoice(reader));
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); }
         return list;
     }
 
@@ -186,9 +227,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@eventId",      eventId);
         cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            list.Add(MapInvoice(reader));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                list.Add(MapInvoice(reader));
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); }
         return list;
     }
 
@@ -202,9 +247,13 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@customerId",   customerId);
         cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
         await conn.OpenAsync();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            list.Add(MapInvoice(reader));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                list.Add(MapInvoice(reader));
+        }
+        catch (SqlException ex) { ThrowForSqlError(ex); }
         return list;
     }
 }
