@@ -85,7 +85,7 @@
         <i data-lucide="calendar"></i>
         <span>Calendar</span>
       </a>
-      <a href="#" class="nav-item disabled">
+      <a href="#" class="nav-item" data-section="invoices">
         <i data-lucide="receipt"></i>
         <span>Invoices</span>
       </a>
@@ -181,6 +181,74 @@
           </thead>
           <tbody id="customer-tbody">
             <tr><td colspan="7" class="empty-state">Select "Customers" to load.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Invoices section -->
+    <div class="section-card page-section" id="section-invoices" data-section="invoices" style="display:none">
+      <div class="section-header">
+        <h2>Invoices</h2>
+        <button class="btn-primary btn-with-icon" id="btn-create-invoice">
+          <i data-lucide="plus"></i>
+          New Invoice
+        </button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="inv-summary-cards" id="inv-summary-cards">
+        <div class="inv-card inv-card--total">
+          <div class="inv-card-label">Total Invoiced</div>
+          <div class="inv-card-value" id="inv-stat-total">—</div>
+        </div>
+        <div class="inv-card inv-card--paid">
+          <div class="inv-card-label">Paid</div>
+          <div class="inv-card-value" id="inv-stat-paid">—</div>
+        </div>
+        <div class="inv-card inv-card--outstanding">
+          <div class="inv-card-label">Outstanding</div>
+          <div class="inv-card-value" id="inv-stat-outstanding">—</div>
+        </div>
+        <div class="inv-card inv-card--overdue">
+          <div class="inv-card-label">Overdue</div>
+          <div class="inv-card-value" id="inv-stat-overdue">—</div>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="inv-filter-bar">
+        <input type="search" class="search-input" id="inv-search"
+          placeholder="Search by invoice #, customer, project…" autocomplete="off" />
+        <select class="emp-filter-select" id="inv-filter-status">
+          <option value="">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="sent">Sent</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+          <option value="overdue">Overdue</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Customer</th>
+              <th>Project / Event</th>
+              <th>Invoice Date</th>
+              <th>Due Date</th>
+              <th>Amount</th>
+              <th>Paid</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inv-tbody">
+            <tr><td colspan="9" class="empty-state">Select "Invoices" to load.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1175,6 +1243,156 @@
         <button class="btn-cancel" id="shift-add-cancel">Cancel</button>
         <button class="btn-primary btn-with-icon" id="btn-save-shift-add">
           <i data-lucide="plus"></i> Add Shift
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Create / Edit Invoice Modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="inv-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv-modal-title">
+
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-blue">
+            <i data-lucide="receipt"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="inv-modal-title">New Invoice</h3>
+            <p class="modal-subtitle" id="inv-modal-subtitle">Fill in the invoice details below</p>
+          </div>
+        </div>
+        <button class="btn-close" id="inv-modal-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Customer &amp; Project</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="inv-customer">Customer <span class="req">*</span></label>
+              <select id="inv-customer"></select>
+            </div>
+            <div class="field">
+              <label for="inv-project">Project</label>
+              <select id="inv-project"><option value="">— select project —</option></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="inv-event">Event (optional)</label>
+            <select id="inv-event"><option value="">— select event —</option></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <p class="form-group-title">Invoice Details</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="inv-number">Invoice # <span class="req">*</span></label>
+              <input type="text" id="inv-number" placeholder="e.g. INV-2026-001" />
+            </div>
+            <div class="field">
+              <label for="inv-status">Status</label>
+              <select id="inv-status">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="partial">Partial</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="inv-date">Invoice Date <span class="req">*</span></label>
+              <input type="date" id="inv-date" />
+            </div>
+            <div class="field">
+              <label for="inv-due-date">Due Date <span class="req">*</span></label>
+              <input type="date" id="inv-due-date" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="inv-amount">Amount (₪) <span class="req">*</span></label>
+            <input type="number" id="inv-amount" min="0.01" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <p class="form-group-title">Notes</p>
+          <div class="field">
+            <textarea id="inv-notes" rows="3" placeholder="Optional notes…"></textarea>
+          </div>
+        </div>
+
+        <div id="inv-modal-error" class="msg-error" role="alert" style="display:none"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="inv-modal-cancel">Cancel</button>
+        <button class="btn-primary btn-with-icon" id="inv-modal-save">
+          <i data-lucide="save"></i>
+          <span id="inv-modal-save-label">Save Invoice</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Record Payment Modal ───────────────────────────────────────────── -->
+  <div class="modal-overlay" id="inv-pay-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv-pay-title">
+
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-green">
+            <i data-lucide="banknote"></i>
+          </div>
+          <div class="modal-header-text">
+            <h3 id="inv-pay-title">Record Payment</h3>
+            <p class="modal-subtitle" id="inv-pay-subtitle">Update payment details for this invoice</p>
+          </div>
+        </div>
+        <button class="btn-close" id="inv-pay-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body grouped">
+        <div class="form-group">
+          <p class="form-group-title">Payment Details</p>
+          <div class="form-row">
+            <div class="field">
+              <label for="inv-pay-amount">Paid Amount (₪) <span class="req">*</span></label>
+              <input type="number" id="inv-pay-amount" min="0" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label for="inv-pay-date">Payment Date</label>
+              <input type="date" id="inv-pay-date" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="inv-pay-status">Status (auto-calculated if blank)</label>
+            <select id="inv-pay-status">
+              <option value="">Auto</option>
+              <option value="sent">Sent</option>
+              <option value="partial">Partial</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+        </div>
+        <div id="inv-pay-error" class="msg-error" role="alert" style="display:none"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" id="inv-pay-cancel">Cancel</button>
+        <button class="btn-primary btn-with-icon" id="inv-pay-save">
+          <i data-lucide="check"></i> Save Payment
         </button>
       </div>
 

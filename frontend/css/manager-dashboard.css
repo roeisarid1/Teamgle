@@ -5476,3 +5476,123 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .modal-subtitle { font-size: 11px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   INVOICE MODULE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Summary cards ───────────────────────────────────────────────────────── */
+.inv-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) { .inv-summary-cards { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .inv-summary-cards { grid-template-columns: 1fr; } }
+
+.inv-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.inv-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+.inv-card-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+.inv-card--paid        { border-color: var(--green); }
+.inv-card--paid .inv-card-value        { color: var(--green); }
+.inv-card--overdue     { border-color: var(--red); }
+.inv-card--overdue .inv-card-value     { color: var(--red); }
+.inv-card--outstanding { border-color: var(--yellow); }
+.inv-card--outstanding .inv-card-value { color: #b45309; }
+
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+.inv-filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.inv-filter-bar .search-input { flex: 1 1 260px; }
+
+/* ── Status badges ───────────────────────────────────────────────────────── */
+.inv-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.inv-badge--draft     { background: #F3F4F6; color: #6B7280; }
+.inv-badge--sent      { background: var(--blue-light); color: var(--blue-dark); }
+.inv-badge--partial   { background: #FEF9C3; color: #854D0E; }
+.inv-badge--paid      { background: var(--green-light); color: #166534; }
+.inv-badge--overdue   { background: var(--red-light); color: #991B1B; }
+.inv-badge--cancelled { background: #F3F4F6; color: #9CA3AF; text-decoration: line-through; }
+
+/* ── Table context column ────────────────────────────────────────────────── */
+.inv-context {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Row action buttons ──────────────────────────────────────────────────── */
+.inv-actions { display: flex; gap: 4px; white-space: nowrap; }
+
+.btn-icon-sm {
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.btn-icon-sm:hover              { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
+.btn-icon-sm.btn-icon-danger:hover { background: var(--red-light); border-color: var(--red); color: var(--red); }
+.btn-icon-sm i { width: 14px; height: 14px; }
+
+/* ── Finance tab invoice block ───────────────────────────────────────────── */
+.inv-finance-block { margin-top: 20px; }
+.inv-finance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+/* ── Small button variant ────────────────────────────────────────────────── */
+.btn-sm {
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  height: auto !important;
+  min-height: unset !important;
+  line-height: 1.4 !important;
+}
+
+/* ── Modal green icon ────────────────────────────────────────────────────── */
+.modal-icon-green {
+  background: var(--green-light);
+  color: var(--green);
+}
+
