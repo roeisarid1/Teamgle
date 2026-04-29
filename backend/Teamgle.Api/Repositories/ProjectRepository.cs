@@ -2484,7 +2484,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             """;
 
         int requiredQty;
-        DateTime shiftStart, shiftEnd;
+        DateTime? shiftStart, shiftEnd;
         string roleName;
 
         await using (var conn = new SqlConnection(_connectionString))
@@ -2498,8 +2498,8 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 throw new KeyNotFoundException("Shift not found or you do not have access.");
 
             requiredQty = reader.GetInt32(reader.GetOrdinal("required_quantity"));
-            shiftStart  = reader.GetDateTime(reader.GetOrdinal("start_time"));
-            shiftEnd    = reader.GetDateTime(reader.GetOrdinal("end_time"));
+            shiftStart  = reader.IsDBNull(reader.GetOrdinal("start_time")) ? null : reader.GetDateTime(reader.GetOrdinal("start_time"));
+            shiftEnd    = reader.IsDBNull(reader.GetOrdinal("end_time"))   ? null : reader.GetDateTime(reader.GetOrdinal("end_time"));
             roleName    = reader.IsDBNull(reader.GetOrdinal("RoleName")) ? "" : reader.GetString(reader.GetOrdinal("RoleName"));
         }
 
@@ -2568,15 +2568,18 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             INNER JOIN Employee  e ON e.user_ID  = u.user_ID
             WHERE es.shift_ID = @shiftId
               AND es.status   = 'employee_request'
-              -- Hard filter: exclude anyone already approved in ANY other shift of the same event
+              -- Hard filter: exclude anyone approved for an overlapping shift in the same event
               AND NOT EXISTS (
                   SELECT 1
                   FROM   Employee_Shift  es3
                   INNER JOIN Shift       s2 ON s2.Shift_ID = es3.shift_ID
+                  INNER JOIN Shift       s3 ON s3.Shift_ID = @shiftId
                   WHERE  es3.employee_user_ID = u.user_ID
                     AND  es3.status           = 'manager_approved'
                     AND  s2.Shift_ID         <> @shiftId
-                    AND  s2.event_ID          = (SELECT event_ID FROM Shift WHERE Shift_ID = @shiftId)
+                    AND  s2.event_ID          = s3.event_ID
+                    AND  s2.start_time        < s3.end_time
+                    AND  s2.end_time          > s3.start_time
               )
             """;
 
