@@ -5212,6 +5212,56 @@ document
 
 // ── PROJECT STAFFING (Employees Tab) ──────────────────────────────────────────
 
+function _renderShiftSummaryStrip(eventId, allWorkers) {
+  const el = document.getElementById(`ps-strip-${eventId}`);
+  if (!el) return;
+
+  const shiftMap = new Map();
+  for (const w of allWorkers) {
+    if (!w.shiftId) continue;
+    if (!shiftMap.has(w.shiftId)) {
+      shiftMap.set(w.shiftId, {
+        roleName:         w.roleName        ?? "",
+        shiftStart:       w.shiftStart,
+        shiftEnd:         w.shiftEnd,
+        requiredQuantity: w.requiredQuantity ?? 0,
+        activeAssignments: 0,
+      });
+    }
+  }
+  // Tally active assignments (approved workers count toward filled slots)
+  for (const w of allWorkers) {
+    if (!w.shiftId || w.status !== "manager_approved") continue;
+    const entry = shiftMap.get(w.shiftId);
+    if (entry) entry.activeAssignments++;
+  }
+
+  if (shiftMap.size === 0) { el.innerHTML = ""; return; }
+
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+
+  const pills = [...shiftMap.values()]
+    .map((s) => {
+      const start = fmt(s.shiftStart);
+      const end   = fmt(s.shiftEnd);
+      const time  = start ? (end ? `${start}–${end}` : start) : "";
+      const label = time ? `${s.roleName} · ${time}` : s.roleName;
+      const filled = s.activeAssignments >= s.requiredQuantity;
+      const cls   = filled ? "ps-strip-pill--full" : "ps-strip-pill--open";
+      return `<span class="ps-strip-pill ${cls}" title="${escapeHtml(label)}">${escapeHtml(s.roleName)}${time ? ` <span class="ps-strip-time">${escapeHtml(time)}</span>` : ""} <strong>${s.activeAssignments}/${s.requiredQuantity}</strong></span>`;
+    })
+    .join("");
+
+  el.innerHTML = pills;
+}
+
 function renderStaffingTab() {
   const root = document.getElementById("ps-root");
   if (!root) return;
@@ -5254,6 +5304,7 @@ function _buildStaffingHTML() {
         <span class="ps-event-name">${escapeHtml(ev.name)}</span>
         <span class="ps-event-meta">${escapeHtml(meta)}</span>
       </div>
+      <div class="ps-strip" id="ps-strip-${ev.eventId}"><span class="ps-strip-loading">Loading shifts…</span></div>
       ${_buildPotentialSection(ev.eventId)}
       ${_buildStaffingSection(ev.eventId, "awaiting", "Awaiting Response", "clock", "pending", [], "awaiting")}
       ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants", "inbox", "pending", [], "applicant")}
@@ -5351,6 +5402,22 @@ function _buildStaffingSection(
     </div>`;
 }
 
+function _fmtShiftLabel(worker) {
+  const role = worker.roleName ?? "";
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+  const start = fmt(worker.shiftStart);
+  const end   = fmt(worker.shiftEnd);
+  const time  = start ? (end ? `${start}–${end}` : start) : "";
+  return time ? `${role} · ${time}` : role;
+}
+
 function _buildWorkerRow(worker, sectionType) {
   const initials =
     ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
@@ -5381,7 +5448,7 @@ function _buildWorkerRow(worker, sectionType) {
           <div class="ps-worker-meta">${escapeHtml(worker.roleName ?? "")}</div>
         </div>
       </div></td>
-      <td><span class="ps-shift-badge">${escapeHtml((worker.shiftId ?? "").slice(0, 8))}</span></td>
+      <td><span class="ps-shift-badge">${escapeHtml(_fmtShiftLabel(worker))}</span></td>
       <td><span class="ps-role-chip">${escapeHtml(worker.roleName ?? "")}</span></td>
       <td class="ps-cost">—</td>
       <td><div class="ps-actions-cell">${btns}</div></td>
@@ -5406,6 +5473,7 @@ function _renderEventWorkerSection(eventId, key, workers, sectionType) {
   tbody.innerHTML = rows;
   if (badge) badge.textContent = workers.length;
   if (window.lucide) lucide.createIcons();
+  _applyStaffingFilters();
 }
 
 async function loadAndRenderEventWorkers(eventId) {
@@ -5444,6 +5512,15 @@ async function loadAndRenderEventWorkers(eventId) {
       "rejected",
     );
     _renderOverlapWarnings(eventId, data.approved ?? []);
+
+    const allWorkers = [
+      ...(data.awaiting   ?? []),
+      ...(data.applicants ?? []),
+      ...(data.approved   ?? []),
+      ...(data.hold       ?? []),
+      ...(data.rejected   ?? []),
+    ];
+    _renderShiftSummaryStrip(eventId, allWorkers);
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
   }
@@ -5575,6 +5652,137 @@ async function _handleWorkerStatusChange(
   }
 }
 
+function _formatAutoAssignTime(start, end) {
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+  const startText = fmt(start);
+  const endText = fmt(end);
+  return startText ? (endText ? `${startText}-${endText}` : startText) : "";
+}
+
+function _pct(value) {
+  const n = Number(value ?? 0);
+  return `${Math.round(n * 100)}%`;
+}
+
+function _scoreBar(label, value, title) {
+  const n = Math.max(0, Math.min(1, Number(value ?? 0)));
+  return `
+    <div class="aa-metric" title="${escapeHtml(title ?? "")}">
+      <div class="aa-metric-top">
+        <span>${escapeHtml(label)}</span>
+        <strong>${_pct(n)}</strong>
+      </div>
+      <div class="aa-bar"><span style="width:${Math.round(n * 100)}%"></span></div>
+    </div>`;
+}
+
+function _buildAutoAssignWorkerCard(decision) {
+  const fullName = `${decision.firstName ?? ""} ${decision.lastName ?? ""}`.trim() || "Worker";
+  const initials =
+    ((decision.firstName ?? "")[0] ?? "") + ((decision.lastName ?? "")[0] ?? "");
+  const status = decision.decision === "assigned" ? "assigned" : "standby";
+  const statusLabel = status === "assigned" ? "Assigned" : "Standby";
+  const attendanceText = `${Number(decision.attendanceMinutesLateAvg ?? 0).toFixed(1)} min avg late`;
+  const costText =
+    Number(decision.costPerHour ?? 0) > 0
+      ? `${Number(decision.costPerHour).toFixed(2)}/hr`
+      : "No cost set";
+
+  return `
+    <article class="aa-worker-card aa-worker-card--${status}">
+      <div class="aa-worker-head">
+        <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
+        <div class="aa-worker-title">
+          <div class="aa-worker-name">${escapeHtml(fullName)}</div>
+          <div class="aa-worker-rank">Rank #${Number(decision.rank ?? 0)} · score ${_pct(decision.totalScore)}</div>
+        </div>
+        <span class="aa-status aa-status--${status}">${statusLabel}</span>
+      </div>
+      <div class="aa-metrics-grid">
+        ${_scoreBar("Commitment", decision.commitmentScore, `Accepted ${_pct(decision.commitmentRate)} of prior offers`)}
+        ${_scoreBar("Attendance", decision.attendanceScore, attendanceText)}
+        ${_scoreBar("Role fit", decision.roleFitScore, `${_pct(decision.roleExperienceRate)} of approved shifts were in this role`)}
+        ${_scoreBar("Cost", decision.costScore, costText)}
+      </div>
+      <div class="aa-worker-foot">
+        <span><i data-lucide="clock"></i>${escapeHtml(attendanceText)}</span>
+        <span><i data-lucide="badge-dollar-sign"></i>${escapeHtml(costText)}</span>
+      </div>
+    </article>`;
+}
+
+function _showAutoAssignInsights(results) {
+  const totalAssigned = results.reduce((s, r) => s + (r.assigned ?? 0), 0);
+  const totalStandby = results.reduce((s, r) => s + (r.standby ?? 0), 0);
+  const warnings = results.map((r) => r.warning).filter(Boolean);
+  const shiftBlocks = results
+    .map((r) => {
+      const decisions = r.decisions ?? [];
+      const timeText = _formatAutoAssignTime(r.shiftStart, r.shiftEnd);
+      const cards = decisions.length
+        ? decisions.map(_buildAutoAssignWorkerCard).join("")
+        : `<div class="aa-empty">No eligible applicants were scored for this shift.</div>`;
+      return `
+        <section class="aa-shift-block">
+          <div class="aa-shift-head">
+            <div>
+              <h4>${escapeHtml(r.roleName ?? "Shift")}</h4>
+              <p>${escapeHtml(timeText)} · Required ${r.required ?? 0}, already approved ${r.alreadyApproved ?? 0}</p>
+            </div>
+            <div class="aa-shift-counts">
+              <span>${r.assigned ?? 0} assigned</span>
+              <span>${r.standby ?? 0} standby</span>
+            </div>
+          </div>
+          <div class="aa-worker-grid">${cards}</div>
+        </section>`;
+    })
+    .join("");
+
+  document.getElementById("auto-assign-insights-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay open";
+  overlay.id = "auto-assign-insights-overlay";
+  overlay.innerHTML = `
+    <div class="modal modal-wide auto-assign-modal" role="dialog" aria-modal="true" aria-labelledby="aa-title">
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-amber"><i data-lucide="sparkles"></i></div>
+          <div class="modal-header-text">
+            <h3 id="aa-title">Auto-Assign Results</h3>
+          </div>
+        </div>
+        <button class="btn-close" data-aa-close aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body auto-assign-body">
+        <div class="aa-summary">
+          <div><span>Assigned</span><strong>${totalAssigned}</strong></div>
+          <div><span>Standby</span><strong>${totalStandby}</strong></div>
+          <div><span>Scored workers</span><strong>${results.reduce((s, r) => s + ((r.decisions ?? []).length), 0)}</strong></div>
+        </div>
+        ${warnings.length ? `<div class="aa-warning"><i data-lucide="alert-triangle"></i><span>${escapeHtml(warnings.join(" "))}</span></div>` : ""}
+        ${shiftBlocks}
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" data-aa-close>Done</button>
+      </div>
+    </div>`;
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.closest("[data-aa-close]")) close();
+  });
+  document.body.appendChild(overlay);
+  if (window.lucide) lucide.createIcons();
+}
+
 async function _handleAutoAssign(eventId, btn) {
   // Find every shift ID that has applicants inside this event's applicants section
   const section = document.getElementById(`ps-section-${eventId}-applicants`);
@@ -5618,14 +5826,7 @@ async function _handleAutoAssign(eventId, btn) {
     btn.textContent = "⚡ Auto-Assign";
     await loadAndRenderEventWorkers(eventId);
 
-    // Build a short summary message for the manager
-    const totalAssigned = results.reduce((s, r) => s + r.assigned, 0);
-    const totalStandby = results.reduce((s, r) => s + r.standby, 0);
-    const warnings = results.map((r) => r.warning).filter(Boolean);
-
-    let msg = `✅ Auto-assign complete.\nAssigned: ${totalAssigned}  |  Standby: ${totalStandby}`;
-    if (warnings.length > 0) msg += `\n\n⚠️ ${warnings.join("\n")}`;
-    alert(msg);
+    _showAutoAssignInsights(results);
   } catch (err) {
     console.error("Auto-assign failed:", err);
     alert(`Auto-assign failed: ${err.message}`);
@@ -5692,6 +5893,14 @@ function _buildPotentialSection(eventId) {
         </div>
       </div>
       <div class="ps-section-body" id="ps-body-${eventId}-potential">
+        <div class="ps-potential-filters" id="ps-potential-filters-${eventId}" style="display:none">
+          <select class="ps-filter-select" id="ps-filter-role-${eventId}">
+            <option value="">All Roles</option>
+          </select>
+          <select class="ps-filter-select" id="ps-filter-shift-${eventId}">
+            <option value="">All Shifts</option>
+          </select>
+        </div>
         <div class="ps-potential-loading">
           <div class="ps-skel ps-skel-row"></div>
           <div class="ps-skel ps-skel-row"></div>
@@ -5718,6 +5927,45 @@ function _replacePotentialContent(eventId, workers) {
         <tr><td colspan="4" class="ps-empty">No eligible workers available for this event's shifts.</td></tr>
       </tbody></table>`;
     return;
+  }
+
+  // Populate role/shift filter dropdowns
+  const filtersEl = document.getElementById(`ps-potential-filters-${eventId}`);
+  const roleSelect  = document.getElementById(`ps-filter-role-${eventId}`);
+  const shiftSelect = document.getElementById(`ps-filter-shift-${eventId}`);
+  if (filtersEl && roleSelect && shiftSelect) {
+    const roles  = [...new Set(workers.flatMap((w) => w.eligibleShifts.map((s) => s.roleName)))].sort();
+    const shifts = workers.flatMap((w) => w.eligibleShifts).reduce((acc, s) => {
+      if (!acc.find((x) => x.shiftId === s.shiftId)) acc.push(s);
+      return acc;
+    }, []);
+
+    roleSelect.innerHTML =
+      `<option value="">All Roles</option>` +
+      roles.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+    shiftSelect.innerHTML =
+      `<option value="">All Shifts</option>` +
+      shifts
+        .map((s) => {
+          const fmt = (dt) =>
+            dt
+              ? new Date(dt).toLocaleTimeString("en-US", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })
+              : "";
+          const start = fmt(s.startTime);
+          const end   = fmt(s.endTime);
+          const time  = start ? (end ? `${start}–${end}` : start) : "";
+          const label = time ? `${s.roleName} · ${time}` : s.roleName;
+          return `<option value="${escapeHtml(s.shiftId)}">${escapeHtml(label)}</option>`;
+        })
+        .join("");
+
+    filtersEl.style.display = "";
+    roleSelect.onchange  = _applyStaffingFilters;
+    shiftSelect.onchange = _applyStaffingFilters;
   }
 
   const rows = workers
@@ -5788,6 +6036,7 @@ function _replacePotentialContent(eventId, workers) {
 
   if (window.lucide) lucide.createIcons();
   _attachPotentialWorkerHandlers(eventId);
+  _applyStaffingFilters();
 }
 
 async function loadAndRenderPotentialWorkers(projectId, eventId) {
@@ -5850,11 +6099,29 @@ function _attachPotentialWorkerHandlers(eventId) {
   if (sendAll) {
     sendAll.addEventListener("click", async (e) => {
       e.stopPropagation();
+
+      const rows = [...body.querySelectorAll(".ps-row--potential")];
+      const eligibleRows = rows.filter(
+        (r) => r.querySelectorAll("input[data-shift-id]:checked").length > 0,
+      );
+      const uniqueShifts = new Set(
+        eligibleRows.flatMap((r) =>
+          [...r.querySelectorAll("input[data-shift-id]:checked")].map(
+            (cb) => cb.dataset.shiftId,
+          ),
+        ),
+      );
+      if (eligibleRows.length === 0) { alert("No workers with selected shifts to send."); return; }
+      if (
+        !confirm(
+          `Send shift requests to ${eligibleRows.length} worker(s) across ${uniqueShifts.size} shift(s)?`,
+        )
+      )
+        return;
+
       sendAll.disabled = true;
       sendAll.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i> Sending…`;
       if (window.lucide) lucide.createIcons();
-
-      const rows = [...body.querySelectorAll(".ps-row--potential")];
       for (const row of rows) {
         const fbuid = row.dataset.workerFbuid;
         const shiftIds = [
@@ -5874,6 +6141,8 @@ function _attachPotentialWorkerHandlers(eventId) {
 
       sendAll.innerHTML = `<i data-lucide="check"></i> All Sent`;
       if (window.lucide) lucide.createIcons();
+      // Refresh Awaiting once after all offers are sent
+      await loadAndRenderEventWorkers(eventId);
     });
   }
 }
@@ -5910,7 +6179,7 @@ async function _sendOfferToWorker(
     row.classList.add("ps-row--fade-out");
     row.addEventListener(
       "animationend",
-      () => {
+      async () => {
         row.remove();
         // Update badge
         const remaining = document.querySelectorAll(
@@ -5931,6 +6200,8 @@ async function _sendOfferToWorker(
             <tr><td colspan="4" class="ps-empty">All available workers have been offered shifts.</td></tr>
           </tbody></table>`;
         }
+        // Refresh Awaiting to show the newly sent offer
+        await loadAndRenderEventWorkers(eventId);
       },
       { once: true },
     );
@@ -5942,6 +6213,34 @@ async function _sendOfferToWorker(
     }
     alert("Failed to send offer. Please try again.");
   }
+}
+
+function _applyStaffingFilters() {
+  const q = (document.getElementById("ps-search-input")?.value ?? "").toLowerCase();
+
+  // Non-potential rows: filter by name and shift label
+  document.querySelectorAll(".ps-root .ps-row:not(.ps-row--potential)").forEach((row) => {
+    const name  = row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
+    const badge = row.querySelector(".ps-shift-badge")?.textContent.toLowerCase()  ?? "";
+    row.style.display = !q || name.includes(q) || badge.includes(q) ? "" : "none";
+  });
+
+  // Potential rows: filter by name + per-event role/shift dropdowns
+  document.querySelectorAll(".ps-root .ps-event-block").forEach((block) => {
+    const eventId = block.dataset.eventId;
+    const roleFilter  = (document.getElementById(`ps-filter-role-${eventId}`)?.value  ?? "").toLowerCase();
+    const shiftFilter =  document.getElementById(`ps-filter-shift-${eventId}`)?.value  ?? "";
+
+    block.querySelectorAll(".ps-row--potential").forEach((row) => {
+      const name      = row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
+      const nameMatch = !q || name.includes(q);
+      const roleMatch = !roleFilter || [...row.querySelectorAll(".ps-role-chip")].some(
+        (c) => c.textContent.toLowerCase() === roleFilter,
+      );
+      const shiftMatch = !shiftFilter || !!row.querySelector(`input[data-shift-id="${CSS.escape(shiftFilter)}"]`);
+      row.style.display = nameMatch && roleMatch && shiftMatch ? "" : "none";
+    });
+  });
 }
 
 function _initStaffingHandlers() {
@@ -5965,16 +6264,7 @@ function _initStaffingHandlers() {
   });
 
   // Live search filter across all rows
-  document.getElementById("ps-search-input")?.addEventListener("input", (e) => {
-    const q = e.target.value.toLowerCase();
-    document.querySelectorAll(".ps-root .ps-row").forEach((row) => {
-      const name =
-        row.querySelector(".ps-worker-name")?.textContent.toLowerCase() ?? "";
-      const role =
-        row.querySelector(".ps-role-chip")?.textContent.toLowerCase() ?? "";
-      row.style.display = name.includes(q) || role.includes(q) ? "" : "none";
-    });
-  });
+  document.getElementById("ps-search-input")?.addEventListener("input", _applyStaffingFilters);
 
   // Action buttons — event delegation handles dynamically rendered rows
   const psRoot = document.querySelector(".ps-root");

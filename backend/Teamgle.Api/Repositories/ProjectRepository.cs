@@ -591,9 +591,9 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Fetch the event's start/end times (and verify ownership)
+        // Verify the shift exists and the manager has access to its project
         const string fetchEventSql = """
-            SELECT e.start_time, e.end_time
+            SELECT 1
             FROM Shift s
             INNER JOIN Event   e ON e.event_ID = s.event_ID
             INNER JOIN Project p ON p.Proj_ID  = e.project_ID
@@ -609,7 +609,7 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        DateTime evtStart, evtEnd;
+        // Verify ownership (and that the shift exists)
         await using (var fetchCmd = new SqlCommand(fetchEventSql, conn))
         {
             fetchCmd.Parameters.AddWithValue("@shiftId",     shiftId);
@@ -617,12 +617,7 @@ public class ProjectRepository : IProjectRepository
             await using var reader = await fetchCmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
                 throw new KeyNotFoundException("Shift not found.");
-            evtStart = reader.GetDateTime(0);
-            evtEnd   = reader.GetDateTime(1);
         }
-
-        if (request.StartTime < evtStart || request.EndTime > evtEnd)
-            throw new ArgumentException("Shift times must fall within the event's start and end times.");
 
         // UPDATE only if the shift belongs to a project the authenticated manager owns
         const string sql = """
@@ -707,9 +702,9 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Fetch event times and verify ownership in one query
+        // Verify event exists and manager has access to its project
         const string checkSql = """
-            SELECT e.start_time, e.end_time
+            SELECT 1
             FROM Event e
             INNER JOIN Project p ON p.Proj_ID = e.project_ID
             WHERE e.event_ID = @eventId
@@ -724,20 +719,13 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        DateTime evtStart, evtEnd;
         await using (var checkCmd = new SqlCommand(checkSql, conn))
         {
             checkCmd.Parameters.AddWithValue("@eventId",     eventId);
             checkCmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
-            await using var reader = await checkCmd.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
+            if (await checkCmd.ExecuteScalarAsync() == null)
                 throw new KeyNotFoundException("Event not found.");
-            evtStart = reader.GetDateTime(0);
-            evtEnd   = reader.GetDateTime(1);
         }
-
-        if (request.StartTime < evtStart || request.EndTime > evtEnd)
-            throw new ArgumentException("Shift times must fall within the event's start and end times.");
 
         const string insertSql = """
             INSERT INTO Shift
@@ -1061,6 +1049,7 @@ public class ProjectRepository : IProjectRepository
         const string sql = """
             SELECT
                 es.shift_ID,
+                es.status,
                 es.pay_rate_per_hour,
                 es.notes,
                 es.planned_start_time,
@@ -1084,8 +1073,19 @@ public class ProjectRepository : IProjectRepository
             INNER JOIN Manager_Project mp ON p.Proj_ID = mp.project_ID AND mp.is_owner = 1
             INNER JOIN [User] u           ON mp.manager_user_ID = u.user_ID
             WHERE eu.FBUID = @fbuid
-              AND es.status = 'manager_offer_sent'
-            ORDER BY COALESCE(es.planned_start_time, s.start_time)
+              AND es.status IN (
+                  'manager_offer_sent',
+                  'employee_request',
+                  'employee_request_canceled'
+              )
+            ORDER BY
+                CASE es.status
+                    WHEN 'manager_offer_sent'       THEN 0
+                    WHEN 'employee_request'         THEN 1
+                    WHEN 'employee_request_canceled' THEN 2
+                    ELSE 3
+                END,
+                COALESCE(es.planned_start_time, s.start_time)
             """;
 
         var offers = new List<JobOfferResponse>();
@@ -1102,6 +1102,7 @@ public class ProjectRepository : IProjectRepository
             offers.Add(new JobOfferResponse
             {
                 ShiftId          = reader["shift_ID"].ToString()!,
+                Status           = reader["status"].ToString()!,
                 PayRatePerHour   = reader["pay_rate_per_hour"] == DBNull.Value ? null : (decimal?)reader["pay_rate_per_hour"],
                 Notes            = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
                 PlannedStartTime = reader["planned_start_time"] == DBNull.Value ? null : (DateTime?)reader["planned_start_time"],
@@ -1176,8 +1177,8 @@ public class ProjectRepository : IProjectRepository
         }
         if (companyId == null) return null;
 
-        // Get eligible employees: in same company, role matches a shift in this event,
-        // not actively assigned to any shift in this event, and has registered (FBUID not null)
+        // Get candidates: in same company, role matches at least one shift in this event, registered
+        // Worker-level exclusion removed — per-shift eligibility is enforced in the shift query below
         const string workerSql = """
             SELECT DISTINCT u.user_ID, u.FBUID, u.firstName, u.lastName, emp.cost_per_hour
             FROM [User] u
@@ -1187,15 +1188,6 @@ public class ProjectRepository : IProjectRepository
                                           AND s.event_ID           = @eventId
             WHERE u.company_ID = @companyId
               AND u.FBUID IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1 FROM Employee_Shift es
-                  INNER JOIN Shift s2 ON s2.Shift_ID = es.shift_ID AND s2.event_ID = @eventId
-                  WHERE es.employee_user_ID = u.user_ID
-                    AND es.status IN (
-                        'manager_offer_sent','employee_request',
-                        'manager_hold','manager_approved'
-                    )
-              )
             """;
 
         var workers = new List<PotentialWorkerResponse>();
@@ -1245,6 +1237,26 @@ public class ProjectRepository : IProjectRepository
             INNER JOIN Employee_Roll er ON er.roll_ID         = s.roll_ID
             WHERE s.event_ID = @eventId
               AND er.employee_user_ID IN ({string.Join(",", paramNames)})
+              -- exclude if already actively assigned to this specific shift
+              AND NOT EXISTS (
+                  SELECT 1 FROM Employee_Shift es
+                  WHERE es.shift_ID         = s.Shift_ID
+                    AND es.employee_user_ID = er.employee_user_ID
+                    AND es.status IN (
+                        'manager_offer_sent','employee_request',
+                        'manager_hold','manager_approved'
+                    )
+              )
+              -- exclude if an approved shift in the same event overlaps this shift's time
+              AND NOT EXISTS (
+                  SELECT 1 FROM Employee_Shift es
+                  INNER JOIN Shift s2 ON s2.Shift_ID = es.shift_ID
+                  WHERE es.employee_user_ID = er.employee_user_ID
+                    AND s2.event_ID         = @eventId
+                    AND es.status           = 'manager_approved'
+                    AND s2.start_time       < s.end_time
+                    AND s2.end_time         > s.start_time
+              )
             ORDER BY s.start_time
             """;
 
@@ -1278,7 +1290,8 @@ public class ProjectRepository : IProjectRepository
         foreach (var w in workers)
             w.EligibleShifts = shiftMap.TryGetValue(w.UserId, out var shifts) ? shifts : [];
 
-        return workers;
+        // Remove workers who have no eligible shifts left after per-shift filtering
+        return workers.Where(w => w.EligibleShifts.Count > 0).ToList();
     }
 
     public async Task SendOfferToEmployeeAsync(
@@ -1378,15 +1391,23 @@ public class ProjectRepository : IProjectRepository
     {
         const string sql = """
             SELECT
-                es.shift_ID   AS ShiftId,
-                u.user_ID     AS UserId,
-                u.FBUID       AS FbUid,
-                u.firstName   AS FirstName,
-                u.lastName    AS LastName,
-                r.Roll_name   AS RoleName,
-                es.status     AS Status,
-                s.start_time  AS ShiftStart,
-                s.end_time    AS ShiftEnd
+                es.shift_ID            AS ShiftId,
+                u.user_ID              AS UserId,
+                u.FBUID                AS FbUid,
+                u.firstName            AS FirstName,
+                u.lastName             AS LastName,
+                r.Roll_name            AS RoleName,
+                es.status              AS Status,
+                s.start_time           AS ShiftStart,
+                s.end_time             AS ShiftEnd,
+                s.required_quantity    AS RequiredQuantity,
+                (SELECT COUNT(*) FROM Employee_Shift ea
+                 WHERE ea.shift_ID = s.Shift_ID
+                   AND ea.status IN (
+                       'manager_offer_sent','employee_request',
+                       'manager_hold','manager_approved'
+                   )
+                )                      AS ActiveAssignments
             FROM Employee_Shift es
             INNER JOIN [User]  u  ON u.user_ID  = es.employee_user_ID
             INNER JOIN Shift   s  ON s.Shift_ID = es.shift_ID
@@ -1421,29 +1442,33 @@ public class ProjectRepository : IProjectRepository
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
 
-        var ordShiftId    = reader.GetOrdinal("ShiftId");
-        var ordUserId     = reader.GetOrdinal("UserId");
-        var ordFbUid      = reader.GetOrdinal("FbUid");
-        var ordFirstName  = reader.GetOrdinal("FirstName");
-        var ordLastName   = reader.GetOrdinal("LastName");
-        var ordRoleName   = reader.GetOrdinal("RoleName");
-        var ordStatus     = reader.GetOrdinal("Status");
-        var ordShiftStart = reader.GetOrdinal("ShiftStart");
-        var ordShiftEnd   = reader.GetOrdinal("ShiftEnd");
+        var ordShiftId           = reader.GetOrdinal("ShiftId");
+        var ordUserId            = reader.GetOrdinal("UserId");
+        var ordFbUid             = reader.GetOrdinal("FbUid");
+        var ordFirstName         = reader.GetOrdinal("FirstName");
+        var ordLastName          = reader.GetOrdinal("LastName");
+        var ordRoleName          = reader.GetOrdinal("RoleName");
+        var ordStatus            = reader.GetOrdinal("Status");
+        var ordShiftStart        = reader.GetOrdinal("ShiftStart");
+        var ordShiftEnd          = reader.GetOrdinal("ShiftEnd");
+        var ordRequiredQuantity  = reader.GetOrdinal("RequiredQuantity");
+        var ordActiveAssignments = reader.GetOrdinal("ActiveAssignments");
 
         while (await reader.ReadAsync())
         {
             var item = new AssignedWorkerItem
             {
-                ShiftId    = reader.IsDBNull(ordShiftId)    ? "" : reader.GetString(ordShiftId),
-                UserId     = reader.IsDBNull(ordUserId)     ? "" : reader.GetString(ordUserId),
-                FbUid      = reader.IsDBNull(ordFbUid)      ? "" : reader.GetString(ordFbUid),
-                FirstName  = reader.IsDBNull(ordFirstName)  ? "" : reader.GetString(ordFirstName),
-                LastName   = reader.IsDBNull(ordLastName)   ? "" : reader.GetString(ordLastName),
-                RoleName   = reader.IsDBNull(ordRoleName)   ? "" : reader.GetString(ordRoleName),
-                Status     = reader.IsDBNull(ordStatus)     ? "" : reader.GetString(ordStatus),
-                ShiftStart = reader.IsDBNull(ordShiftStart) ? null : reader.GetDateTime(ordShiftStart),
-                ShiftEnd   = reader.IsDBNull(ordShiftEnd)   ? null : reader.GetDateTime(ordShiftEnd),
+                ShiftId           = reader.IsDBNull(ordShiftId)           ? "" : reader.GetString(ordShiftId),
+                UserId            = reader.IsDBNull(ordUserId)            ? "" : reader.GetString(ordUserId),
+                FbUid             = reader.IsDBNull(ordFbUid)             ? "" : reader.GetString(ordFbUid),
+                FirstName         = reader.IsDBNull(ordFirstName)         ? "" : reader.GetString(ordFirstName),
+                LastName          = reader.IsDBNull(ordLastName)          ? "" : reader.GetString(ordLastName),
+                RoleName          = reader.IsDBNull(ordRoleName)          ? "" : reader.GetString(ordRoleName),
+                Status            = reader.IsDBNull(ordStatus)            ? "" : reader.GetString(ordStatus),
+                ShiftStart        = reader.IsDBNull(ordShiftStart)        ? null : reader.GetDateTime(ordShiftStart),
+                ShiftEnd          = reader.IsDBNull(ordShiftEnd)          ? null : reader.GetDateTime(ordShiftEnd),
+                RequiredQuantity  = reader.IsDBNull(ordRequiredQuantity)  ? 0    : reader.GetInt32(ordRequiredQuantity),
+                ActiveAssignments = reader.IsDBNull(ordActiveAssignments) ? 0    : reader.GetInt32(ordActiveAssignments),
             };
 
             switch (item.Status)
@@ -1467,26 +1492,47 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Hard block: if approving, reject if employee is already approved in any other shift of this event
+        // Block approval only if target shift overlaps another already-approved shift for this employee
         if (newStatus == "manager_approved")
         {
-            const string conflictSql = """
-                SELECT COUNT(*)
-                FROM   Employee_Shift es
-                INNER JOIN Shift s ON s.Shift_ID = es.shift_ID
-                WHERE  es.employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
-                  AND  s.event_ID          = @eventId
-                  AND  es.shift_ID        <> @shiftId
-                  AND  es.status           = 'manager_approved'
-                """;
-            await using var conflictCmd = new SqlCommand(conflictSql, conn);
-            conflictCmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
-            conflictCmd.Parameters.AddWithValue("@eventId",       eventId);
-            conflictCmd.Parameters.AddWithValue("@shiftId",       shiftId);
-            var conflicts = (int)(await conflictCmd.ExecuteScalarAsync() ?? 0);
-            if (conflicts > 0)
-                throw new InvalidOperationException(
-                    "This employee is already approved for another shift in this event.");
+            // Fetch target shift's time window first
+            DateTime? targetStart = null, targetEnd = null;
+            const string timeSql = "SELECT start_time, end_time FROM Shift WHERE Shift_ID = @shiftId";
+            await using (var timeCmd = new SqlCommand(timeSql, conn))
+            {
+                timeCmd.Parameters.AddWithValue("@shiftId", shiftId);
+                await using var tr = await timeCmd.ExecuteReaderAsync();
+                if (await tr.ReadAsync())
+                {
+                    targetStart = tr.IsDBNull(0) ? null : tr.GetDateTime(0);
+                    targetEnd   = tr.IsDBNull(1) ? null : tr.GetDateTime(1);
+                }
+            }
+
+            if (targetStart.HasValue && targetEnd.HasValue)
+            {
+                const string conflictSql = """
+                    SELECT COUNT(*)
+                    FROM   Employee_Shift es
+                    INNER JOIN Shift s ON s.Shift_ID = es.shift_ID
+                    WHERE  es.employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+                      AND  s.event_ID          = @eventId
+                      AND  es.shift_ID        <> @shiftId
+                      AND  es.status           = 'manager_approved'
+                      AND  s.start_time        < @targetEnd
+                      AND  s.end_time          > @targetStart
+                    """;
+                await using var conflictCmd = new SqlCommand(conflictSql, conn);
+                conflictCmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
+                conflictCmd.Parameters.AddWithValue("@eventId",       eventId);
+                conflictCmd.Parameters.AddWithValue("@shiftId",       shiftId);
+                conflictCmd.Parameters.AddWithValue("@targetStart",   targetStart.Value);
+                conflictCmd.Parameters.AddWithValue("@targetEnd",     targetEnd.Value);
+                var conflicts = (int)(await conflictCmd.ExecuteScalarAsync() ?? 0);
+                if (conflicts > 0)
+                    throw new InvalidOperationException(
+                        "This employee is already approved for an overlapping shift in this event.");
+            }
         }
 
         const string sql = """
@@ -2439,8 +2485,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
     {
         // Step 1: Load the shift info (required slots, time window) and verify the manager owns it
         const string shiftSql = """
-            SELECT s.required_quantity, s.start_time, s.end_time
+            SELECT s.required_quantity, s.start_time, s.end_time, r.Roll_name AS RoleName
             FROM   Shift s
+            INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
             INNER JOIN Event   e  ON e.event_ID  = s.event_ID
             INNER JOIN Project p  ON p.Proj_ID   = e.project_ID
             INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
@@ -2450,7 +2497,8 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             """;
 
         int requiredQty;
-        DateTime shiftStart, shiftEnd;
+        DateTime? shiftStart, shiftEnd;
+        string roleName;
 
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(shiftSql, conn))
@@ -2463,8 +2511,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 throw new KeyNotFoundException("Shift not found or you do not have access.");
 
             requiredQty = reader.GetInt32(reader.GetOrdinal("required_quantity"));
-            shiftStart  = reader.GetDateTime(reader.GetOrdinal("start_time"));
-            shiftEnd    = reader.GetDateTime(reader.GetOrdinal("end_time"));
+            shiftStart  = reader.IsDBNull(reader.GetOrdinal("start_time")) ? null : reader.GetDateTime(reader.GetOrdinal("start_time"));
+            shiftEnd    = reader.IsDBNull(reader.GetOrdinal("end_time"))   ? null : reader.GetDateTime(reader.GetOrdinal("end_time"));
+            roleName    = reader.IsDBNull(reader.GetOrdinal("RoleName")) ? "" : reader.GetString(reader.GetOrdinal("RoleName"));
         }
 
         // Step 2: Count how many are already manually approved (they are untouchable)
@@ -2489,6 +2538,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         const string candidatesSql = """
             SELECT
                 u.user_ID                                                             AS UserId,
+                u.FBUID                                                               AS FbUid,
+                u.firstName                                                           AS FirstName,
+                u.lastName                                                            AS LastName,
                 ISNULL(e.cost_per_hour, 0)                                            AS CostPerHour,
 
                 -- Commitment: how many shifts the employee did NOT reject out of all shifts
@@ -2529,20 +2581,23 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             INNER JOIN Employee  e ON e.user_ID  = u.user_ID
             WHERE es.shift_ID = @shiftId
               AND es.status   = 'employee_request'
-              -- Hard filter: exclude anyone already approved in ANY other shift of the same event
+              -- Hard filter: exclude anyone approved for an overlapping shift in the same event
               AND NOT EXISTS (
                   SELECT 1
                   FROM   Employee_Shift  es3
                   INNER JOIN Shift       s2 ON s2.Shift_ID = es3.shift_ID
+                  INNER JOIN Shift       s3 ON s3.Shift_ID = @shiftId
                   WHERE  es3.employee_user_ID = u.user_ID
                     AND  es3.status           = 'manager_approved'
                     AND  s2.Shift_ID         <> @shiftId
-                    AND  s2.event_ID          = (SELECT event_ID FROM Shift WHERE Shift_ID = @shiftId)
+                    AND  s2.event_ID          = s3.event_ID
+                    AND  s2.start_time        < s3.end_time
+                    AND  s2.end_time          > s3.start_time
               )
             """;
 
         // Raw data row used only inside this method for scoring
-        var candidates = new List<(string UserId, double CostPerHour, int RegisteredShifts, int OfferedShifts, double AttendanceAccuracy, double RoleFitScore)>();
+        var candidates = new List<(string UserId, string FbUid, string FirstName, string LastName, double CostPerHour, int RegisteredShifts, int OfferedShifts, double AttendanceAccuracy, double RoleFitScore)>();
 
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(candidatesSql, conn))
@@ -2554,6 +2609,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             {
                 candidates.Add((
                     UserId:              reader.GetString(reader.GetOrdinal("UserId")),
+                    FbUid:               reader.IsDBNull(reader.GetOrdinal("FbUid")) ? "" : reader.GetString(reader.GetOrdinal("FbUid")),
+                    FirstName:           reader.IsDBNull(reader.GetOrdinal("FirstName")) ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
+                    LastName:            reader.IsDBNull(reader.GetOrdinal("LastName")) ? "" : reader.GetString(reader.GetOrdinal("LastName")),
                     CostPerHour:         Convert.ToDouble(reader["CostPerHour"]),
                     RegisteredShifts:    reader.GetInt32(reader.GetOrdinal("RegisteredShifts")),
                     OfferedShifts:       reader.GetInt32(reader.GetOrdinal("OfferedShifts")),
@@ -2566,6 +2624,10 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         if (candidates.Count == 0)
             return new AutoAssignResult
             {
+                ShiftId         = shiftId,
+                RoleName        = roleName,
+                ShiftStart      = shiftStart,
+                ShiftEnd        = shiftEnd,
                 Required        = requiredQty,
                 AlreadyApproved = alreadyApproved,
                 Assigned        = 0,
@@ -2602,6 +2664,17 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             .Select((c, i) => new
             {
                 c.UserId,
+                c.FbUid,
+                c.FirstName,
+                c.LastName,
+                c.CostPerHour,
+                CommitmentRate = commitmentRaw[i],
+                CommitmentScore = commitmentScore[i],
+                AttendanceMinutesLateAvg = attendanceAccuracyRaw[i],
+                AttendanceScore = attendanceScore[i],
+                RoleExperienceRate = roleFitRaw[i],
+                RoleFitScore = roleFitScore[i],
+                CostScore = costScore[i],
                 Score = commitmentScore[i]  * 0.25
                       + attendanceScore[i]  * 0.30
                       + roleFitScore[i]     * 0.20
@@ -2620,6 +2693,33 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             toStandby = scored.Select(x => x.UserId).ToList();
             toApprove.Clear();
         }
+
+        var approvedSet = toApprove.ToHashSet();
+        var decisions = scored.Select((x, i) => new AutoAssignWorkerDecision
+        {
+            UserId                   = x.UserId,
+            FbUid                    = x.FbUid,
+            FirstName                = x.FirstName,
+            LastName                 = x.LastName,
+            Decision                 = approvedSet.Contains(x.UserId) ? "assigned" : "standby",
+            Rank                     = i + 1,
+            TotalScore               = Math.Round(x.Score, 3),
+            CommitmentRate           = Math.Round(x.CommitmentRate, 3),
+            CommitmentScore          = Math.Round(x.CommitmentScore, 3),
+            AttendanceMinutesLateAvg = Math.Round(x.AttendanceMinutesLateAvg, 1),
+            AttendanceScore          = Math.Round(x.AttendanceScore, 3),
+            RoleExperienceRate       = Math.Round(x.RoleExperienceRate, 3),
+            RoleFitScore             = Math.Round(x.RoleFitScore, 3),
+            CostPerHour              = Math.Round(x.CostPerHour, 2),
+            CostScore                = Math.Round(x.CostScore, 3),
+            Explanation              = BuildAutoAssignExplanation(
+                approvedSet.Contains(x.UserId),
+                x.Score,
+                x.CommitmentRate,
+                x.AttendanceMinutesLateAvg,
+                x.RoleExperienceRate,
+                x.CostPerHour)
+        }).ToList();
 
         // Step 6: Apply the status updates inside a single transaction
         await using (var conn = new SqlConnection(_connectionString))
@@ -2670,10 +2770,15 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         // Step 7: Build and return the result summary
         var result = new AutoAssignResult
         {
+            ShiftId         = shiftId,
+            RoleName        = roleName,
+            ShiftStart      = shiftStart,
+            ShiftEnd        = shiftEnd,
             Required        = requiredQty,
             AlreadyApproved = alreadyApproved,
             Assigned        = toApprove.Count,
             Standby         = toStandby.Count,
+            Decisions       = decisions,
         };
 
         if (toApprove.Count < remainingSlots)
@@ -2681,5 +2786,43 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                              $"Not enough applicants without scheduling conflicts.";
 
         return result;
+    }
+
+    private static string BuildAutoAssignExplanation(
+        bool assigned,
+        double totalScore,
+        double commitmentRate,
+        double attendanceMinutesLateAvg,
+        double roleExperienceRate,
+        double costPerHour)
+    {
+        var reasons = new List<string>();
+
+        if (roleExperienceRate >= 0.7)
+            reasons.Add("strong experience in this role");
+        else if (roleExperienceRate >= 0.35)
+            reasons.Add("some experience in this role");
+        else
+            reasons.Add("limited history in this role");
+
+        if (attendanceMinutesLateAvg <= 5)
+            reasons.Add("very reliable arrival history");
+        else if (attendanceMinutesLateAvg <= 15)
+            reasons.Add("reasonable arrival history");
+        else
+            reasons.Add("higher average lateness");
+
+        if (commitmentRate >= 0.85)
+            reasons.Add("high acceptance/commitment rate");
+        else if (commitmentRate >= 0.55)
+            reasons.Add("moderate acceptance/commitment rate");
+        else
+            reasons.Add("lower acceptance/commitment rate");
+
+        if (costPerHour > 0)
+            reasons.Add($"cost is {costPerHour:0.##}/hr");
+
+        var prefix = assigned ? "Selected because of" : "Moved to standby after comparing";
+        return $"{prefix} {string.Join(", ", reasons)}. Overall score: {totalScore:P0}.";
     }
 }

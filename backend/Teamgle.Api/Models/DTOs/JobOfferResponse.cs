@@ -3,6 +3,7 @@ namespace Teamgle.Api.Models.DTOs;
 public class JobOfferResponse
 {
     public string    ShiftId           { get; set; } = "";
+    public string    Status            { get; set; } = "";
     public decimal?  PayRatePerHour    { get; set; }
     public string?   Notes             { get; set; }
     public DateTime? PlannedStartTime  { get; set; }
