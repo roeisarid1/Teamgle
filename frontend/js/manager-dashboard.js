@@ -4367,81 +4367,100 @@ async function appendEventBlock() {
     <div class="event-block-header" data-toggle-event="${idx}">
       <div class="event-block-header-inner">
         <span class="event-block-chevron">▾</span>
+        <span class="event-block-icon"><i data-lucide="calendar-clock"></i></span>
         <span class="event-block-label">Event ${idx}</span>
         <span class="event-block-summary" id="event-summary-${idx}"></span>
       </div>
       <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}" aria-label="Remove event">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        <i data-lucide="x"></i>
       </button>
     </div>
     <div class="event-block-body">
-      <div class="field" data-field="event-name-${idx}">
-        <label>Event Name <span class="req">*</span></label>
-        <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
-      </div>
-      <div class="form-row">
-        <div class="field datetime-field" data-field="event-start-date-${idx}">
-          <label>Start <span class="req">*</span></label>
-          <div class="datetime-group">
-            <input type="date" id="event-start-date-${idx}" class="dt-date" />
-            <input type="time" id="event-start-time-${idx}" class="dt-time" step="300" />
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="map-pin"></i></span>
+          Event Details
+        </p>
+        <div class="field" data-field="event-name-${idx}">
+          <label>Event Name <span class="req">*</span></label>
+          <input type="text" id="event-name-${idx}" placeholder="Cocktail Hour" autocomplete="off" />
+        </div>
+        <div class="create-event-two-col">
+          <div class="field">
+            <label>Location</label>
+            <input type="text" id="event-location-${idx}" placeholder="Grand Ballroom" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Event Type</label>
+            <select id="event-type-${idx}">
+              <option value="">Select type</option>
+              <option value="conference">Conference</option>
+              <option value="party">Party</option>
+              <option value="wedding">Wedding</option>
+              <option value="corporate">Corporate</option>
+              <option value="bar_mitzvah">Bar Mitzvah</option>
+              <option value="birthday">Birthday</option>
+              <option value="concert">Concert</option>
+              <option value="exhibition">Exhibition</option>
+              <option value="seminar">Seminar</option>
+              <option value="gala">Gala</option>
+              <option value="trip">Trip</option>
+              <option value="other">Other</option>
+            </select>
           </div>
         </div>
-        <div class="field datetime-field" data-field="event-end-date-${idx}">
-          <label>End <span class="req">*</span></label>
-          <div class="datetime-group">
-            <input type="date" id="event-end-date-${idx}" class="dt-date" />
-            <input type="time" id="event-end-time-${idx}" class="dt-time" step="300" />
+      </div>
+
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="clock"></i></span>
+          Schedule
+        </p>
+        <div class="create-event-two-col">
+          <div class="field datetime-field create-date-card" data-field="event-start-date-${idx}">
+            <label>Start <span class="req">*</span></label>
+            <div class="datetime-group">
+              <input type="date" id="event-start-date-${idx}" class="dt-date" />
+              <input type="time" id="event-start-time-${idx}" class="dt-time" step="300" />
+            </div>
+          </div>
+          <div class="field datetime-field create-date-card" data-field="event-end-date-${idx}">
+            <label>End <span class="req">*</span></label>
+            <div class="datetime-group">
+              <input type="date" id="event-end-date-${idx}" class="dt-date" />
+              <input type="time" id="event-end-time-${idx}" class="dt-time" step="300" />
+            </div>
           </div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Location</label>
-          <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Event Type</label>
-          <select id="event-type-${idx}">
-            <option value="">— Select type —</option>
-            <option value="conference">Conference</option>
-            <option value="party">Party</option>
-            <option value="wedding">Wedding</option>
-            <option value="corporate">Corporate</option>
-            <option value="bar_mitzvah">Bar Mitzvah</option>
-            <option value="birthday">Birthday</option>
-            <option value="concert">Concert</option>
-            <option value="exhibition">Exhibition</option>
-            <option value="seminar">Seminar</option>
-            <option value="gala">Gala</option>
-            <option value="trip">Trip</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Attendees Count</label>
-          <input type="number" id="event-attendees-${idx}" placeholder="0" min="0" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Planned Budget</label>
-          <input type="number" id="event-budget-${idx}" placeholder="0.00" min="0" step="0.01" />
-        </div>
-        <div class="field">
-          <label>Expected Revenue</label>
-          <input type="number" id="event-revenue-${idx}" placeholder="0.00" min="0" step="0.01" />
+
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="wallet"></i></span>
+          Planning Numbers
+        </p>
+        <div class="create-event-three-col">
+          <div class="field">
+            <label>Attendees</label>
+            <input type="number" id="event-attendees-${idx}" placeholder="0" min="0" />
+          </div>
+          <div class="field">
+            <label>Planned Budget</label>
+            <input type="number" id="event-budget-${idx}" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Expected Revenue</label>
+            <input type="number" id="event-revenue-${idx}" placeholder="0.00" min="0" step="0.01" />
+          </div>
         </div>
       </div>
 
       <!-- Shifts sub-section -->
       <div class="shifts-subsection">
         <div class="shifts-subheader">
-          <span class="shifts-subheader-label">Shifts</span>
+          <span class="shifts-subheader-label"><i data-lucide="users"></i> Shifts</span>
           <button class="btn-add-shift btn-with-icon" type="button" data-add-shift="${idx}">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <i data-lucide="plus"></i>
             Add Shift
           </button>
         </div>
@@ -4595,7 +4614,7 @@ function appendShiftRow(eventIdx, roles) {
       </div>
     </div>
     <button class="btn-remove-shift" type="button" title="Remove shift" aria-label="Remove shift">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      <i data-lucide="x"></i>
     </button>
   `;
 
@@ -4604,6 +4623,7 @@ function appendShiftRow(eventIdx, roles) {
     .addEventListener("click", () => row.remove());
 
   list.appendChild(row);
+  if (window.lucide) lucide.createIcons();
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
@@ -8301,6 +8321,12 @@ function _invBuildFinanceBlock(invoices, opts = {}) {
 document.getElementById("btn-edit-project").addEventListener("click", openProjectEditModal);
 document.getElementById("btn-delete-project").addEventListener("click", () => confirmDelete("project"));
 
+function _setEditSaveButton(btn, label) {
+  if (!btn) return;
+  btn.innerHTML = `<i data-lucide="save"></i><span>${escapeHtml(label)}</span>`;
+  if (window.lucide) lucide.createIcons();
+}
+
 // ── Open edit modal ────────────────────────────────────────────────────────
 
 function openProjectEditModal() {
@@ -8329,7 +8355,7 @@ function openProjectEditModal() {
 
   const saveBtn = document.getElementById("proj-edit-save");
   saveBtn.disabled    = false;
-  saveBtn.textContent = "Save Changes";
+  _setEditSaveButton(saveBtn, "Save Changes");
 
   const overlay = document.getElementById("proj-edit-overlay");
   overlay.style.display = "flex";
@@ -8372,7 +8398,7 @@ document.getElementById("proj-edit-save").addEventListener("click", async () => 
 
   const saveBtn = document.getElementById("proj-edit-save");
   saveBtn.disabled    = true;
-  saveBtn.textContent = "Saving…";
+  _setEditSaveButton(saveBtn, "Saving...");
 
   try {
     const token = await getToken();
@@ -8398,7 +8424,7 @@ document.getElementById("proj-edit-save").addEventListener("click", async () => 
     errEl.style.display = "block";
   } finally {
     saveBtn.disabled    = false;
-    saveBtn.textContent = "Save Changes";
+    _setEditSaveButton(saveBtn, "Save Changes");
   }
 });
 
@@ -8471,7 +8497,7 @@ function openEventEditModal() {
 
   const saveBtn = document.getElementById("event-edit-save");
   saveBtn.disabled    = false;
-  saveBtn.textContent = "Save Changes";
+  _setEditSaveButton(saveBtn, "Save Changes");
 
   const overlay = document.getElementById("event-edit-overlay");
   overlay.style.display = "flex";
@@ -8526,7 +8552,7 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
 
   const saveBtn = document.getElementById("event-edit-save");
   saveBtn.disabled    = true;
-  saveBtn.textContent = "Saving…";
+  _setEditSaveButton(saveBtn, "Saving...");
 
   try {
     const token = await getToken();
@@ -8561,7 +8587,7 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
     errEl.style.display = "block";
   } finally {
     saveBtn.disabled    = false;
-    saveBtn.textContent = "Save Changes";
+    _setEditSaveButton(saveBtn, "Save Changes");
   }
 });
 
