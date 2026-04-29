@@ -591,9 +591,9 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Fetch the event's start/end times (and verify ownership)
+        // Verify the shift exists and the manager has access to its project
         const string fetchEventSql = """
-            SELECT e.start_time, e.end_time
+            SELECT 1
             FROM Shift s
             INNER JOIN Event   e ON e.event_ID = s.event_ID
             INNER JOIN Project p ON p.Proj_ID  = e.project_ID
@@ -609,7 +609,7 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        DateTime evtStart, evtEnd;
+        // Verify ownership (and that the shift exists)
         await using (var fetchCmd = new SqlCommand(fetchEventSql, conn))
         {
             fetchCmd.Parameters.AddWithValue("@shiftId",     shiftId);
@@ -617,12 +617,7 @@ public class ProjectRepository : IProjectRepository
             await using var reader = await fetchCmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
                 throw new KeyNotFoundException("Shift not found.");
-            evtStart = reader.GetDateTime(0);
-            evtEnd   = reader.GetDateTime(1);
         }
-
-        if (request.StartTime < evtStart || request.EndTime > evtEnd)
-            throw new ArgumentException("Shift times must fall within the event's start and end times.");
 
         // UPDATE only if the shift belongs to a project the authenticated manager owns
         const string sql = """
@@ -707,9 +702,9 @@ public class ProjectRepository : IProjectRepository
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
-        // Fetch event times and verify ownership in one query
+        // Verify event exists and manager has access to its project
         const string checkSql = """
-            SELECT e.start_time, e.end_time
+            SELECT 1
             FROM Event e
             INNER JOIN Project p ON p.Proj_ID = e.project_ID
             WHERE e.event_ID = @eventId
@@ -724,20 +719,13 @@ public class ProjectRepository : IProjectRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        DateTime evtStart, evtEnd;
         await using (var checkCmd = new SqlCommand(checkSql, conn))
         {
             checkCmd.Parameters.AddWithValue("@eventId",     eventId);
             checkCmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
-            await using var reader = await checkCmd.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
+            if (await checkCmd.ExecuteScalarAsync() == null)
                 throw new KeyNotFoundException("Event not found.");
-            evtStart = reader.GetDateTime(0);
-            evtEnd   = reader.GetDateTime(1);
         }
-
-        if (request.StartTime < evtStart || request.EndTime > evtEnd)
-            throw new ArgumentException("Shift times must fall within the event's start and end times.");
 
         const string insertSql = """
             INSERT INTO Shift
@@ -2484,8 +2472,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
     {
         // Step 1: Load the shift info (required slots, time window) and verify the manager owns it
         const string shiftSql = """
-            SELECT s.required_quantity, s.start_time, s.end_time
+            SELECT s.required_quantity, s.start_time, s.end_time, r.Roll_name AS RoleName
             FROM   Shift s
+            INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
             INNER JOIN Event   e  ON e.event_ID  = s.event_ID
             INNER JOIN Project p  ON p.Proj_ID   = e.project_ID
             INNER JOIN Manager_Project mp ON mp.project_ID = p.Proj_ID
@@ -2496,6 +2485,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
 
         int requiredQty;
         DateTime shiftStart, shiftEnd;
+        string roleName;
 
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(shiftSql, conn))
@@ -2510,6 +2500,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             requiredQty = reader.GetInt32(reader.GetOrdinal("required_quantity"));
             shiftStart  = reader.GetDateTime(reader.GetOrdinal("start_time"));
             shiftEnd    = reader.GetDateTime(reader.GetOrdinal("end_time"));
+            roleName    = reader.IsDBNull(reader.GetOrdinal("RoleName")) ? "" : reader.GetString(reader.GetOrdinal("RoleName"));
         }
 
         // Step 2: Count how many are already manually approved (they are untouchable)
@@ -2534,6 +2525,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         const string candidatesSql = """
             SELECT
                 u.user_ID                                                             AS UserId,
+                u.FBUID                                                               AS FbUid,
+                u.firstName                                                           AS FirstName,
+                u.lastName                                                            AS LastName,
                 ISNULL(e.cost_per_hour, 0)                                            AS CostPerHour,
 
                 -- Commitment: how many shifts the employee did NOT reject out of all shifts
@@ -2587,7 +2581,7 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             """;
 
         // Raw data row used only inside this method for scoring
-        var candidates = new List<(string UserId, double CostPerHour, int RegisteredShifts, int OfferedShifts, double AttendanceAccuracy, double RoleFitScore)>();
+        var candidates = new List<(string UserId, string FbUid, string FirstName, string LastName, double CostPerHour, int RegisteredShifts, int OfferedShifts, double AttendanceAccuracy, double RoleFitScore)>();
 
         await using (var conn = new SqlConnection(_connectionString))
         await using (var cmd  = new SqlCommand(candidatesSql, conn))
@@ -2599,6 +2593,9 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             {
                 candidates.Add((
                     UserId:              reader.GetString(reader.GetOrdinal("UserId")),
+                    FbUid:               reader.IsDBNull(reader.GetOrdinal("FbUid")) ? "" : reader.GetString(reader.GetOrdinal("FbUid")),
+                    FirstName:           reader.IsDBNull(reader.GetOrdinal("FirstName")) ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
+                    LastName:            reader.IsDBNull(reader.GetOrdinal("LastName")) ? "" : reader.GetString(reader.GetOrdinal("LastName")),
                     CostPerHour:         Convert.ToDouble(reader["CostPerHour"]),
                     RegisteredShifts:    reader.GetInt32(reader.GetOrdinal("RegisteredShifts")),
                     OfferedShifts:       reader.GetInt32(reader.GetOrdinal("OfferedShifts")),
@@ -2611,6 +2608,10 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         if (candidates.Count == 0)
             return new AutoAssignResult
             {
+                ShiftId         = shiftId,
+                RoleName        = roleName,
+                ShiftStart      = shiftStart,
+                ShiftEnd        = shiftEnd,
                 Required        = requiredQty,
                 AlreadyApproved = alreadyApproved,
                 Assigned        = 0,
@@ -2647,6 +2648,17 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             .Select((c, i) => new
             {
                 c.UserId,
+                c.FbUid,
+                c.FirstName,
+                c.LastName,
+                c.CostPerHour,
+                CommitmentRate = commitmentRaw[i],
+                CommitmentScore = commitmentScore[i],
+                AttendanceMinutesLateAvg = attendanceAccuracyRaw[i],
+                AttendanceScore = attendanceScore[i],
+                RoleExperienceRate = roleFitRaw[i],
+                RoleFitScore = roleFitScore[i],
+                CostScore = costScore[i],
                 Score = commitmentScore[i]  * 0.25
                       + attendanceScore[i]  * 0.30
                       + roleFitScore[i]     * 0.20
@@ -2665,6 +2677,33 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             toStandby = scored.Select(x => x.UserId).ToList();
             toApprove.Clear();
         }
+
+        var approvedSet = toApprove.ToHashSet();
+        var decisions = scored.Select((x, i) => new AutoAssignWorkerDecision
+        {
+            UserId                   = x.UserId,
+            FbUid                    = x.FbUid,
+            FirstName                = x.FirstName,
+            LastName                 = x.LastName,
+            Decision                 = approvedSet.Contains(x.UserId) ? "assigned" : "standby",
+            Rank                     = i + 1,
+            TotalScore               = Math.Round(x.Score, 3),
+            CommitmentRate           = Math.Round(x.CommitmentRate, 3),
+            CommitmentScore          = Math.Round(x.CommitmentScore, 3),
+            AttendanceMinutesLateAvg = Math.Round(x.AttendanceMinutesLateAvg, 1),
+            AttendanceScore          = Math.Round(x.AttendanceScore, 3),
+            RoleExperienceRate       = Math.Round(x.RoleExperienceRate, 3),
+            RoleFitScore             = Math.Round(x.RoleFitScore, 3),
+            CostPerHour              = Math.Round(x.CostPerHour, 2),
+            CostScore                = Math.Round(x.CostScore, 3),
+            Explanation              = BuildAutoAssignExplanation(
+                approvedSet.Contains(x.UserId),
+                x.Score,
+                x.CommitmentRate,
+                x.AttendanceMinutesLateAvg,
+                x.RoleExperienceRate,
+                x.CostPerHour)
+        }).ToList();
 
         // Step 6: Apply the status updates inside a single transaction
         await using (var conn = new SqlConnection(_connectionString))
@@ -2715,10 +2754,15 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         // Step 7: Build and return the result summary
         var result = new AutoAssignResult
         {
+            ShiftId         = shiftId,
+            RoleName        = roleName,
+            ShiftStart      = shiftStart,
+            ShiftEnd        = shiftEnd,
             Required        = requiredQty,
             AlreadyApproved = alreadyApproved,
             Assigned        = toApprove.Count,
             Standby         = toStandby.Count,
+            Decisions       = decisions,
         };
 
         if (toApprove.Count < remainingSlots)
@@ -2726,5 +2770,43 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                              $"Not enough applicants without scheduling conflicts.";
 
         return result;
+    }
+
+    private static string BuildAutoAssignExplanation(
+        bool assigned,
+        double totalScore,
+        double commitmentRate,
+        double attendanceMinutesLateAvg,
+        double roleExperienceRate,
+        double costPerHour)
+    {
+        var reasons = new List<string>();
+
+        if (roleExperienceRate >= 0.7)
+            reasons.Add("strong experience in this role");
+        else if (roleExperienceRate >= 0.35)
+            reasons.Add("some experience in this role");
+        else
+            reasons.Add("limited history in this role");
+
+        if (attendanceMinutesLateAvg <= 5)
+            reasons.Add("very reliable arrival history");
+        else if (attendanceMinutesLateAvg <= 15)
+            reasons.Add("reasonable arrival history");
+        else
+            reasons.Add("higher average lateness");
+
+        if (commitmentRate >= 0.85)
+            reasons.Add("high acceptance/commitment rate");
+        else if (commitmentRate >= 0.55)
+            reasons.Add("moderate acceptance/commitment rate");
+        else
+            reasons.Add("lower acceptance/commitment rate");
+
+        if (costPerHour > 0)
+            reasons.Add($"cost is {costPerHour:0.##}/hr");
+
+        var prefix = assigned ? "Selected because of" : "Moved to standby after comparing";
+        return $"{prefix} {string.Join(", ", reasons)}. Overall score: {totalScore:P0}.";
     }
 }
