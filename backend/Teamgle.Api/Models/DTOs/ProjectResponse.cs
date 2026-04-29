@@ -7,5 +7,6 @@ public class ProjectResponse
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string DisplayStatus { get; set; } = string.Empty;
     public string? CustomerId { get; set; }
 }

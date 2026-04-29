@@ -12,6 +12,16 @@ public class ProjectService : IProjectService
         _projectRepo = projectRepo;
     }
 
+    private static string ComputeDisplayStatus(string status, DateTime? startDate, DateTime? endDate)
+    {
+        if (status == "draft" || status == "canceled") return status;
+        if (startDate == null || endDate == null) return "planning";
+        var today = DateTime.UtcNow.Date;
+        if (today < startDate.Value.Date) return "planning";
+        if (today > endDate.Value.Date) return "completed";
+        return "active";
+    }
+
     // ── Resolve manager's company (shared guard) ───────────────────────────
     private async Task<string> ResolveCompanyIdAsync(string firebaseUid)
     {
@@ -84,12 +94,13 @@ public class ProjectService : IProjectService
         done:
         return new ProjectResponse
         {
-            ProjId     = projId,
-            Name       = request.Name.Trim(),
-            StartDate  = request.StartDate,
-            EndDate    = request.EndDate,
-            Status     = request.Status,
-            CustomerId = request.CustomerId
+            ProjId         = projId,
+            Name           = request.Name.Trim(),
+            StartDate      = request.StartDate,
+            EndDate        = request.EndDate,
+            Status         = request.Status,
+            CustomerId     = request.CustomerId,
+            DisplayStatus  = ComputeDisplayStatus(request.Status, request.StartDate, request.EndDate),
         };
     }
 
@@ -102,7 +113,10 @@ public class ProjectService : IProjectService
             throw new ArgumentException("End date cannot be before start date.");
 
         await ResolveCompanyIdAsync(firebaseUid);
-        return await _projectRepo.UpdateProjectAsync(projId, request, firebaseUid);
+        var project = await _projectRepo.UpdateProjectAsync(projId, request, firebaseUid);
+        if (project != null)
+            project.DisplayStatus = ComputeDisplayStatus(project.Status, project.StartDate, project.EndDate);
+        return project;
     }
 
     // ── Delete project ─────────────────────────────────────────────────────
@@ -138,14 +152,20 @@ public class ProjectService : IProjectService
         if (companyId == null)
             throw new UnauthorizedAccessException("User is not a registered manager.");
 
-        return await _projectRepo.GetProjectsByManagerAsync(firebaseUid);
+        var projects = (await _projectRepo.GetProjectsByManagerAsync(firebaseUid)).ToList();
+        foreach (var p in projects)
+            p.DisplayStatus = ComputeDisplayStatus(p.Status, p.StartDate, p.EndDate);
+        return projects;
     }
 
     // ── Get a single project by ID (access-checked) ────────────────────────
     public async Task<ProjectDetailResponse?> GetProjectByIdAsync(string firebaseUid, string projId)
     {
         await ResolveCompanyIdAsync(firebaseUid);
-        return await _projectRepo.GetProjectDetailAsync(projId, firebaseUid);
+        var detail = await _projectRepo.GetProjectDetailAsync(projId, firebaseUid);
+        if (detail != null)
+            detail.DisplayStatus = ComputeDisplayStatus(detail.Status, detail.StartDate, detail.EndDate);
+        return detail;
     }
 
     // ── Get schedule (events + shifts) for a project (access-checked) ─────

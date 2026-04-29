@@ -195,12 +195,11 @@ function renderRoles(roles) {
 
 // ── Search helpers ─────────────────────────────────────────────────────────
 function filterEmployees(list) {
-  const q          = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
-  const salaryMax  = parseFloat(document.getElementById("emp-filter-salary-max")?.value ?? "");
-  const statusVal  = (document.getElementById("emp-filter-status")?.value ?? "").toLowerCase();
+  const q         = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
+  const statusVal = (document.getElementById("emp-filter-status")?.value ?? "").toLowerCase();
 
-  const hasFilter  = q || !isNaN(salaryMax) || statusVal;
-  const clearBtn   = document.getElementById("emp-filter-clear");
+  const hasFilter = q || statusVal;
+  const clearBtn  = document.getElementById("emp-filter-clear");
   if (clearBtn) clearBtn.style.display = hasFilter ? "" : "none";
 
   return list.filter((e) => {
@@ -208,7 +207,6 @@ function filterEmployees(list) {
       const full = `${e.firstName} ${e.lastName}`.toLowerCase();
       if (!full.includes(q) && !e.firstName.toLowerCase().includes(q) && !e.lastName.toLowerCase().includes(q)) return false;
     }
-    if (!isNaN(salaryMax) && e.costPerHour != null && e.costPerHour > salaryMax) return false;
     if (statusVal) {
       const empStatus = (e.status ?? "active").toLowerCase();
       if (empStatus !== statusVal) return false;
@@ -230,18 +228,13 @@ function filterCustomers(list) {
 document.getElementById("employee-search")?.addEventListener("input", () => {
   renderEmployees(filterEmployees(allEmployees));
 });
-document.getElementById("emp-filter-salary-max")?.addEventListener("input", () => {
-  renderEmployees(filterEmployees(allEmployees));
-});
 document.getElementById("emp-filter-status")?.addEventListener("change", () => {
   renderEmployees(filterEmployees(allEmployees));
 });
 document.getElementById("emp-filter-clear")?.addEventListener("click", () => {
   const s = document.getElementById("employee-search");
-  const m = document.getElementById("emp-filter-salary-max");
   const st = document.getElementById("emp-filter-status");
   if (s) s.value = "";
-  if (m) m.value = "";
   if (st) st.value = "";
   renderEmployees(filterEmployees(allEmployees));
 });
@@ -1539,7 +1532,7 @@ function _applyProjectFilters() {
 
   if (_filterStatuses.size > 0) {
     projects = projects.filter((p) =>
-      _filterStatuses.has(_computeProjectStatus(p)),
+      _filterStatuses.has(p.displayStatus),
     );
   }
 
@@ -1670,8 +1663,7 @@ function _renderProjectKanban(projects) {
   todayDate.setHours(0, 0, 0, 0);
 
   for (const p of projects) {
-    const computed = _computeProjectStatus(p, todayDate);
-    switch (computed) {
+    switch (p.displayStatus) {
       case "draft":
         buckets.draft.push(p);
         break;
@@ -1698,26 +1690,6 @@ function _renderProjectKanban(projects) {
   }
 }
 
-// Compute display status from DB status + dates (no DB writes)
-function _computeProjectStatus(project, todayDate) {
-  if (project.status === "draft") return "draft";
-  if (project.status === "canceled") return "canceled";
-  if (!project.startDate || !project.endDate) return "planning";
-  const start = new Date(project.startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(project.endDate);
-  end.setHours(0, 0, 0, 0);
-  const today =
-    todayDate ??
-    (() => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      return d;
-    })();
-  if (today < start) return "planning";
-  if (today > end) return "completed";
-  return "active";
-}
 
 function renderProjectCard(project) {
   const statusMap = {
@@ -1727,9 +1699,8 @@ function renderProjectCard(project) {
     completed: { label: "Completed", cls: "badge-success" },
     canceled: { label: "Canceled", cls: "badge-error" },
   };
-  const computed = _computeProjectStatus(project);
-  const badge = statusMap[computed] ?? {
-    label: computed,
+  const badge = statusMap[project.displayStatus] ?? {
+    label: project.displayStatus,
     cls: "badge-pending",
   };
   const fmt = (d) =>
@@ -2763,12 +2734,17 @@ function buildBriefRow(brief) {
       ? brief.content.slice(0, 120) + "…"
       : brief.content;
 
+  const ackHtml =
+    brief.totalRelevant > 0
+      ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
+      : "";
+
   row.innerHTML = `
     <div class="pd-row-summary">
       <div class="pd-brief-summary">
         <span class="pd-brief-title-text">${escapeHtml(brief.title)}</span>
         <span class="pd-brief-preview-text">${escapeHtml(preview)}</span>
-        <span class="pd-brief-author-text">Created by: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}</span>
+        <span class="pd-brief-author-text">Created by: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}${ackHtml}</span>
       </div>
       <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
     </div>
@@ -2780,6 +2756,10 @@ function buildBriefRow(brief) {
       <div class="pd-form-actions">
         <button class="pd-form-save-btn" disabled>Save</button>
         <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+      <div class="ed-ack-section">
+        <div class="ed-ack-header">Acknowledgments</div>
+        <div class="ed-brief-ack-list"></div>
       </div>
     </div>`;
   wireBriefRow(row, brief);
@@ -2806,6 +2786,44 @@ function wireBriefRow(row, brief) {
     _expandedRow = row;
     form.classList.add("expanded");
     row.classList.add("pd-row--expanded");
+
+    // Load acknowledgments (once)
+    const ackListEl = form.querySelector(".ed-brief-ack-list");
+    if (ackListEl && ackListEl.innerHTML === "") {
+      ackListEl.innerHTML = '<span class="ed-ack-loading">Loading…</span>';
+      getToken().then((token) =>
+        fetch(
+          `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+          .then((r) => (r.ok ? r.json() : Promise.reject()))
+          .then((acks) => {
+            if (acks.length === 0) {
+              ackListEl.innerHTML =
+                '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
+            } else {
+              const readCount = acks.filter((a) => a.isRead).length;
+              const total = acks.length;
+              const headerEl = form.querySelector(".ed-ack-header");
+              if (headerEl) headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
+              ackListEl.innerHTML = acks
+                .map(
+                  (a) => `
+              <div class="ed-ack-item${a.isRead ? " ed-ack-item--read" : ""}">
+                <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
+                ${a.isRead
+                    ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
+                    : `<span class="ed-ack-pending">Pending</span>`}
+              </div>`,
+                )
+                .join("");
+            }
+          })
+          .catch(() => {
+            ackListEl.innerHTML = '<span class="ed-ack-empty">Failed to load.</span>';
+          }),
+      );
+    }
   });
 
   const isDirty = () =>
@@ -7915,6 +7933,7 @@ function _renderInvoiceTable() {
       <td class="inv-actions">
         <button class="btn-icon-sm" title="Record Payment" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
         <button class="btn-icon-sm" title="Edit" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon-sm" title="Download PDF" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
         <button class="btn-icon-sm btn-icon-danger" title="Cancel" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="x-circle"></i></button>
       </td>
     </tr>`;
@@ -7930,8 +7949,29 @@ function _wireInvoiceTableActions() {
     btn.addEventListener("click", () => openRecordPaymentModal(btn.dataset.invPay)));
   tbody.querySelectorAll("[data-inv-edit]").forEach((btn) =>
     btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invEdit })));
+  tbody.querySelectorAll("[data-inv-pdf]").forEach((btn) =>
+    btn.addEventListener("click", () => _downloadInvoicePdf(btn.dataset.invPdf, btn.dataset.invNum)));
   tbody.querySelectorAll("[data-inv-cancel]").forEach((btn) =>
     btn.addEventListener("click", () => _cancelInvoice(btn.dataset.invCancel)));
+}
+
+async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error();
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoice-${(invoiceNumber || invoiceId).replace(/\//g, "-")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch { alert("Failed to download PDF."); }
 }
 
 async function _cancelInvoice(invoiceId) {

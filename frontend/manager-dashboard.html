@@ -89,10 +89,6 @@
         <i data-lucide="receipt"></i>
         <span>Invoices</span>
       </a>
-      <a href="#" class="nav-item disabled">
-        <i data-lucide="radio"></i>
-        <span>Live Mode</span>
-      </a>
       <a href="#" class="nav-item" data-section="chats">
         <i data-lucide="message-square"></i>
         <span>Chats</span>
@@ -115,11 +111,6 @@
       <div class="emp-filter-bar">
         <input type="search" class="search-input" id="employee-search"
           placeholder="Search by name…" autocomplete="off" />
-        <div class="emp-filter-group">
-          <label class="emp-filter-label">Max cost/hr (₪)</label>
-          <input type="number" class="emp-filter-input" id="emp-filter-salary-max"
-            placeholder="e.g. 100" min="0" step="1" />
-        </div>
         <div class="emp-filter-group">
           <label class="emp-filter-label">Status</label>
           <select class="emp-filter-select" id="emp-filter-status">
@@ -1399,10 +1390,12 @@
             <label for="inv-pay-status">Status (auto-calculated if blank)</label>
             <select id="inv-pay-status">
               <option value="">Auto</option>
+              <option value="draft">Draft</option>
               <option value="sent">Sent</option>
               <option value="partial">Partial</option>
               <option value="paid">Paid</option>
               <option value="overdue">Overdue</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
         </div>

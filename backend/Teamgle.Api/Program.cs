@@ -1,7 +1,10 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using QuestPDF.Infrastructure;
 using Teamgle.Api.Repositories;
 using Teamgle.Api.Services;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -372,6 +372,26 @@ public class ProjectsController : ControllerBase
         }
     }
 
+    // ── GET /api/projects/{id}/briefs/{briefId}/acknowledgments ──────────────
+    [HttpGet("{id}/briefs/{briefId}/acknowledgments")]
+    public async Task<IActionResult> GetProjectBriefAcknowledgments(string id, string briefId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var acks = await _projectService.GetBriefAcknowledgmentsAsync(uid, briefId);
+            if (acks == null) return NotFound(new { error = "Brief not found." });
+            return Ok(acks);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching acknowledgments for brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── POST /api/projects/{id}/events/{eventId}/potential-workers/{employeeFBUID}/send-offer
     [HttpPost("{id}/events/{eventId}/potential-workers/{employeeFBUID}/send-offer")]
     public async Task<IActionResult> SendOfferToEmployee(
