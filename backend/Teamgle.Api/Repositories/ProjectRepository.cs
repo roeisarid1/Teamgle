@@ -99,6 +99,153 @@ public class ProjectRepository : IProjectRepository
         return projId;
     }
 
+    // ── sp_UpdateProject ──────────────────────────────────────────────────
+    public async Task<ProjectResponse?> UpdateProjectAsync(string projId, UpdateProjectRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_UpdateProject", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@projId",       projId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+        cmd.Parameters.AddWithValue("@name",         request.Name.Trim());
+        cmd.Parameters.AddWithValue("@startDate",    (object?)request.StartDate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@endDate",      (object?)request.EndDate   ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@status",       request.Status);
+        cmd.Parameters.AddWithValue("@customerId",   (object?)request.CustomerId ?? DBNull.Value);
+
+        await conn.OpenAsync();
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+                return new ProjectResponse
+                {
+                    ProjId     = reader["projId"].ToString()!,
+                    Name       = reader["name"].ToString()!,
+                    StartDate  = reader["startDate"]   == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["startDate"]),
+                    EndDate    = reader["endDate"]     == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["endDate"]),
+                    Status     = reader["status"].ToString()!,
+                    CustomerId = reader["customerId"]  == DBNull.Value ? null : reader["customerId"].ToString(),
+                };
+            return null;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_DeleteProject ──────────────────────────────────────────────────
+    public async Task<bool> DeleteProjectAsync(string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_DeleteProject", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@projId",       projId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_UpdateEvent ────────────────────────────────────────────────────
+    public async Task<EventResponse?> UpdateEventAsync(string eventId, UpdateEventRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_UpdateEvent", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@eventId",         eventId);
+        cmd.Parameters.AddWithValue("@managerFBUID",    firebaseUid);
+        cmd.Parameters.AddWithValue("@name",            request.Name.Trim());
+        cmd.Parameters.AddWithValue("@location",        (object?)request.Location?.Trim()  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@startTime",       request.StartTime);
+        cmd.Parameters.AddWithValue("@endTime",         request.EndTime);
+        cmd.Parameters.AddWithValue("@status",          request.Status);
+        cmd.Parameters.AddWithValue("@eventType",       (object?)request.EventType?.Trim()  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@plannedBudget",   (object?)request.PlannedBudget      ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@expectedRevenue", (object?)request.ExpectedRevenue    ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@attendeesCount",  (object?)request.AttendeesCount     ?? DBNull.Value);
+
+        await conn.OpenAsync();
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+                return new EventResponse
+                {
+                    EventId         = reader["eventId"].ToString()!,
+                    Name            = reader["name"].ToString()!,
+                    Location        = reader["location"]        == DBNull.Value ? null : reader["location"].ToString(),
+                    StartTime       = reader["startTime"]       == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["startTime"]),
+                    EndTime         = reader["endTime"]         == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["endTime"]),
+                    Status          = reader["status"].ToString()!,
+                    EventType       = reader["eventType"]       == DBNull.Value ? null : reader["eventType"].ToString(),
+                    PlannedBudget   = reader["plannedBudget"]   == DBNull.Value ? null : (decimal?)Convert.ToDecimal(reader["plannedBudget"]),
+                    ExpectedRevenue = reader["expectedRevenue"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(reader["expectedRevenue"]),
+                    AttendeesCount  = reader["attendeesCount"]  == DBNull.Value ? null : (int?)Convert.ToInt32(reader["attendeesCount"]),
+                    ProjectId       = reader["projectId"]       == DBNull.Value ? null : reader["projectId"].ToString(),
+                };
+            return null;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_DeleteEvent ────────────────────────────────────────────────────
+    public async Task<bool> DeleteEventAsync(string eventId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_DeleteEvent", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@eventId",      eventId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
     // ── Insert into Manager_Project (links manager as owner) ──────────────
     public async Task CreateManagerProjectAsync(string projId, string userId)
     {

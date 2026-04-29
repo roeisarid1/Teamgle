@@ -93,6 +93,44 @@ public class ProjectService : IProjectService
         };
     }
 
+    // ── Update project ─────────────────────────────────────────────────────
+    public async Task<ProjectResponse?> UpdateProjectAsync(string firebaseUid, string projId, UpdateProjectRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Project name is required.");
+        if (request.EndDate.HasValue && request.StartDate.HasValue && request.EndDate < request.StartDate)
+            throw new ArgumentException("End date cannot be before start date.");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdateProjectAsync(projId, request, firebaseUid);
+    }
+
+    // ── Delete project ─────────────────────────────────────────────────────
+    public async Task<bool> DeleteProjectAsync(string firebaseUid, string projId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.DeleteProjectAsync(projId, firebaseUid);
+    }
+
+    // ── Update event ───────────────────────────────────────────────────────
+    public async Task<EventResponse?> UpdateEventAsync(string firebaseUid, string eventId, UpdateEventRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Event name is required.");
+        if (request.EndTime <= request.StartTime)
+            throw new ArgumentException("End time must be after start time.");
+
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.UpdateEventAsync(eventId, request, firebaseUid);
+    }
+
+    // ── Delete event ───────────────────────────────────────────────────────
+    public async Task<bool> DeleteEventAsync(string firebaseUid, string eventId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.DeleteEventAsync(eventId, firebaseUid);
+    }
+
     // ── Get all projects for the authenticated manager ─────────────────────
     public async Task<IEnumerable<ProjectListItemResponse>> GetProjectsAsync(string firebaseUid)
     {

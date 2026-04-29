@@ -8,6 +8,10 @@ public interface IProjectService
     Task<IEnumerable<ProjectListItemResponse>> GetProjectsAsync(string firebaseUid);
     Task<ProjectDetailResponse?> GetProjectByIdAsync(string firebaseUid, string projId);
     Task<ProjectScheduleResponse?> GetProjectScheduleAsync(string firebaseUid, string projId);
+    Task<ProjectResponse?> UpdateProjectAsync(string firebaseUid, string projId, UpdateProjectRequest request);
+    Task<bool> DeleteProjectAsync(string firebaseUid, string projId);
+    Task<EventResponse?> UpdateEventAsync(string firebaseUid, string eventId, UpdateEventRequest request);
+    Task<bool> DeleteEventAsync(string firebaseUid, string eventId);
     Task CreateEventShiftAsync(string firebaseUid, string eventId, CreateShiftRequest request);
     Task UpdateShiftAsync(string firebaseUid, string shiftId, UpdateShiftRequest request);
     Task DeleteShiftAsync(string firebaseUid, string shiftId);

@@ -8250,3 +8250,350 @@ function _invBuildFinanceBlock(invoices, opts = {}) {
   </div>`;
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PROJECT EDIT / DELETE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Wire up header buttons ─────────────────────────────────────────────────
+
+document.getElementById("btn-edit-project").addEventListener("click", openProjectEditModal);
+document.getElementById("btn-delete-project").addEventListener("click", () => confirmDelete("project"));
+
+// ── Open edit modal ────────────────────────────────────────────────────────
+
+function openProjectEditModal() {
+  const proj = currentProjectDetail;
+  if (!proj) return;
+
+  document.getElementById("proj-edit-name").value   = proj.name ?? "";
+  document.getElementById("proj-edit-start").value  = proj.startDate ? proj.startDate.slice(0, 10) : "";
+  document.getElementById("proj-edit-end").value    = proj.endDate   ? proj.endDate.slice(0, 10)   : "";
+  document.getElementById("proj-edit-status").value = proj.status ?? "draft";
+
+  // Populate customer select from allCustomers
+  const sel = document.getElementById("proj-edit-customer");
+  sel.innerHTML = '<option value="">— No customer —</option>';
+  (allCustomers || []).forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value       = c.customerId ?? c.customer_ID ?? c.id ?? "";
+    opt.textContent = c.customerCompanyName ?? c.customer_company_name ?? c.name ?? opt.value;
+    if (opt.value === proj.customerId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  const err = document.getElementById("proj-edit-error");
+  err.textContent  = "";
+  err.style.display = "none";
+
+  const saveBtn = document.getElementById("proj-edit-save");
+  saveBtn.disabled    = false;
+  saveBtn.textContent = "Save Changes";
+
+  const overlay = document.getElementById("proj-edit-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+  document.getElementById("proj-edit-name").focus();
+}
+
+function _closeProjEditModal() {
+  document.getElementById("proj-edit-overlay").style.display = "none";
+}
+
+document.getElementById("proj-edit-close").addEventListener("click", _closeProjEditModal);
+document.getElementById("proj-edit-cancel").addEventListener("click", _closeProjEditModal);
+document.getElementById("proj-edit-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeProjEditModal();
+});
+
+// ── Save ───────────────────────────────────────────────────────────────────
+
+document.getElementById("proj-edit-save").addEventListener("click", async () => {
+  const name      = document.getElementById("proj-edit-name").value.trim();
+  const startDate = document.getElementById("proj-edit-start").value || null;
+  const endDate   = document.getElementById("proj-edit-end").value   || null;
+  const status    = document.getElementById("proj-edit-status").value;
+  const customerId = document.getElementById("proj-edit-customer").value || null;
+
+  const errEl = document.getElementById("proj-edit-error");
+  errEl.style.display = "none";
+
+  if (!name) {
+    errEl.textContent  = "Project name is required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (startDate && endDate && endDate < startDate) {
+    errEl.textContent  = "End date cannot be before start date.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  const saveBtn = document.getElementById("proj-edit-save");
+  saveBtn.disabled    = true;
+  saveBtn.textContent = "Saving…";
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name, startDate, endDate, status, customerId }),
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update project.");
+    }
+    _closeProjEditModal();
+    await Promise.all([
+      loadProjects(),
+      openProjectDetail(currentProjectId),
+    ]);
+  } catch (err) {
+    errEl.textContent  = err.message;
+    errEl.style.display = "block";
+  } finally {
+    saveBtn.disabled    = false;
+    saveBtn.textContent = "Save Changes";
+  }
+});
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+
+async function _executeDeleteProject() {
+  const btn = document.getElementById("delete-confirm-ok");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete project.");
+    }
+    _closeDeleteConfirm();
+    _stopStaffingPoll();
+    await loadProjects();
+    activateSection("projects");
+  } catch (err) {
+    document.getElementById("delete-confirm-message").textContent = err.message;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Delete";
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EVENT EDIT / DELETE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Wire up header buttons ─────────────────────────────────────────────────
+
+document.getElementById("btn-edit-event").addEventListener("click", openEventEditModal);
+document.getElementById("btn-delete-event").addEventListener("click", () => confirmDelete("event"));
+
+// ── Open edit modal ────────────────────────────────────────────────────────
+
+function _toDatetimeLocal(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openEventEditModal() {
+  const ev = (currentProjectDetail?.events ?? []).find(
+    (e) => e.eventId === currentEventId,
+  );
+  if (!ev) return;
+
+  document.getElementById("event-edit-name").value       = ev.name       ?? "";
+  document.getElementById("event-edit-location").value   = ev.location   ?? "";
+  document.getElementById("event-edit-start").value      = _toDatetimeLocal(ev.startTime);
+  document.getElementById("event-edit-end").value        = _toDatetimeLocal(ev.endTime);
+  document.getElementById("event-edit-status").value     = ev.status     ?? "planning";
+  document.getElementById("event-edit-type").value       = ev.eventType  ?? "other";
+  document.getElementById("event-edit-budget").value     = ev.plannedBudget   != null ? ev.plannedBudget   : "";
+  document.getElementById("event-edit-revenue").value    = ev.expectedRevenue != null ? ev.expectedRevenue : "";
+  document.getElementById("event-edit-attendees").value  = ev.attendeesCount  != null ? ev.attendeesCount  : "";
+
+  const err = document.getElementById("event-edit-error");
+  err.textContent  = "";
+  err.style.display = "none";
+
+  const saveBtn = document.getElementById("event-edit-save");
+  saveBtn.disabled    = false;
+  saveBtn.textContent = "Save Changes";
+
+  const overlay = document.getElementById("event-edit-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+  document.getElementById("event-edit-name").focus();
+}
+
+function _closeEventEditModal() {
+  document.getElementById("event-edit-overlay").style.display = "none";
+}
+
+document.getElementById("event-edit-close").addEventListener("click", _closeEventEditModal);
+document.getElementById("event-edit-cancel").addEventListener("click", _closeEventEditModal);
+document.getElementById("event-edit-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeEventEditModal();
+});
+
+// ── Save ───────────────────────────────────────────────────────────────────
+
+document.getElementById("event-edit-save").addEventListener("click", async () => {
+  const name            = document.getElementById("event-edit-name").value.trim();
+  const location        = document.getElementById("event-edit-location").value.trim() || null;
+  const startTime       = document.getElementById("event-edit-start").value;
+  const endTime         = document.getElementById("event-edit-end").value;
+  const status          = document.getElementById("event-edit-status").value;
+  const eventType       = document.getElementById("event-edit-type").value || null;
+  const budgetVal       = document.getElementById("event-edit-budget").value;
+  const revenueVal      = document.getElementById("event-edit-revenue").value;
+  const attendeesVal    = document.getElementById("event-edit-attendees").value;
+  const plannedBudget   = budgetVal   !== "" ? parseFloat(budgetVal)   : null;
+  const expectedRevenue = revenueVal  !== "" ? parseFloat(revenueVal)  : null;
+  const attendeesCount  = attendeesVal !== "" ? parseInt(attendeesVal, 10) : null;
+
+  const errEl = document.getElementById("event-edit-error");
+  errEl.style.display = "none";
+
+  if (!name) {
+    errEl.textContent  = "Event name is required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (!startTime || !endTime) {
+    errEl.textContent  = "Start time and end time are required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (endTime <= startTime) {
+    errEl.textContent  = "End time must be after start time.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  const saveBtn = document.getElementById("event-edit-save");
+  saveBtn.disabled    = true;
+  saveBtn.textContent = "Saving…";
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name, location, startTime, endTime, status,
+          eventType, plannedBudget, expectedRevenue, attendeesCount,
+        }),
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update event.");
+    }
+    _closeEventEditModal();
+    // Refresh project detail so events list is up-to-date, then stay on event detail
+    await openProjectDetail(currentProjectId);
+    const updatedEv = (currentProjectDetail?.events ?? []).find(
+      (e) => e.eventId === currentEventId,
+    );
+    if (updatedEv) {
+      document.getElementById("event-detail-title").textContent    = escapeHtml(updatedEv.name);
+      document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(updatedEv);
+    }
+    activateSection("event-detail");
+  } catch (err) {
+    errEl.textContent  = err.message;
+    errEl.style.display = "block";
+  } finally {
+    saveBtn.disabled    = false;
+    saveBtn.textContent = "Save Changes";
+  }
+});
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+
+async function _executeDeleteEvent() {
+  const btn = document.getElementById("delete-confirm-ok");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete event.");
+    }
+    _closeDeleteConfirm();
+    await openProjectDetail(currentProjectId);
+    activateSection("project-detail");
+  } catch (err) {
+    document.getElementById("delete-confirm-message").textContent = err.message;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Delete";
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SHARED DELETE CONFIRM MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _deleteTarget = null; // "project" | "event"
+
+const _deleteWarnings = {
+  project: "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Invoices will be detached (not deleted).",
+  event:   "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Invoices will be detached (not deleted).",
+};
+
+function confirmDelete(target) {
+  _deleteTarget = target;
+  const name  = target === "project"
+    ? (currentProjectDetail?.name ?? "this project")
+    : ((currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId)?.name ?? "this event");
+
+  document.getElementById("delete-confirm-title").textContent        = `Delete ${target === "project" ? "Project" : "Event"}`;
+  document.getElementById("delete-confirm-message").textContent      = `Are you sure you want to delete "${name}"?`;
+  document.getElementById("delete-confirm-warning-text").textContent = _deleteWarnings[target];
+  document.getElementById("delete-confirm-ok").disabled              = false;
+  document.getElementById("delete-confirm-ok").textContent           = "Delete";
+
+  const overlay = document.getElementById("delete-confirm-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+}
+
+function _closeDeleteConfirm() {
+  document.getElementById("delete-confirm-overlay").style.display = "none";
+  _deleteTarget = null;
+}
+
+document.getElementById("delete-confirm-close").addEventListener("click", _closeDeleteConfirm);
+document.getElementById("delete-confirm-cancel").addEventListener("click", _closeDeleteConfirm);
+document.getElementById("delete-confirm-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeDeleteConfirm();
+});
+
+document.getElementById("delete-confirm-ok").addEventListener("click", () => {
+  if (_deleteTarget === "project") _executeDeleteProject();
+  else if (_deleteTarget === "event") _executeDeleteEvent();
+});
+

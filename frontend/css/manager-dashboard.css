@@ -5596,3 +5596,82 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--green);
 }
 
+
+/* ── Project / Event edit-delete header actions ──────────────────────────── */
+
+.cp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-header-action svg { width: 15px; height: 15px; }
+.btn-header-action:hover { background: var(--hover); }
+
+.btn-header-action--danger {
+  color: var(--red, #DC2626);
+  border-color: var(--red-light, #FEE2E2);
+}
+.btn-header-action--danger:hover {
+  background: var(--red-light, #FEE2E2);
+}
+
+/* ── Shared delete confirm modal ─────────────────────────────────────────── */
+
+.modal.modal--sm { max-width: 440px; }
+
+.modal-title--danger { color: var(--red, #DC2626); }
+
+.delete-confirm-msg {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.delete-confirm-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delete-confirm-warning svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.modal-field-error {
+  color: var(--red, #DC2626);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.btn-danger {
+  background: var(--red, #DC2626);
+  color: #fff;
+  border: none;
+}
+.btn-danger:hover { background: #B91C1C; }
+.btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .cp-header-actions { gap: 6px; }
+  .btn-header-action { padding: 5px 10px; font-size: 12px; }
+}

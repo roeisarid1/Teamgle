@@ -143,6 +143,49 @@ public class ProjectsController : ControllerBase
         }
     }
 
+    // ── PUT /api/projects/{id} ────────────────────────────────────────────
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateProject(string id, [FromBody] UpdateProjectRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var project = await _projectService.UpdateProjectAsync(uid, id, request);
+            if (project == null) return NotFound(new { error = "Project not found." });
+            return Ok(project);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ── DELETE /api/projects/{id} ─────────────────────────────────────────
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteProject(string id)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var deleted = await _projectService.DeleteProjectAsync(uid, id);
+            if (!deleted) return NotFound(new { error = "Project not found." });
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting project {Id}", id);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── GET /api/projects/{id}/tasks ──────────────────────────────────────
     [HttpGet("{id}/tasks")]
     public async Task<IActionResult> GetProjectTasks(string id)
