@@ -1049,6 +1049,7 @@ public class ProjectRepository : IProjectRepository
         const string sql = """
             SELECT
                 es.shift_ID,
+                es.status,
                 es.pay_rate_per_hour,
                 es.notes,
                 es.planned_start_time,
@@ -1072,8 +1073,19 @@ public class ProjectRepository : IProjectRepository
             INNER JOIN Manager_Project mp ON p.Proj_ID = mp.project_ID AND mp.is_owner = 1
             INNER JOIN [User] u           ON mp.manager_user_ID = u.user_ID
             WHERE eu.FBUID = @fbuid
-              AND es.status = 'manager_offer_sent'
-            ORDER BY COALESCE(es.planned_start_time, s.start_time)
+              AND es.status IN (
+                  'manager_offer_sent',
+                  'employee_request',
+                  'employee_request_canceled'
+              )
+            ORDER BY
+                CASE es.status
+                    WHEN 'manager_offer_sent'       THEN 0
+                    WHEN 'employee_request'         THEN 1
+                    WHEN 'employee_request_canceled' THEN 2
+                    ELSE 3
+                END,
+                COALESCE(es.planned_start_time, s.start_time)
             """;
 
         var offers = new List<JobOfferResponse>();
@@ -1090,6 +1102,7 @@ public class ProjectRepository : IProjectRepository
             offers.Add(new JobOfferResponse
             {
                 ShiftId          = reader["shift_ID"].ToString()!,
+                Status           = reader["status"].ToString()!,
                 PayRatePerHour   = reader["pay_rate_per_hour"] == DBNull.Value ? null : (decimal?)reader["pay_rate_per_hour"],
                 Notes            = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
                 PlannedStartTime = reader["planned_start_time"] == DBNull.Value ? null : (DateTime?)reader["planned_start_time"],

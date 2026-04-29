@@ -5652,6 +5652,137 @@ async function _handleWorkerStatusChange(
   }
 }
 
+function _formatAutoAssignTime(start, end) {
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+  const startText = fmt(start);
+  const endText = fmt(end);
+  return startText ? (endText ? `${startText}-${endText}` : startText) : "";
+}
+
+function _pct(value) {
+  const n = Number(value ?? 0);
+  return `${Math.round(n * 100)}%`;
+}
+
+function _scoreBar(label, value, title) {
+  const n = Math.max(0, Math.min(1, Number(value ?? 0)));
+  return `
+    <div class="aa-metric" title="${escapeHtml(title ?? "")}">
+      <div class="aa-metric-top">
+        <span>${escapeHtml(label)}</span>
+        <strong>${_pct(n)}</strong>
+      </div>
+      <div class="aa-bar"><span style="width:${Math.round(n * 100)}%"></span></div>
+    </div>`;
+}
+
+function _buildAutoAssignWorkerCard(decision) {
+  const fullName = `${decision.firstName ?? ""} ${decision.lastName ?? ""}`.trim() || "Worker";
+  const initials =
+    ((decision.firstName ?? "")[0] ?? "") + ((decision.lastName ?? "")[0] ?? "");
+  const status = decision.decision === "assigned" ? "assigned" : "standby";
+  const statusLabel = status === "assigned" ? "Assigned" : "Standby";
+  const attendanceText = `${Number(decision.attendanceMinutesLateAvg ?? 0).toFixed(1)} min avg late`;
+  const costText =
+    Number(decision.costPerHour ?? 0) > 0
+      ? `${Number(decision.costPerHour).toFixed(2)}/hr`
+      : "No cost set";
+
+  return `
+    <article class="aa-worker-card aa-worker-card--${status}">
+      <div class="aa-worker-head">
+        <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
+        <div class="aa-worker-title">
+          <div class="aa-worker-name">${escapeHtml(fullName)}</div>
+          <div class="aa-worker-rank">Rank #${Number(decision.rank ?? 0)} · score ${_pct(decision.totalScore)}</div>
+        </div>
+        <span class="aa-status aa-status--${status}">${statusLabel}</span>
+      </div>
+      <div class="aa-metrics-grid">
+        ${_scoreBar("Commitment", decision.commitmentScore, `Accepted ${_pct(decision.commitmentRate)} of prior offers`)}
+        ${_scoreBar("Attendance", decision.attendanceScore, attendanceText)}
+        ${_scoreBar("Role fit", decision.roleFitScore, `${_pct(decision.roleExperienceRate)} of approved shifts were in this role`)}
+        ${_scoreBar("Cost", decision.costScore, costText)}
+      </div>
+      <div class="aa-worker-foot">
+        <span><i data-lucide="clock"></i>${escapeHtml(attendanceText)}</span>
+        <span><i data-lucide="badge-dollar-sign"></i>${escapeHtml(costText)}</span>
+      </div>
+    </article>`;
+}
+
+function _showAutoAssignInsights(results) {
+  const totalAssigned = results.reduce((s, r) => s + (r.assigned ?? 0), 0);
+  const totalStandby = results.reduce((s, r) => s + (r.standby ?? 0), 0);
+  const warnings = results.map((r) => r.warning).filter(Boolean);
+  const shiftBlocks = results
+    .map((r) => {
+      const decisions = r.decisions ?? [];
+      const timeText = _formatAutoAssignTime(r.shiftStart, r.shiftEnd);
+      const cards = decisions.length
+        ? decisions.map(_buildAutoAssignWorkerCard).join("")
+        : `<div class="aa-empty">No eligible applicants were scored for this shift.</div>`;
+      return `
+        <section class="aa-shift-block">
+          <div class="aa-shift-head">
+            <div>
+              <h4>${escapeHtml(r.roleName ?? "Shift")}</h4>
+              <p>${escapeHtml(timeText)} · Required ${r.required ?? 0}, already approved ${r.alreadyApproved ?? 0}</p>
+            </div>
+            <div class="aa-shift-counts">
+              <span>${r.assigned ?? 0} assigned</span>
+              <span>${r.standby ?? 0} standby</span>
+            </div>
+          </div>
+          <div class="aa-worker-grid">${cards}</div>
+        </section>`;
+    })
+    .join("");
+
+  document.getElementById("auto-assign-insights-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay open";
+  overlay.id = "auto-assign-insights-overlay";
+  overlay.innerHTML = `
+    <div class="modal modal-wide auto-assign-modal" role="dialog" aria-modal="true" aria-labelledby="aa-title">
+      <div class="modal-header">
+        <div class="modal-header-content">
+          <div class="modal-header-icon modal-icon-amber"><i data-lucide="sparkles"></i></div>
+          <div class="modal-header-text">
+            <h3 id="aa-title">Auto-Assign Results</h3>
+          </div>
+        </div>
+        <button class="btn-close" data-aa-close aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body auto-assign-body">
+        <div class="aa-summary">
+          <div><span>Assigned</span><strong>${totalAssigned}</strong></div>
+          <div><span>Standby</span><strong>${totalStandby}</strong></div>
+          <div><span>Scored workers</span><strong>${results.reduce((s, r) => s + ((r.decisions ?? []).length), 0)}</strong></div>
+        </div>
+        ${warnings.length ? `<div class="aa-warning"><i data-lucide="alert-triangle"></i><span>${escapeHtml(warnings.join(" "))}</span></div>` : ""}
+        ${shiftBlocks}
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" data-aa-close>Done</button>
+      </div>
+    </div>`;
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.closest("[data-aa-close]")) close();
+  });
+  document.body.appendChild(overlay);
+  if (window.lucide) lucide.createIcons();
+}
+
 async function _handleAutoAssign(eventId, btn) {
   // Find every shift ID that has applicants inside this event's applicants section
   const section = document.getElementById(`ps-section-${eventId}-applicants`);
@@ -5695,14 +5826,7 @@ async function _handleAutoAssign(eventId, btn) {
     btn.textContent = "⚡ Auto-Assign";
     await loadAndRenderEventWorkers(eventId);
 
-    // Build a short summary message for the manager
-    const totalAssigned = results.reduce((s, r) => s + r.assigned, 0);
-    const totalStandby = results.reduce((s, r) => s + r.standby, 0);
-    const warnings = results.map((r) => r.warning).filter(Boolean);
-
-    let msg = `✅ Auto-assign complete.\nAssigned: ${totalAssigned}  |  Standby: ${totalStandby}`;
-    if (warnings.length > 0) msg += `\n\n⚠️ ${warnings.join("\n")}`;
-    alert(msg);
+    _showAutoAssignInsights(results);
   } catch (err) {
     console.error("Auto-assign failed:", err);
     alert(`Auto-assign failed: ${err.message}`);
