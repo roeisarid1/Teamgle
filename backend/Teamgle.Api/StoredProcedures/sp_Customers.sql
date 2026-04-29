@@ -279,6 +279,14 @@ BEGIN
 
     BEGIN TRANSACTION;
     BEGIN TRY
+        -- Guard: block deletion if any invoices reference this customer (FK_Invoice_Customer).
+        -- Even cancelled invoices must be preserved for audit / history.
+        IF EXISTS (SELECT 1 FROM Invoice WHERE customer_ID = @customerId)
+        BEGIN
+            RAISERROR('Cannot delete customer: one or more invoices exist for this customer. Remove all invoices first.', 16, 1);
+            RETURN;
+        END
+
         -- Step 1: detach any projects that reference this customer
         UPDATE Project
         SET    customer_ID = NULL

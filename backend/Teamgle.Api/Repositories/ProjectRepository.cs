@@ -59,6 +59,23 @@ public class ProjectRepository : IProjectRepository
         var validStatuses = new HashSet<string> { "draft", "planning", "active", "completed", "canceled" };
         var status = validStatuses.Contains(request.Status) ? request.Status : "draft";
 
+        // Validate that the customer belongs to this company before inserting.
+        if (request.CustomerId != null)
+        {
+            const string ownershipSql = """
+                SELECT COUNT(1) FROM Customer
+                WHERE customer_ID = @cid AND company_ID = @companyId
+                """;
+            await using var chkConn = new SqlConnection(_connectionString);
+            await using var chkCmd  = new SqlCommand(ownershipSql, chkConn);
+            chkCmd.Parameters.AddWithValue("@cid",       request.CustomerId);
+            chkCmd.Parameters.AddWithValue("@companyId", companyId);
+            await chkConn.OpenAsync();
+            var found = Convert.ToInt32(await chkCmd.ExecuteScalarAsync());
+            if (found == 0)
+                throw new ArgumentException("Customer not found or does not belong to your company.");
+        }
+
         const string sql = """
             INSERT INTO Project
                 (Proj_ID, name, start_date, end_date, status, customer_ID)
@@ -80,6 +97,153 @@ public class ProjectRepository : IProjectRepository
         await cmd.ExecuteNonQueryAsync();
 
         return projId;
+    }
+
+    // ── sp_UpdateProject ──────────────────────────────────────────────────
+    public async Task<ProjectResponse?> UpdateProjectAsync(string projId, UpdateProjectRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_UpdateProject", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@projId",       projId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+        cmd.Parameters.AddWithValue("@name",         request.Name.Trim());
+        cmd.Parameters.AddWithValue("@startDate",    (object?)request.StartDate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@endDate",      (object?)request.EndDate   ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@status",       request.Status);
+        cmd.Parameters.AddWithValue("@customerId",   (object?)request.CustomerId ?? DBNull.Value);
+
+        await conn.OpenAsync();
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+                return new ProjectResponse
+                {
+                    ProjId     = reader["projId"].ToString()!,
+                    Name       = reader["name"].ToString()!,
+                    StartDate  = reader["startDate"]   == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["startDate"]),
+                    EndDate    = reader["endDate"]     == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["endDate"]),
+                    Status     = reader["status"].ToString()!,
+                    CustomerId = reader["customerId"]  == DBNull.Value ? null : reader["customerId"].ToString(),
+                };
+            return null;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_DeleteProject ──────────────────────────────────────────────────
+    public async Task<bool> DeleteProjectAsync(string projId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_DeleteProject", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@projId",       projId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_UpdateEvent ────────────────────────────────────────────────────
+    public async Task<EventResponse?> UpdateEventAsync(string eventId, UpdateEventRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_UpdateEvent", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@eventId",         eventId);
+        cmd.Parameters.AddWithValue("@managerFBUID",    firebaseUid);
+        cmd.Parameters.AddWithValue("@name",            request.Name.Trim());
+        cmd.Parameters.AddWithValue("@location",        (object?)request.Location?.Trim()  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@startTime",       request.StartTime);
+        cmd.Parameters.AddWithValue("@endTime",         request.EndTime);
+        cmd.Parameters.AddWithValue("@status",          request.Status);
+        cmd.Parameters.AddWithValue("@eventType",       (object?)request.EventType?.Trim()  ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@plannedBudget",   (object?)request.PlannedBudget      ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@expectedRevenue", (object?)request.ExpectedRevenue    ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@attendeesCount",  (object?)request.AttendeesCount     ?? DBNull.Value);
+
+        await conn.OpenAsync();
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+                return new EventResponse
+                {
+                    EventId         = reader["eventId"].ToString()!,
+                    Name            = reader["name"].ToString()!,
+                    Location        = reader["location"]        == DBNull.Value ? null : reader["location"].ToString(),
+                    StartTime       = reader["startTime"]       == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["startTime"]),
+                    EndTime         = reader["endTime"]         == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(reader["endTime"]),
+                    Status          = reader["status"].ToString()!,
+                    EventType       = reader["eventType"]       == DBNull.Value ? null : reader["eventType"].ToString(),
+                    PlannedBudget   = reader["plannedBudget"]   == DBNull.Value ? null : (decimal?)Convert.ToDecimal(reader["plannedBudget"]),
+                    ExpectedRevenue = reader["expectedRevenue"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(reader["expectedRevenue"]),
+                    AttendeesCount  = reader["attendeesCount"]  == DBNull.Value ? null : (int?)Convert.ToInt32(reader["attendeesCount"]),
+                    ProjectId       = reader["projectId"]       == DBNull.Value ? null : reader["projectId"].ToString(),
+                };
+            return null;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
+    }
+
+    // ── sp_DeleteEvent ────────────────────────────────────────────────────
+    public async Task<bool> DeleteEventAsync(string eventId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_DeleteEvent", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+
+        cmd.Parameters.AddWithValue("@eventId",      eventId);
+        cmd.Parameters.AddWithValue("@managerFBUID", firebaseUid);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("not a registered manager") || msg.Contains("access denied"))
+                throw new UnauthorizedAccessException(msg);
+            if (msg.Contains("not found"))
+                throw new KeyNotFoundException(msg);
+            throw new ArgumentException(msg);
+        }
     }
 
     // ── Insert into Manager_Project (links manager as owner) ──────────────
@@ -148,6 +312,7 @@ public class ProjectRepository : IProjectRepository
                 p.start_date                                  AS StartDate,
                 p.end_date                                    AS EndDate,
                 p.status                                      AS Status,
+                p.customer_ID                                 AS CustomerId,
                 c.customer_company_name                       AS CustomerName,
                 COUNT(DISTINCT e.event_ID)                    AS EventCount,
                 ISNULL(SUM(s.required_quantity), 0)           AS RequiredCount,
@@ -169,7 +334,7 @@ public class ProjectRepository : IProjectRepository
             )
             GROUP BY
                 p.Proj_ID, p.name, p.start_date, p.end_date,
-                p.status, c.customer_company_name
+                p.status, p.customer_ID, c.customer_company_name
             ORDER BY p.start_date DESC
             """;
 
@@ -190,6 +355,9 @@ public class ProjectRepository : IProjectRepository
                 StartDate     = reader.IsDBNull(reader.GetOrdinal("StartDate")) ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
                 EndDate       = reader.IsDBNull(reader.GetOrdinal("EndDate"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
                 Status        = reader.GetString(reader.GetOrdinal("Status")),
+                CustomerId    = reader.IsDBNull(reader.GetOrdinal("CustomerId"))
+                                    ? null
+                                    : reader.GetString(reader.GetOrdinal("CustomerId")),
                 CustomerName  = reader.IsDBNull(reader.GetOrdinal("CustomerName"))
                                     ? null
                                     : reader.GetString(reader.GetOrdinal("CustomerName")),
@@ -212,6 +380,7 @@ public class ProjectRepository : IProjectRepository
                 p.start_date              AS StartDate,
                 p.end_date                AS EndDate,
                 p.status                  AS Status,
+                p.customer_ID             AS CustomerId,
                 c.customer_company_name   AS CustomerName
             FROM Project p
             LEFT  JOIN Customer c ON c.customer_ID = p.customer_ID
@@ -244,6 +413,7 @@ public class ProjectRepository : IProjectRepository
                     StartDate    = reader.IsDBNull(reader.GetOrdinal("StartDate"))    ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
                     EndDate      = reader.IsDBNull(reader.GetOrdinal("EndDate"))      ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
                     Status       = reader.GetString(reader.GetOrdinal("Status")),
+                    CustomerId   = reader.IsDBNull(reader.GetOrdinal("CustomerId"))   ? null : reader.GetString(reader.GetOrdinal("CustomerId")),
                     CustomerName = reader.IsDBNull(reader.GetOrdinal("CustomerName")) ? null : reader.GetString(reader.GetOrdinal("CustomerName")),
                 };
             }
@@ -2134,6 +2304,39 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 ReadAt         = reader.IsDBNull(reader.GetOrdinal("ReadAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ReadAt")),
             });
         return list;
+    }
+
+    public async Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string projId, string briefId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Verify manager has access AND the brief belongs to the given project (directly or via an event)
+        const string accessSql = """
+            SELECT 1
+            FROM   Brief b
+            LEFT JOIN Project p  ON p.Proj_ID  = b.project_ID
+            LEFT JOIN Event   e  ON e.event_ID  = b.event_ID
+            LEFT JOIN Project ep ON ep.Proj_ID  = e.project_ID
+            WHERE b.brief_ID = @briefId
+              AND COALESCE(p.Proj_ID, ep.Proj_ID) = @projId
+              AND COALESCE(p.Proj_ID, ep.Proj_ID) IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @fbUid)
+              )
+            """;
+        await using (var ac = new SqlCommand(accessSql, conn))
+        {
+            ac.Parameters.AddWithValue("@briefId", briefId);
+            ac.Parameters.AddWithValue("@projId",  projId);
+            ac.Parameters.AddWithValue("@fbUid",   firebaseUid);
+            if (await ac.ExecuteScalarAsync() == null) return null;
+        }
+
+        // Delegate to the shared scope-resolution + reader logic
+        return await GetBriefAcknowledgmentsAsync(briefId, firebaseUid);
     }
 
     public async Task<bool> AcknowledgeBriefAsync(string briefId, string firebaseUid)

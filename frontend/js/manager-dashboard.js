@@ -195,12 +195,11 @@ function renderRoles(roles) {
 
 // ── Search helpers ─────────────────────────────────────────────────────────
 function filterEmployees(list) {
-  const q          = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
-  const salaryMax  = parseFloat(document.getElementById("emp-filter-salary-max")?.value ?? "");
-  const statusVal  = (document.getElementById("emp-filter-status")?.value ?? "").toLowerCase();
+  const q         = (document.getElementById("employee-search")?.value ?? "").trim().toLowerCase();
+  const statusVal = (document.getElementById("emp-filter-status")?.value ?? "").toLowerCase();
 
-  const hasFilter  = q || !isNaN(salaryMax) || statusVal;
-  const clearBtn   = document.getElementById("emp-filter-clear");
+  const hasFilter = q || statusVal;
+  const clearBtn  = document.getElementById("emp-filter-clear");
   if (clearBtn) clearBtn.style.display = hasFilter ? "" : "none";
 
   return list.filter((e) => {
@@ -208,7 +207,6 @@ function filterEmployees(list) {
       const full = `${e.firstName} ${e.lastName}`.toLowerCase();
       if (!full.includes(q) && !e.firstName.toLowerCase().includes(q) && !e.lastName.toLowerCase().includes(q)) return false;
     }
-    if (!isNaN(salaryMax) && e.costPerHour != null && e.costPerHour > salaryMax) return false;
     if (statusVal) {
       const empStatus = (e.status ?? "active").toLowerCase();
       if (empStatus !== statusVal) return false;
@@ -230,18 +228,13 @@ function filterCustomers(list) {
 document.getElementById("employee-search")?.addEventListener("input", () => {
   renderEmployees(filterEmployees(allEmployees));
 });
-document.getElementById("emp-filter-salary-max")?.addEventListener("input", () => {
-  renderEmployees(filterEmployees(allEmployees));
-});
 document.getElementById("emp-filter-status")?.addEventListener("change", () => {
   renderEmployees(filterEmployees(allEmployees));
 });
 document.getElementById("emp-filter-clear")?.addEventListener("click", () => {
   const s = document.getElementById("employee-search");
-  const m = document.getElementById("emp-filter-salary-max");
   const st = document.getElementById("emp-filter-status");
   if (s) s.value = "";
-  if (m) m.value = "";
   if (st) st.value = "";
   renderEmployees(filterEmployees(allEmployees));
 });
@@ -1502,6 +1495,7 @@ function activateSection(name) {
   }
   if (name === "create-project") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
+  if (name === "invoices") loadInvoices();
 }
 
 function _initChatSection() {
@@ -1538,7 +1532,7 @@ function _applyProjectFilters() {
 
   if (_filterStatuses.size > 0) {
     projects = projects.filter((p) =>
-      _filterStatuses.has(_computeProjectStatus(p)),
+      _filterStatuses.has(p.displayStatus),
     );
   }
 
@@ -1669,8 +1663,7 @@ function _renderProjectKanban(projects) {
   todayDate.setHours(0, 0, 0, 0);
 
   for (const p of projects) {
-    const computed = _computeProjectStatus(p, todayDate);
-    switch (computed) {
+    switch (p.displayStatus) {
       case "draft":
         buckets.draft.push(p);
         break;
@@ -1697,26 +1690,6 @@ function _renderProjectKanban(projects) {
   }
 }
 
-// Compute display status from DB status + dates (no DB writes)
-function _computeProjectStatus(project, todayDate) {
-  if (project.status === "draft") return "draft";
-  if (project.status === "canceled") return "canceled";
-  if (!project.startDate || !project.endDate) return "planning";
-  const start = new Date(project.startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(project.endDate);
-  end.setHours(0, 0, 0, 0);
-  const today =
-    todayDate ??
-    (() => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      return d;
-    })();
-  if (today < start) return "planning";
-  if (today > end) return "completed";
-  return "active";
-}
 
 function renderProjectCard(project) {
   const statusMap = {
@@ -1726,9 +1699,8 @@ function renderProjectCard(project) {
     completed: { label: "Completed", cls: "badge-success" },
     canceled: { label: "Canceled", cls: "badge-error" },
   };
-  const computed = _computeProjectStatus(project);
-  const badge = statusMap[computed] ?? {
-    label: computed,
+  const badge = statusMap[project.displayStatus] ?? {
+    label: project.displayStatus,
     cls: "badge-pending",
   };
   const fmt = (d) =>
@@ -1869,7 +1841,7 @@ async function openProjectDetail(projId) {
 
     currentProjectDetail = project;
     titleEl.textContent = escapeHtml(project.name);
-    subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
+    subtitleEl.textContent = `${project.displayStatus ?? project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
     renderDashboardTab();
   } catch {
     titleEl.textContent = "Error loading project";
@@ -2704,6 +2676,19 @@ async function renderProjectFinanceTab() {
           </tr></tfoot>
         </table>
       </div>`;
+
+    // Append invoice block
+    const projId   = currentProjectDetail?.projId;
+    const invoices = projId ? await _invFetchForProject(projId) : [];
+    root.innerHTML += _invBuildFinanceBlock(invoices, { createBtnId: "pd-inv-create-btn", context: "project" });
+    lucide.createIcons();
+
+    document.getElementById("pd-inv-create-btn")?.addEventListener("click", () => {
+      openInvoiceModal({
+        prefillProjectId:  projId,
+        prefillCustomerId: currentProjectDetail?.customerId,
+      });
+    });
   } catch {
     root.innerHTML = '<div class="pd-loading">Failed to load finance data.</div>';
   }
@@ -2749,12 +2734,17 @@ function buildBriefRow(brief) {
       ? brief.content.slice(0, 120) + "…"
       : brief.content;
 
+  const ackHtml =
+    brief.totalRelevant > 0
+      ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
+      : "";
+
   row.innerHTML = `
     <div class="pd-row-summary">
       <div class="pd-brief-summary">
         <span class="pd-brief-title-text">${escapeHtml(brief.title)}</span>
         <span class="pd-brief-preview-text">${escapeHtml(preview)}</span>
-        <span class="pd-brief-author-text">Created by: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}</span>
+        <span class="pd-brief-author-text">Created by: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}${ackHtml}</span>
       </div>
       <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
     </div>
@@ -2766,6 +2756,10 @@ function buildBriefRow(brief) {
       <div class="pd-form-actions">
         <button class="pd-form-save-btn" disabled>Save</button>
         <button class="pd-form-cancel-btn">Cancel</button>
+      </div>
+      <div class="ed-ack-section">
+        <div class="ed-ack-header">Acknowledgments</div>
+        <div class="ed-brief-ack-list"></div>
       </div>
     </div>`;
   wireBriefRow(row, brief);
@@ -2792,6 +2786,44 @@ function wireBriefRow(row, brief) {
     _expandedRow = row;
     form.classList.add("expanded");
     row.classList.add("pd-row--expanded");
+
+    // Load acknowledgments (once)
+    const ackListEl = form.querySelector(".ed-brief-ack-list");
+    if (ackListEl && ackListEl.innerHTML === "") {
+      ackListEl.innerHTML = '<span class="ed-ack-loading">Loading…</span>';
+      getToken().then((token) =>
+        fetch(
+          `${API_BASE}/projects/${encodeURIComponent(currentProjectDetail.projId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+          .then((r) => (r.ok ? r.json() : Promise.reject()))
+          .then((acks) => {
+            if (acks.length === 0) {
+              ackListEl.innerHTML =
+                '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
+            } else {
+              const readCount = acks.filter((a) => a.isRead).length;
+              const total = acks.length;
+              const headerEl = form.querySelector(".ed-ack-header");
+              if (headerEl) headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
+              ackListEl.innerHTML = acks
+                .map(
+                  (a) => `
+              <div class="ed-ack-item${a.isRead ? " ed-ack-item--read" : ""}">
+                <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
+                ${a.isRead
+                    ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
+                    : `<span class="ed-ack-pending">Pending</span>`}
+              </div>`,
+                )
+                .join("");
+            }
+          })
+          .catch(() => {
+            ackListEl.innerHTML = '<span class="ed-ack-empty">Failed to load.</span>';
+          }),
+      );
+    }
   });
 
   const isDirty = () =>
@@ -4335,81 +4367,100 @@ async function appendEventBlock() {
     <div class="event-block-header" data-toggle-event="${idx}">
       <div class="event-block-header-inner">
         <span class="event-block-chevron">▾</span>
+        <span class="event-block-icon"><i data-lucide="calendar-clock"></i></span>
         <span class="event-block-label">Event ${idx}</span>
         <span class="event-block-summary" id="event-summary-${idx}"></span>
       </div>
       <button class="btn-remove-block" type="button" title="Remove event" data-remove-event="${idx}" aria-label="Remove event">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        <i data-lucide="x"></i>
       </button>
     </div>
     <div class="event-block-body">
-      <div class="field" data-field="event-name-${idx}">
-        <label>Event Name <span class="req">*</span></label>
-        <input type="text" id="event-name-${idx}" placeholder="e.g. Cocktail Hour" autocomplete="off" />
-      </div>
-      <div class="form-row">
-        <div class="field datetime-field" data-field="event-start-date-${idx}">
-          <label>Start <span class="req">*</span></label>
-          <div class="datetime-group">
-            <input type="date" id="event-start-date-${idx}" class="dt-date" />
-            <input type="time" id="event-start-time-${idx}" class="dt-time" step="300" />
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="map-pin"></i></span>
+          Event Details
+        </p>
+        <div class="field" data-field="event-name-${idx}">
+          <label>Event Name <span class="req">*</span></label>
+          <input type="text" id="event-name-${idx}" placeholder="Cocktail Hour" autocomplete="off" />
+        </div>
+        <div class="create-event-two-col">
+          <div class="field">
+            <label>Location</label>
+            <input type="text" id="event-location-${idx}" placeholder="Grand Ballroom" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Event Type</label>
+            <select id="event-type-${idx}">
+              <option value="">Select type</option>
+              <option value="conference">Conference</option>
+              <option value="party">Party</option>
+              <option value="wedding">Wedding</option>
+              <option value="corporate">Corporate</option>
+              <option value="bar_mitzvah">Bar Mitzvah</option>
+              <option value="birthday">Birthday</option>
+              <option value="concert">Concert</option>
+              <option value="exhibition">Exhibition</option>
+              <option value="seminar">Seminar</option>
+              <option value="gala">Gala</option>
+              <option value="trip">Trip</option>
+              <option value="other">Other</option>
+            </select>
           </div>
         </div>
-        <div class="field datetime-field" data-field="event-end-date-${idx}">
-          <label>End <span class="req">*</span></label>
-          <div class="datetime-group">
-            <input type="date" id="event-end-date-${idx}" class="dt-date" />
-            <input type="time" id="event-end-time-${idx}" class="dt-time" step="300" />
+      </div>
+
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="clock"></i></span>
+          Schedule
+        </p>
+        <div class="create-event-two-col">
+          <div class="field datetime-field create-date-card" data-field="event-start-date-${idx}">
+            <label>Start <span class="req">*</span></label>
+            <div class="datetime-group">
+              <input type="date" id="event-start-date-${idx}" class="dt-date" />
+              <input type="time" id="event-start-time-${idx}" class="dt-time" step="300" />
+            </div>
+          </div>
+          <div class="field datetime-field create-date-card" data-field="event-end-date-${idx}">
+            <label>End <span class="req">*</span></label>
+            <div class="datetime-group">
+              <input type="date" id="event-end-date-${idx}" class="dt-date" />
+              <input type="time" id="event-end-time-${idx}" class="dt-time" step="300" />
+            </div>
           </div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Location</label>
-          <input type="text" id="event-location-${idx}" placeholder="e.g. Grand Ballroom" autocomplete="off" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Event Type</label>
-          <select id="event-type-${idx}">
-            <option value="">— Select type —</option>
-            <option value="conference">Conference</option>
-            <option value="party">Party</option>
-            <option value="wedding">Wedding</option>
-            <option value="corporate">Corporate</option>
-            <option value="bar_mitzvah">Bar Mitzvah</option>
-            <option value="birthday">Birthday</option>
-            <option value="concert">Concert</option>
-            <option value="exhibition">Exhibition</option>
-            <option value="seminar">Seminar</option>
-            <option value="gala">Gala</option>
-            <option value="trip">Trip</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Attendees Count</label>
-          <input type="number" id="event-attendees-${idx}" placeholder="0" min="0" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label>Planned Budget</label>
-          <input type="number" id="event-budget-${idx}" placeholder="0.00" min="0" step="0.01" />
-        </div>
-        <div class="field">
-          <label>Expected Revenue</label>
-          <input type="number" id="event-revenue-${idx}" placeholder="0.00" min="0" step="0.01" />
+
+      <div class="event-edit-section">
+        <p class="form-group-title">
+          <span class="form-group-icon"><i data-lucide="wallet"></i></span>
+          Planning Numbers
+        </p>
+        <div class="create-event-three-col">
+          <div class="field">
+            <label>Attendees</label>
+            <input type="number" id="event-attendees-${idx}" placeholder="0" min="0" />
+          </div>
+          <div class="field">
+            <label>Planned Budget</label>
+            <input type="number" id="event-budget-${idx}" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Expected Revenue</label>
+            <input type="number" id="event-revenue-${idx}" placeholder="0.00" min="0" step="0.01" />
+          </div>
         </div>
       </div>
 
       <!-- Shifts sub-section -->
       <div class="shifts-subsection">
         <div class="shifts-subheader">
-          <span class="shifts-subheader-label">Shifts</span>
+          <span class="shifts-subheader-label"><i data-lucide="users"></i> Shifts</span>
           <button class="btn-add-shift btn-with-icon" type="button" data-add-shift="${idx}">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <i data-lucide="plus"></i>
             Add Shift
           </button>
         </div>
@@ -4563,7 +4614,7 @@ function appendShiftRow(eventIdx, roles) {
       </div>
     </div>
     <button class="btn-remove-shift" type="button" title="Remove shift" aria-label="Remove shift">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      <i data-lucide="x"></i>
     </button>
   `;
 
@@ -4572,6 +4623,7 @@ function appendShiftRow(eventIdx, roles) {
     .addEventListener("click", () => row.remove());
 
   list.appendChild(row);
+  if (window.lucide) lucide.createIcons();
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
@@ -7663,9 +7715,24 @@ async function renderEdFinanceTab() {
       ),
     ]);
     if (!payrollRes.ok || !expensesRes.ok) throw new Error();
-    const payroll = await payrollRes.json();
+    const payroll  = await payrollRes.json();
     const expenses = await expensesRes.json();
-    root.innerHTML = _edBuildFinanceHTML(payroll, expenses);
+    const invoices = await _invFetchForEvent(currentEventId);
+
+    root.innerHTML = _edBuildFinanceHTML(payroll, expenses) +
+      _invBuildFinanceBlock(invoices, { createBtnId: "ed-inv-create-btn", context: "event" });
+
+    lucide.createIcons();
+
+    document.getElementById("ed-inv-create-btn")?.addEventListener("click", () => {
+      const ev = (currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId);
+      openInvoiceModal({
+        prefillEventId:    currentEventId,
+        prefillProjectId:  ev?.projectId  || currentProjectDetail?.projId,
+        prefillCustomerId: currentProjectDetail?.customerId,
+        prefillAmount:     ev?.expectedRevenue || "",
+      });
+    });
   } catch {
     root.innerHTML =
       '<div class="pd-loading">Failed to load finance data.</div>';
@@ -7793,3 +7860,806 @@ function _edBuildFinanceHTML(payroll, expenses) {
         : ""
     }`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVOICE MODULE — appended to manager-dashboard context
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── State ──────────────────────────────────────────────────────────────────
+let _allInvoices = [];
+let _editingInvoiceId = null;
+let _paymentInvoiceId = null;
+
+const _fmtMoney = (n) =>
+  `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
+
+const _invStatusLabel = {
+  draft: "Draft", sent: "Sent", partial: "Partial",
+  paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
+};
+
+function _invStatusBadge(status) {
+  return `<span class="inv-badge inv-badge--${status}">${_invStatusLabel[status] || status}</span>`;
+}
+
+// ── Load & render invoices list ────────────────────────────────────────────
+async function loadInvoices() {
+  const tbody = document.getElementById("inv-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading…</td></tr>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/invoices`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error();
+    _allInvoices = await res.json();
+    _renderInvoiceTable();
+    _renderInvoiceSummaryCards();
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Failed to load invoices.</td></tr>`;
+  }
+}
+
+function _renderInvoiceSummaryCards() {
+  const visible = _filteredInvoices();
+  const total = visible.reduce((s, i) => s + (i.invoiceAmount || 0), 0);
+  const paid  = visible.reduce((s, i) => s + (i.paidAmount    || 0), 0);
+  const outstanding = visible
+    .filter((i) => i.paymentStatus !== "cancelled" && i.paymentStatus !== "paid")
+    .reduce((s, i) => s + ((i.invoiceAmount || 0) - (i.paidAmount || 0)), 0);
+  const overdue = visible
+    .filter((i) => i.paymentStatus === "overdue")
+    .reduce((s, i) => s + ((i.invoiceAmount || 0) - (i.paidAmount || 0)), 0);
+
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl("inv-stat-total",       _fmtMoney(total));
+  setEl("inv-stat-paid",        _fmtMoney(paid));
+  setEl("inv-stat-outstanding", _fmtMoney(outstanding));
+  setEl("inv-stat-overdue",     _fmtMoney(overdue));
+}
+
+function _filteredInvoices() {
+  const search = (document.getElementById("inv-search")?.value || "").toLowerCase();
+  const status = document.getElementById("inv-filter-status")?.value || "";
+  return _allInvoices.filter((inv) => {
+    if (status && inv.paymentStatus !== status) return false;
+    if (search) {
+      const hay = [inv.invoiceNumber, inv.customerCompanyName, inv.projectName, inv.eventName]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function _renderInvoiceTable() {
+  const tbody = document.getElementById("inv-tbody");
+  if (!tbody) return;
+  const list = _filteredInvoices();
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No invoices found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map((inv) => {
+    const context = [inv.projectName, inv.eventName].filter(Boolean).join(" / ") || "—";
+    return `<tr>
+      <td><strong>${escapeHtml(inv.invoiceNumber)}</strong></td>
+      <td>${escapeHtml(inv.customerCompanyName || "—")}</td>
+      <td class="inv-context">${escapeHtml(context)}</td>
+      <td>${_fmtDate(inv.invoiceDate)}</td>
+      <td>${_fmtDate(inv.dueDate)}</td>
+      <td>${_fmtMoney(inv.invoiceAmount)}</td>
+      <td>${_fmtMoney(inv.paidAmount)}</td>
+      <td>${_invStatusBadge(inv.paymentStatus)}</td>
+      <td class="inv-actions">
+        <button class="btn-icon-sm" title="Record Payment" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
+        <button class="btn-icon-sm" title="Edit" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon-sm" title="Download PDF" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
+        <button class="btn-icon-sm btn-icon-danger" title="Cancel" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="x-circle"></i></button>
+      </td>
+    </tr>`;
+  }).join("");
+  lucide.createIcons();
+  _wireInvoiceTableActions();
+}
+
+function _wireInvoiceTableActions() {
+  const tbody = document.getElementById("inv-tbody");
+  if (!tbody) return;
+  tbody.querySelectorAll("[data-inv-pay]").forEach((btn) =>
+    btn.addEventListener("click", () => openRecordPaymentModal(btn.dataset.invPay)));
+  tbody.querySelectorAll("[data-inv-edit]").forEach((btn) =>
+    btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invEdit })));
+  tbody.querySelectorAll("[data-inv-pdf]").forEach((btn) =>
+    btn.addEventListener("click", () => _downloadInvoicePdf(btn.dataset.invPdf, btn.dataset.invNum)));
+  tbody.querySelectorAll("[data-inv-cancel]").forEach((btn) =>
+    btn.addEventListener("click", () => _cancelInvoice(btn.dataset.invCancel)));
+}
+
+async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error();
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoice-${(invoiceNumber || invoiceId).replace(/\//g, "-")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch { alert("Failed to download PDF."); }
+}
+
+async function _cancelInvoice(invoiceId) {
+  if (!confirm("Cancel this invoice? It will be marked as Cancelled.")) return;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok && res.status !== 204) throw new Error();
+    await loadInvoices();
+  } catch { alert("Failed to cancel invoice."); }
+}
+
+// ── Filters wiring ─────────────────────────────────────────────────────────
+document.getElementById("inv-search")?.addEventListener("input", () => {
+  _renderInvoiceTable(); _renderInvoiceSummaryCards();
+});
+document.getElementById("inv-filter-status")?.addEventListener("change", () => {
+  _renderInvoiceTable(); _renderInvoiceSummaryCards();
+});
+document.getElementById("btn-create-invoice")?.addEventListener("click", () => openInvoiceModal({}));
+
+// ── Create / Edit Invoice Modal ────────────────────────────────────────────
+async function openInvoiceModal(opts = {}) {
+  _editingInvoiceId = opts.invoiceId || null;
+  const overlay = document.getElementById("inv-modal-overlay");
+  document.getElementById("inv-modal-title").textContent   = _editingInvoiceId ? "Edit Invoice"   : "New Invoice";
+  document.getElementById("inv-modal-save-label").textContent = _editingInvoiceId ? "Update Invoice" : "Save Invoice";
+  const errEl = document.getElementById("inv-modal-error");
+  if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+
+  await _invLoadCustomerDropdown(opts.prefillCustomerId || null);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const due30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+  if (_editingInvoiceId) {
+    const inv = _allInvoices.find((i) => i.invoiceId === _editingInvoiceId);
+    if (inv) {
+      _setVal("inv-customer", inv.customerId);
+      await _invLoadProjectDropdown(inv.customerId, inv.projectId);
+      await _invLoadEventDropdown(inv.projectId, inv.eventId);
+      _setVal("inv-number",   inv.invoiceNumber);
+      _setVal("inv-status",   inv.paymentStatus);
+      _setVal("inv-date",     inv.invoiceDate ? inv.invoiceDate.slice(0, 10) : today);
+      _setVal("inv-due-date", inv.dueDate     ? inv.dueDate.slice(0, 10)     : due30);
+      _setVal("inv-amount",   inv.invoiceAmount);
+      _setVal("inv-notes",    inv.notes || "");
+    }
+  } else {
+    _setVal("inv-customer",  opts.prefillCustomerId || "");
+    if (opts.prefillCustomerId) await _invLoadProjectDropdown(opts.prefillCustomerId, opts.prefillProjectId || null);
+    if (opts.prefillProjectId)  await _invLoadEventDropdown(opts.prefillProjectId, opts.prefillEventId || null);
+    _setVal("inv-project",   opts.prefillProjectId  || "");
+    _setVal("inv-event",     opts.prefillEventId    || "");
+    _setVal("inv-number",    "");
+    _setVal("inv-status",    "draft");
+    _setVal("inv-date",      today);
+    _setVal("inv-due-date",  due30);
+    _setVal("inv-amount",    opts.prefillAmount || "");
+    _setVal("inv-notes",     "");
+  }
+
+  overlay.style.display = "flex";
+  lucide.createIcons();
+}
+
+
+function _setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val ?? "";
+}
+
+async function _invLoadCustomerDropdown(selectedId) {
+  const sel = document.getElementById("inv-customer");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">— select customer —</option>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/customers`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const customers = await res.json();
+    customers.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c.customerId; opt.textContent = c.customerCompanyName;
+      if (c.customerId === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch { /* silent */ }
+  sel.onchange = async () => { await _invLoadProjectDropdown(sel.value, null); _setVal("inv-event", ""); };
+  if (selectedId) await _invLoadProjectDropdown(selectedId, null);
+}
+
+async function _invLoadProjectDropdown(customerId, selectedProjectId) {
+  const sel = document.getElementById("inv-project");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">— select project —</option>`;
+  if (!customerId) return;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const projects = await res.json();
+    projects.filter((p) => !p.customerId || p.customerId === customerId).forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.projId; opt.textContent = p.name;
+      if (p.projId === selectedProjectId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch { /* silent */ }
+  sel.onchange = async () => { await _invLoadEventDropdown(sel.value, null); };
+  if (selectedProjectId) await _invLoadEventDropdown(selectedProjectId, null);
+}
+
+async function _invLoadEventDropdown(projectId, selectedEventId) {
+  const sel = document.getElementById("inv-event");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">— select event (optional) —</option>`;
+  if (!projectId) return;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const proj = await res.json();
+    (proj.events || []).forEach((e) => {
+      const opt = document.createElement("option");
+      opt.value = e.eventId; opt.textContent = e.name;
+      opt.dataset.revenue = e.expectedRevenue || "";
+      if (e.eventId === selectedEventId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch { /* silent */ }
+  sel.onchange = () => {
+    const chosen = sel.options[sel.selectedIndex];
+    if (chosen?.dataset?.revenue) _setVal("inv-amount", chosen.dataset.revenue);
+  };
+}
+
+document.getElementById("inv-modal-close")?.addEventListener("click",  _closeInvoiceModal);
+document.getElementById("inv-modal-cancel")?.addEventListener("click", _closeInvoiceModal);
+document.getElementById("inv-modal-overlay")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeInvoiceModal();
+});
+function _closeInvoiceModal() {
+  document.getElementById("inv-modal-overlay").style.display = "none";
+  _editingInvoiceId = null;
+}
+
+document.getElementById("inv-modal-save")?.addEventListener("click", async () => {
+  const errEl   = document.getElementById("inv-modal-error");
+  const saveBtn = document.getElementById("inv-modal-save");
+  const customerId = document.getElementById("inv-customer")?.value?.trim();
+  const projectId  = document.getElementById("inv-project")?.value?.trim() || null;
+  const eventId    = document.getElementById("inv-event")?.value?.trim()   || null;
+  const number     = document.getElementById("inv-number")?.value?.trim();
+  const status     = document.getElementById("inv-status")?.value;
+  const date       = document.getElementById("inv-date")?.value;
+  const dueDate    = document.getElementById("inv-due-date")?.value;
+  const amount     = parseFloat(document.getElementById("inv-amount")?.value);
+  const notes      = document.getElementById("inv-notes")?.value?.trim() || null;
+
+  if (!customerId)               { _showInvError(errEl, "Please select a customer."); return; }
+  if (!number)                   { _showInvError(errEl, "Invoice number is required."); return; }
+  if (!date)                     { _showInvError(errEl, "Invoice date is required."); return; }
+  if (!dueDate)                  { _showInvError(errEl, "Due date is required."); return; }
+  if (isNaN(amount) || amount <= 0) { _showInvError(errEl, "Amount must be greater than 0."); return; }
+
+  saveBtn.disabled = true;
+  if (errEl) errEl.style.display = "none";
+  try {
+    const token = await getToken();
+    if (_editingInvoiceId) {
+      const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(_editingInvoiceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Update failed."); }
+    } else {
+      const res = await fetch(`${API_BASE}/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ customerId, projectId, eventId, invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Create failed."); }
+    }
+    _closeInvoiceModal();
+    await loadInvoices();
+  } catch (e) {
+    _showInvError(errEl, e.message || "An error occurred.");
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+function _showInvError(el, msg) {
+  if (!el) return;
+  el.textContent = msg; el.style.display = "block";
+}
+
+// ── Record Payment Modal ───────────────────────────────────────────────────
+function openRecordPaymentModal(invoiceId) {
+  _paymentInvoiceId = invoiceId;
+  const inv   = _allInvoices.find((i) => i.invoiceId === invoiceId);
+  const errEl = document.getElementById("inv-pay-error");
+  const subEl = document.getElementById("inv-pay-subtitle");
+  if (subEl && inv) subEl.textContent = `${inv.invoiceNumber} — ${_fmtMoney(inv.invoiceAmount)} total`;
+  if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+  _setVal("inv-pay-amount", inv?.paidAmount || "");
+  _setVal("inv-pay-date",   new Date().toISOString().slice(0, 10));
+  _setVal("inv-pay-status", "");
+  document.getElementById("inv-pay-overlay").style.display = "flex";
+  lucide.createIcons();
+}
+
+document.getElementById("inv-pay-close")?.addEventListener("click",  _closePaymentModal);
+document.getElementById("inv-pay-cancel")?.addEventListener("click", _closePaymentModal);
+document.getElementById("inv-pay-overlay")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closePaymentModal();
+});
+function _closePaymentModal() {
+  document.getElementById("inv-pay-overlay").style.display = "none";
+  _paymentInvoiceId = null;
+}
+
+document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
+  const errEl   = document.getElementById("inv-pay-error");
+  const saveBtn = document.getElementById("inv-pay-save");
+  const paidAmount    = parseFloat(document.getElementById("inv-pay-amount")?.value);
+  const paymentDate   = document.getElementById("inv-pay-date")?.value || null;
+  const paymentStatus = document.getElementById("inv-pay-status")?.value || null;
+
+  if (isNaN(paidAmount) || paidAmount < 0) { _showInvError(errEl, "Paid amount must be 0 or greater."); return; }
+
+  saveBtn.disabled = true;
+  if (errEl) errEl.style.display = "none";
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(_paymentInvoiceId)}/payment`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ paidAmount, paymentDate, paymentStatus: paymentStatus || null }),
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Payment save failed."); }
+    _closePaymentModal();
+    await loadInvoices();
+  } catch (e) {
+    _showInvError(errEl, e.message || "An error occurred.");
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+// ── Finance tab integration helpers (used by event/project finance tabs) ───
+async function _invFetchForEvent(eventId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}/invoices`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok ? await res.json() : [];
+  } catch { return []; }
+}
+
+async function _invFetchForProject(projectId) {
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/invoices`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok ? await res.json() : [];
+  } catch { return []; }
+}
+
+function _invBuildFinanceBlock(invoices, opts = {}) {
+  const fmt = _fmtMoney;
+  const total = invoices.reduce((s, i) => s + (i.invoiceAmount || 0), 0);
+  const paid  = invoices.reduce((s, i) => s + (i.paidAmount    || 0), 0);
+  const outstanding = total - paid;
+
+  const rows = invoices.map((inv) =>
+    `<tr>
+      <td>${escapeHtml(inv.invoiceNumber)}</td>
+      <td>${_invStatusBadge(inv.paymentStatus)}</td>
+      <td>${_fmtDate(inv.invoiceDate)}</td>
+      <td>${_fmtDate(inv.dueDate)}</td>
+      <td>${fmt(inv.invoiceAmount)}</td>
+      <td>${fmt(inv.paidAmount)}</td>
+      <td>${fmt(inv.invoiceAmount - inv.paidAmount)}</td>
+    </tr>`
+  ).join("");
+
+  return `
+  <div class="ed-finance-section inv-finance-block">
+    <div class="inv-finance-header">
+      <h4 class="ed-finance-section-title">Invoices</h4>
+      <button class="btn-primary btn-sm btn-with-icon" id="${opts.createBtnId || "inv-finance-create-btn"}">
+        <i data-lucide="plus"></i> New Invoice
+      </button>
+    </div>
+    ${invoices.length > 0 ? `
+      <div class="ed-finance-cards" style="margin-bottom:12px">
+        <div class="ed-finance-card"><div class="ed-finance-card-label">Invoiced</div><div class="ed-finance-card-value">${fmt(total)}</div></div>
+        <div class="ed-finance-card ed-finance-card--profit"><div class="ed-finance-card-label">Collected</div><div class="ed-finance-card-value">${fmt(paid)}</div></div>
+        <div class="ed-finance-card ${outstanding > 0 ? "ed-finance-card--loss" : ""}">
+          <div class="ed-finance-card-label">Outstanding</div><div class="ed-finance-card-value">${fmt(outstanding)}</div>
+        </div>
+      </div>
+      <table class="ed-worker-table">
+        <thead><tr><th>Invoice #</th><th>Status</th><th>Date</th><th>Due</th><th>Amount</th><th>Paid</th><th>Balance</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : `<p class="pd-empty-state" style="padding:12px 0">No invoices yet for this ${opts.context || "item"}.</p>`}
+  </div>`;
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PROJECT EDIT / DELETE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Wire up header buttons ─────────────────────────────────────────────────
+
+document.getElementById("btn-edit-project").addEventListener("click", openProjectEditModal);
+document.getElementById("btn-delete-project").addEventListener("click", () => confirmDelete("project"));
+
+function _setEditSaveButton(btn, label) {
+  if (!btn) return;
+  btn.innerHTML = `<i data-lucide="save"></i><span>${escapeHtml(label)}</span>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+// ── Open edit modal ────────────────────────────────────────────────────────
+
+function openProjectEditModal() {
+  const proj = currentProjectDetail;
+  if (!proj) return;
+
+  document.getElementById("proj-edit-name").value   = proj.name ?? "";
+  document.getElementById("proj-edit-start").value  = proj.startDate ? proj.startDate.slice(0, 10) : "";
+  document.getElementById("proj-edit-end").value    = proj.endDate   ? proj.endDate.slice(0, 10)   : "";
+  document.getElementById("proj-edit-status").value = proj.status ?? "draft";
+
+  // Populate customer select from allCustomers
+  const sel = document.getElementById("proj-edit-customer");
+  sel.innerHTML = '<option value="">— No customer —</option>';
+  (allCustomers || []).forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value       = c.customerId ?? c.customer_ID ?? c.id ?? "";
+    opt.textContent = c.customerCompanyName ?? c.customer_company_name ?? c.name ?? opt.value;
+    if (opt.value === proj.customerId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  const err = document.getElementById("proj-edit-error");
+  err.textContent  = "";
+  err.style.display = "none";
+
+  const saveBtn = document.getElementById("proj-edit-save");
+  saveBtn.disabled    = false;
+  _setEditSaveButton(saveBtn, "Save Changes");
+
+  const overlay = document.getElementById("proj-edit-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+  document.getElementById("proj-edit-name").focus();
+}
+
+function _closeProjEditModal() {
+  document.getElementById("proj-edit-overlay").style.display = "none";
+}
+
+document.getElementById("proj-edit-close").addEventListener("click", _closeProjEditModal);
+document.getElementById("proj-edit-cancel").addEventListener("click", _closeProjEditModal);
+document.getElementById("proj-edit-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeProjEditModal();
+});
+
+// ── Save ───────────────────────────────────────────────────────────────────
+
+document.getElementById("proj-edit-save").addEventListener("click", async () => {
+  const name      = document.getElementById("proj-edit-name").value.trim();
+  const startDate = document.getElementById("proj-edit-start").value || null;
+  const endDate   = document.getElementById("proj-edit-end").value   || null;
+  const status    = document.getElementById("proj-edit-status").value;
+  const customerId = document.getElementById("proj-edit-customer").value || null;
+
+  const errEl = document.getElementById("proj-edit-error");
+  errEl.style.display = "none";
+
+  if (!name) {
+    errEl.textContent  = "Project name is required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (startDate && endDate && endDate < startDate) {
+    errEl.textContent  = "End date cannot be before start date.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  const saveBtn = document.getElementById("proj-edit-save");
+  saveBtn.disabled    = true;
+  _setEditSaveButton(saveBtn, "Saving...");
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name, startDate, endDate, status, customerId }),
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update project.");
+    }
+    _closeProjEditModal();
+    await Promise.all([
+      loadProjects(),
+      openProjectDetail(currentProjectId),
+    ]);
+  } catch (err) {
+    errEl.textContent  = err.message;
+    errEl.style.display = "block";
+  } finally {
+    saveBtn.disabled    = false;
+    _setEditSaveButton(saveBtn, "Save Changes");
+  }
+});
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+
+async function _executeDeleteProject() {
+  const btn = document.getElementById("delete-confirm-ok");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/projects/${encodeURIComponent(currentProjectId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete project.");
+    }
+    _closeDeleteConfirm();
+    _stopStaffingPoll();
+    await loadProjects();
+    activateSection("projects");
+  } catch (err) {
+    document.getElementById("delete-confirm-message").textContent = err.message;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Delete";
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EVENT EDIT / DELETE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Wire up header buttons ─────────────────────────────────────────────────
+
+document.getElementById("btn-edit-event").addEventListener("click", openEventEditModal);
+document.getElementById("btn-delete-event").addEventListener("click", () => confirmDelete("event"));
+
+// ── Open edit modal ────────────────────────────────────────────────────────
+
+function _toDatetimeLocal(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openEventEditModal() {
+  const ev = (currentProjectDetail?.events ?? []).find(
+    (e) => e.eventId === currentEventId,
+  );
+  if (!ev) return;
+
+  document.getElementById("event-edit-name").value       = ev.name       ?? "";
+  document.getElementById("event-edit-location").value   = ev.location   ?? "";
+  document.getElementById("event-edit-start").value      = _toDatetimeLocal(ev.startTime);
+  document.getElementById("event-edit-end").value        = _toDatetimeLocal(ev.endTime);
+  document.getElementById("event-edit-status").value     = ev.status     ?? "planning";
+  document.getElementById("event-edit-type").value       = ev.eventType  ?? "other";
+  document.getElementById("event-edit-budget").value     = ev.plannedBudget   != null ? ev.plannedBudget   : "";
+  document.getElementById("event-edit-revenue").value    = ev.expectedRevenue != null ? ev.expectedRevenue : "";
+  document.getElementById("event-edit-attendees").value  = ev.attendeesCount  != null ? ev.attendeesCount  : "";
+
+  const err = document.getElementById("event-edit-error");
+  err.textContent  = "";
+  err.style.display = "none";
+
+  const saveBtn = document.getElementById("event-edit-save");
+  saveBtn.disabled    = false;
+  _setEditSaveButton(saveBtn, "Save Changes");
+
+  const overlay = document.getElementById("event-edit-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+  document.getElementById("event-edit-name").focus();
+}
+
+function _closeEventEditModal() {
+  document.getElementById("event-edit-overlay").style.display = "none";
+}
+
+document.getElementById("event-edit-close").addEventListener("click", _closeEventEditModal);
+document.getElementById("event-edit-cancel").addEventListener("click", _closeEventEditModal);
+document.getElementById("event-edit-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeEventEditModal();
+});
+
+// ── Save ───────────────────────────────────────────────────────────────────
+
+document.getElementById("event-edit-save").addEventListener("click", async () => {
+  const name            = document.getElementById("event-edit-name").value.trim();
+  const location        = document.getElementById("event-edit-location").value.trim() || null;
+  const startTime       = document.getElementById("event-edit-start").value;
+  const endTime         = document.getElementById("event-edit-end").value;
+  const status          = document.getElementById("event-edit-status").value;
+  const eventType       = document.getElementById("event-edit-type").value || null;
+  const budgetVal       = document.getElementById("event-edit-budget").value;
+  const revenueVal      = document.getElementById("event-edit-revenue").value;
+  const attendeesVal    = document.getElementById("event-edit-attendees").value;
+  const plannedBudget   = budgetVal   !== "" ? parseFloat(budgetVal)   : null;
+  const expectedRevenue = revenueVal  !== "" ? parseFloat(revenueVal)  : null;
+  const attendeesCount  = attendeesVal !== "" ? parseInt(attendeesVal, 10) : null;
+
+  const errEl = document.getElementById("event-edit-error");
+  errEl.style.display = "none";
+
+  if (!name) {
+    errEl.textContent  = "Event name is required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (!startTime || !endTime) {
+    errEl.textContent  = "Start time and end time are required.";
+    errEl.style.display = "block";
+    return;
+  }
+  if (endTime <= startTime) {
+    errEl.textContent  = "End time must be after start time.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  const saveBtn = document.getElementById("event-edit-save");
+  saveBtn.disabled    = true;
+  _setEditSaveButton(saveBtn, "Saving...");
+
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name, location, startTime, endTime, status,
+          eventType, plannedBudget, expectedRevenue, attendeesCount,
+        }),
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update event.");
+    }
+    _closeEventEditModal();
+    // Refresh project detail so events list is up-to-date, then stay on event detail
+    await openProjectDetail(currentProjectId);
+    const updatedEv = (currentProjectDetail?.events ?? []).find(
+      (e) => e.eventId === currentEventId,
+    );
+    if (updatedEv) {
+      document.getElementById("event-detail-title").textContent    = escapeHtml(updatedEv.name);
+      document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(updatedEv);
+    }
+    activateSection("event-detail");
+  } catch (err) {
+    errEl.textContent  = err.message;
+    errEl.style.display = "block";
+  } finally {
+    saveBtn.disabled    = false;
+    _setEditSaveButton(saveBtn, "Save Changes");
+  }
+});
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+
+async function _executeDeleteEvent() {
+  const btn = document.getElementById("delete-confirm-ok");
+  btn.disabled    = true;
+  btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res   = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(currentEventId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete event.");
+    }
+    _closeDeleteConfirm();
+    await openProjectDetail(currentProjectId);
+    activateSection("project-detail");
+  } catch (err) {
+    document.getElementById("delete-confirm-message").textContent = err.message;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Delete";
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SHARED DELETE CONFIRM MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _deleteTarget = null; // "project" | "event"
+
+const _deleteWarnings = {
+  project: "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Invoices will be detached (not deleted).",
+  event:   "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Invoices will be detached (not deleted).",
+};
+
+function confirmDelete(target) {
+  _deleteTarget = target;
+  const name  = target === "project"
+    ? (currentProjectDetail?.name ?? "this project")
+    : ((currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId)?.name ?? "this event");
+
+  document.getElementById("delete-confirm-title").textContent        = `Delete ${target === "project" ? "Project" : "Event"}`;
+  document.getElementById("delete-confirm-message").textContent      = `Are you sure you want to delete "${name}"?`;
+  document.getElementById("delete-confirm-warning-text").textContent = _deleteWarnings[target];
+  document.getElementById("delete-confirm-ok").disabled              = false;
+  document.getElementById("delete-confirm-ok").textContent           = "Delete";
+
+  const overlay = document.getElementById("delete-confirm-overlay");
+  overlay.style.display = "flex";
+  if (window.lucide) lucide.createIcons();
+}
+
+function _closeDeleteConfirm() {
+  document.getElementById("delete-confirm-overlay").style.display = "none";
+  _deleteTarget = null;
+}
+
+document.getElementById("delete-confirm-close").addEventListener("click", _closeDeleteConfirm);
+document.getElementById("delete-confirm-cancel").addEventListener("click", _closeDeleteConfirm);
+document.getElementById("delete-confirm-overlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) _closeDeleteConfirm();
+});
+
+document.getElementById("delete-confirm-ok").addEventListener("click", () => {
+  if (_deleteTarget === "project") _executeDeleteProject();
+  else if (_deleteTarget === "event") _executeDeleteEvent();
+});
+

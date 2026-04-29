@@ -10,9 +10,13 @@ public interface IProjectRepository
     // ── Project ────────────────────────────────────────────────────────────
     Task<string> CreateProjectAsync(string companyId, CreateProjectRequest request);
     Task CreateManagerProjectAsync(string projId, string userId);
+    Task<ProjectResponse?> UpdateProjectAsync(string projId, UpdateProjectRequest request, string firebaseUid);
+    Task<bool> DeleteProjectAsync(string projId, string firebaseUid);
 
     // ── Event ──────────────────────────────────────────────────────────────
     Task<string> CreateEventAsync(string projId, CreateEventRequest request);
+    Task<EventResponse?> UpdateEventAsync(string eventId, UpdateEventRequest request, string firebaseUid);
+    Task<bool> DeleteEventAsync(string eventId, string firebaseUid);
 
     // ── Shift ──────────────────────────────────────────────────────────────
     Task CreateShiftAsync(string eventId, CreateShiftRequest request);
@@ -78,6 +82,7 @@ public interface IProjectRepository
 
     // ── Brief Acknowledgment ───────────────────────────────────────────────
     Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string briefId, string firebaseUid);
+    Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string projId, string briefId, string firebaseUid);
     Task<bool> AcknowledgeBriefAsync(string briefId, string firebaseUid);
     Task<IEnumerable<EmployeeBriefItem>?> GetBriefsForEmployeeAsync(string firebaseUid);
 

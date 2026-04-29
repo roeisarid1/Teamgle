@@ -6,7 +6,9 @@ public class ProjectDetailResponse
     public string   Name         { get; set; } = "";
     public DateTime? StartDate   { get; set; }
     public DateTime? EndDate     { get; set; }
-    public string   Status       { get; set; } = "";
+    public string   Status        { get; set; } = "";
+    public string   DisplayStatus { get; set; } = "";
+    public string?  CustomerId   { get; set; }
     public string?  CustomerName { get; set; }
     public int      EventCount   { get; set; }
 

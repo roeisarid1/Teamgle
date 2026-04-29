@@ -434,4 +434,51 @@ public class EventsController : ControllerBase
             return StatusCode(500, new { error = "Unexpected error." });
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  EVENT CRUD
+    // ══════════════════════════════════════════════════════════════════════
+
+    // PUT /api/events/{eventId}
+    [HttpPut("{eventId}")]
+    public async Task<IActionResult> UpdateEvent(string eventId, [FromBody] UpdateEventRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var ev = await _projectService.UpdateEventAsync(uid, eventId, request);
+            if (ev == null) return NotFound(new { error = "Event not found." });
+            return Ok(ev);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating event {EventId}", eventId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // DELETE /api/events/{eventId}
+    [HttpDelete("{eventId}")]
+    public async Task<IActionResult> DeleteEvent(string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var deleted = await _projectService.DeleteEventAsync(uid, eventId);
+            if (!deleted) return NotFound(new { error = "Event not found." });
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting event {EventId}", eventId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
 }

@@ -118,6 +118,345 @@ GO
 
 
 -- =============================================================================
+-- Description:  sp_UpdateProject
+--               Updates name, dates, status, and customer on an existing project.
+--               Access: verified via Manager_Project + company_ID.
+--               Customer must belong to manager's company if provided.
+-- =============================================================================
+CREATE OR ALTER PROCEDURE sp_UpdateProject
+    @projId       NVARCHAR(50),
+    @managerFBUID NVARCHAR(128),
+    @name         NVARCHAR(255),
+    @startDate    DATE          = NULL,
+    @endDate      DATE          = NULL,
+    @status       NVARCHAR(50),
+    @customerId   NVARCHAR(50)  = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @companyId NVARCHAR(50);
+    SELECT @companyId = u.company_ID
+    FROM [User] u INNER JOIN Manager m ON u.user_ID = m.user_ID
+    WHERE u.FBUID = @managerFBUID;
+
+    IF @companyId IS NULL BEGIN
+        RAISERROR('User is not a registered manager.', 16, 1); RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM Manager_Project mp
+        INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+        WHERE mp.project_ID = @projId AND u.company_ID = @companyId
+    ) BEGIN
+        RAISERROR('Project not found or access denied.', 16, 2); RETURN;
+    END
+
+    IF @customerId IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM Customer WHERE customer_ID = @customerId AND company_ID = @companyId
+    ) BEGIN
+        RAISERROR('Customer not found or does not belong to your company.', 16, 1); RETURN;
+    END
+
+    IF @status NOT IN ('draft','planning','active','completed','canceled') BEGIN
+        RAISERROR('Invalid project status.', 16, 1); RETURN;
+    END
+
+    UPDATE Project
+    SET name        = @name,
+        start_date  = @startDate,
+        end_date    = @endDate,
+        status      = @status,
+        customer_ID = @customerId
+    WHERE Proj_ID = @projId;
+
+    SELECT
+        p.Proj_ID               AS projId,
+        p.name                  AS name,
+        p.start_date            AS startDate,
+        p.end_date              AS endDate,
+        p.status                AS status,
+        p.customer_ID           AS customerId,
+        c.customer_company_name AS customerName
+    FROM Project p
+    LEFT JOIN Customer c ON c.customer_ID = p.customer_ID
+    WHERE p.Proj_ID = @projId;
+END;
+GO
+
+
+-- =============================================================================
+-- Description:  sp_DeleteProject
+--               Cascade-deletes a project and all its dependent data in a
+--               single transaction.
+--               Invoice references are nullified (not deleted) to preserve
+--               financial records.
+--               Access: verified via Manager_Project + company_ID.
+-- =============================================================================
+CREATE OR ALTER PROCEDURE sp_DeleteProject
+    @projId       NVARCHAR(50),
+    @managerFBUID NVARCHAR(128)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @companyId NVARCHAR(50);
+    SELECT @companyId = u.company_ID
+    FROM [User] u INNER JOIN Manager m ON u.user_ID = m.user_ID
+    WHERE u.FBUID = @managerFBUID;
+
+    IF @companyId IS NULL BEGIN
+        RAISERROR('User is not a registered manager.', 16, 1); RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM Manager_Project mp
+        INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+        WHERE mp.project_ID = @projId AND u.company_ID = @companyId
+    ) BEGIN
+        RAISERROR('Project not found or access denied.', 16, 2); RETURN;
+    END
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- Detach invoices (preserve financial records, nullify project/event links)
+        UPDATE Invoice SET project_ID = NULL WHERE project_ID = @projId;
+        UPDATE Invoice SET event_ID   = NULL
+        WHERE event_ID IN (SELECT event_ID FROM [Event] WHERE project_ID = @projId);
+
+        -- Null out shift refs in Briefs/Tasks not yet covered by event deletion
+        UPDATE Brief SET shift_ID = NULL
+        WHERE shift_ID IN (
+            SELECT s.Shift_ID FROM Shift s
+            INNER JOIN [Event] e ON s.event_ID = e.event_ID
+            WHERE e.project_ID = @projId
+        );
+        UPDATE Task SET shift_ID = NULL
+        WHERE shift_ID IN (
+            SELECT s.Shift_ID FROM Shift s
+            INNER JOIN [Event] e ON s.event_ID = e.event_ID
+            WHERE e.project_ID = @projId
+        );
+
+        -- Brief_Acknowledgment for event briefs
+        DELETE ba FROM Brief_Acknowledgment ba
+        INNER JOIN Brief b ON ba.brief_ID = b.brief_ID
+        INNER JOIN [Event] e ON b.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Brief_Acknowledgment for project briefs
+        DELETE ba FROM Brief_Acknowledgment ba
+        INNER JOIN Brief b ON ba.brief_ID = b.brief_ID
+        WHERE b.project_ID = @projId;
+
+        -- Employee_Shift for this project's events' shifts
+        DELETE es FROM Employee_Shift es
+        INNER JOIN Shift s ON es.shift_ID = s.Shift_ID
+        INNER JOIN [Event] e ON s.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Event_Expense for this project's events
+        DELETE ee FROM Event_Expense ee
+        INNER JOIN [Event] e ON ee.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Tasks for this project's events
+        DELETE t FROM Task t
+        INNER JOIN [Event] e ON t.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Tasks for this project
+        DELETE FROM Task WHERE project_ID = @projId;
+
+        -- Briefs for this project's events
+        DELETE b FROM Brief b
+        INNER JOIN [Event] e ON b.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Briefs for this project
+        DELETE FROM Brief WHERE project_ID = @projId;
+
+        -- Shifts for this project's events
+        DELETE s FROM Shift s
+        INNER JOIN [Event] e ON s.event_ID = e.event_ID
+        WHERE e.project_ID = @projId;
+
+        -- Events
+        DELETE FROM [Event] WHERE project_ID = @projId;
+
+        -- Manager_Project links
+        DELETE FROM Manager_Project WHERE project_ID = @projId;
+
+        -- Project
+        DELETE FROM Project WHERE Proj_ID = @projId;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+
+-- =============================================================================
+-- Description:  sp_UpdateEvent
+--               Updates an event's editable fields.
+--               Access: Event → Project → Manager_Project + company_ID.
+--               Validates end_time > start_time and status enum.
+-- =============================================================================
+CREATE OR ALTER PROCEDURE sp_UpdateEvent
+    @eventId         NVARCHAR(50),
+    @managerFBUID    NVARCHAR(128),
+    @name            NVARCHAR(255),
+    @location        NVARCHAR(255) = NULL,
+    @startTime       DATETIME2,
+    @endTime         DATETIME2,
+    @status          NVARCHAR(50),
+    @eventType       NVARCHAR(50)  = NULL,
+    @plannedBudget   DECIMAL(18,2) = NULL,
+    @expectedRevenue DECIMAL(18,2) = NULL,
+    @attendeesCount  INT           = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @companyId NVARCHAR(50);
+    SELECT @companyId = u.company_ID
+    FROM [User] u INNER JOIN Manager m ON u.user_ID = m.user_ID
+    WHERE u.FBUID = @managerFBUID;
+
+    IF @companyId IS NULL BEGIN
+        RAISERROR('User is not a registered manager.', 16, 1); RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [Event] e
+        INNER JOIN Manager_Project mp ON mp.project_ID = e.project_ID
+        INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+        WHERE e.event_ID = @eventId AND u.company_ID = @companyId
+    ) BEGIN
+        RAISERROR('Event not found or access denied.', 16, 2); RETURN;
+    END
+
+    IF @endTime <= @startTime BEGIN
+        RAISERROR('End time must be after start time.', 16, 1); RETURN;
+    END
+
+    IF @status NOT IN ('planning','active','completed','canceled') BEGIN
+        RAISERROR('Invalid event status.', 16, 1); RETURN;
+    END
+
+    UPDATE [Event]
+    SET name             = @name,
+        location         = @location,
+        start_time       = @startTime,
+        end_time         = @endTime,
+        status           = @status,
+        event_type       = ISNULL(@eventType, event_type),
+        planned_budget   = @plannedBudget,
+        expected_revenue = @expectedRevenue,
+        attendees_count  = @attendeesCount
+    WHERE event_ID = @eventId;
+
+    SELECT
+        event_ID         AS eventId,
+        name,
+        location,
+        start_time       AS startTime,
+        end_time         AS endTime,
+        status,
+        event_type       AS eventType,
+        planned_budget   AS plannedBudget,
+        expected_revenue AS expectedRevenue,
+        attendees_count  AS attendeesCount,
+        project_ID       AS projectId
+    FROM [Event]
+    WHERE event_ID = @eventId;
+END;
+GO
+
+
+-- =============================================================================
+-- Description:  sp_DeleteEvent
+--               Cascade-deletes an event and all its dependent data in a
+--               single transaction.
+--               Invoice.event_ID is nullified to preserve financial records.
+--               Access: Event → Project → Manager_Project + company_ID.
+-- =============================================================================
+CREATE OR ALTER PROCEDURE sp_DeleteEvent
+    @eventId      NVARCHAR(50),
+    @managerFBUID NVARCHAR(128)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @companyId NVARCHAR(50);
+    SELECT @companyId = u.company_ID
+    FROM [User] u INNER JOIN Manager m ON u.user_ID = m.user_ID
+    WHERE u.FBUID = @managerFBUID;
+
+    IF @companyId IS NULL BEGIN
+        RAISERROR('User is not a registered manager.', 16, 1); RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [Event] e
+        INNER JOIN Manager_Project mp ON mp.project_ID = e.project_ID
+        INNER JOIN [User] u ON u.user_ID = mp.manager_user_ID
+        WHERE e.event_ID = @eventId AND u.company_ID = @companyId
+    ) BEGIN
+        RAISERROR('Event not found or access denied.', 16, 2); RETURN;
+    END
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- Detach invoices
+        UPDATE Invoice SET event_ID = NULL WHERE event_ID = @eventId;
+
+        -- Null out shift refs in Briefs/Tasks not covered by event deletion
+        UPDATE Brief SET shift_ID = NULL
+        WHERE shift_ID IN (SELECT Shift_ID FROM Shift WHERE event_ID = @eventId);
+        UPDATE Task SET shift_ID = NULL
+        WHERE shift_ID IN (SELECT Shift_ID FROM Shift WHERE event_ID = @eventId);
+
+        -- Brief_Acknowledgment for this event's briefs
+        DELETE ba FROM Brief_Acknowledgment ba
+        INNER JOIN Brief b ON ba.brief_ID = b.brief_ID
+        WHERE b.event_ID = @eventId;
+
+        -- Employee_Shift for this event's shifts
+        DELETE es FROM Employee_Shift es
+        INNER JOIN Shift s ON es.shift_ID = s.Shift_ID
+        WHERE s.event_ID = @eventId;
+
+        -- Event_Expense
+        DELETE FROM Event_Expense WHERE event_ID = @eventId;
+
+        -- Tasks
+        DELETE FROM Task WHERE event_ID = @eventId;
+
+        -- Briefs
+        DELETE FROM Brief WHERE event_ID = @eventId;
+
+        -- Shifts
+        DELETE FROM Shift WHERE event_ID = @eventId;
+
+        -- Event
+        DELETE FROM [Event] WHERE event_ID = @eventId;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+
+-- =============================================================================
 -- DOWN  —  Drop all stored procedures added above.
 --          Does NOT drop or alter any tables or data.
 --          Uncomment and run to roll back.
@@ -127,4 +466,8 @@ DROP PROCEDURE IF EXISTS sp_CreateProject;
 DROP PROCEDURE IF EXISTS sp_CreateManagerProject;
 DROP PROCEDURE IF EXISTS sp_CreateEvent;
 DROP PROCEDURE IF EXISTS sp_CreateShift;
+DROP PROCEDURE IF EXISTS sp_UpdateProject;
+DROP PROCEDURE IF EXISTS sp_DeleteProject;
+DROP PROCEDURE IF EXISTS sp_UpdateEvent;
+DROP PROCEDURE IF EXISTS sp_DeleteEvent;
 */

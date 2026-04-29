@@ -11,10 +11,10 @@ public interface IAuthService
     Task<bool> IsEligibleForFirstRegistrationAsync(string email);
 
     /// <summary>
-    /// Saves the Firebase UID to the SQL User row.
-    /// Called after Firebase successfully creates the account.
+    /// Verifies the Firebase ID token server-side, extracts UID + email,
+    /// validates eligibility, and saves the UID to the SQL User row.
     /// </summary>
-    Task CompleteRegistrationAsync(string email, string firebaseUid);
+    Task CompleteRegistrationAsync(string idToken);
 
     /// <summary>
     /// Verifies a Firebase ID token, looks up the user in SQL by UID,
