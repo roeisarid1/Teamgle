@@ -59,6 +59,23 @@ public class ProjectRepository : IProjectRepository
         var validStatuses = new HashSet<string> { "draft", "planning", "active", "completed", "canceled" };
         var status = validStatuses.Contains(request.Status) ? request.Status : "draft";
 
+        // Validate that the customer belongs to this company before inserting.
+        if (request.CustomerId != null)
+        {
+            const string ownershipSql = """
+                SELECT COUNT(1) FROM Customer
+                WHERE customer_ID = @cid AND company_ID = @companyId
+                """;
+            await using var chkConn = new SqlConnection(_connectionString);
+            await using var chkCmd  = new SqlCommand(ownershipSql, chkConn);
+            chkCmd.Parameters.AddWithValue("@cid",       request.CustomerId);
+            chkCmd.Parameters.AddWithValue("@companyId", companyId);
+            await chkConn.OpenAsync();
+            var found = Convert.ToInt32(await chkCmd.ExecuteScalarAsync());
+            if (found == 0)
+                throw new ArgumentException("Customer not found or does not belong to your company.");
+        }
+
         const string sql = """
             INSERT INTO Project
                 (Proj_ID, name, start_date, end_date, status, customer_ID)
@@ -148,6 +165,7 @@ public class ProjectRepository : IProjectRepository
                 p.start_date                                  AS StartDate,
                 p.end_date                                    AS EndDate,
                 p.status                                      AS Status,
+                p.customer_ID                                 AS CustomerId,
                 c.customer_company_name                       AS CustomerName,
                 COUNT(DISTINCT e.event_ID)                    AS EventCount,
                 ISNULL(SUM(s.required_quantity), 0)           AS RequiredCount,
@@ -169,7 +187,7 @@ public class ProjectRepository : IProjectRepository
             )
             GROUP BY
                 p.Proj_ID, p.name, p.start_date, p.end_date,
-                p.status, c.customer_company_name
+                p.status, p.customer_ID, c.customer_company_name
             ORDER BY p.start_date DESC
             """;
 
@@ -190,6 +208,9 @@ public class ProjectRepository : IProjectRepository
                 StartDate     = reader.IsDBNull(reader.GetOrdinal("StartDate")) ? null : reader.GetDateTime(reader.GetOrdinal("StartDate")),
                 EndDate       = reader.IsDBNull(reader.GetOrdinal("EndDate"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndDate")),
                 Status        = reader.GetString(reader.GetOrdinal("Status")),
+                CustomerId    = reader.IsDBNull(reader.GetOrdinal("CustomerId"))
+                                    ? null
+                                    : reader.GetString(reader.GetOrdinal("CustomerId")),
                 CustomerName  = reader.IsDBNull(reader.GetOrdinal("CustomerName"))
                                     ? null
                                     : reader.GetString(reader.GetOrdinal("CustomerName")),

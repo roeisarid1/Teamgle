@@ -200,6 +200,16 @@ BEGIN
         END
     END
 
+    -- Cross-validate: if both eventId and projectId supplied, event must belong to project
+    IF @eventId IS NOT NULL AND @projectId IS NOT NULL
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM [Event] WHERE event_ID = @eventId AND project_ID = @projectId)
+        BEGIN
+            RAISERROR('Event does not belong to the specified project.', 16, 1);
+            RETURN;
+        END
+    END
+
     -- Derive customer_ID from project if not supplied
     IF @projectId IS NOT NULL AND @customerId IS NULL
     BEGIN
@@ -207,6 +217,16 @@ BEGIN
         IF @customerId IS NULL
         BEGIN
             RAISERROR('Project not found or has no associated customer.', 16, 1);
+            RETURN;
+        END
+    END
+
+    -- Cross-validate: if both projectId and customerId supplied, project must belong to customer
+    IF @projectId IS NOT NULL AND @customerId IS NOT NULL
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM Project WHERE Proj_ID = @projectId AND customer_ID = @customerId)
+        BEGIN
+            RAISERROR('Project does not belong to the specified customer.', 16, 1);
             RETURN;
         END
     END

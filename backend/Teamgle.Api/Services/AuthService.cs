@@ -21,17 +21,35 @@ public class AuthService : IAuthService
     }
 
     // ── First Registration: save Firebase UID ─────────────────────────────
-    public async Task CompleteRegistrationAsync(string email, string firebaseUid)
+    public async Task CompleteRegistrationAsync(string idToken)
     {
-        // Safety: confirm the user is still eligible before writing.
-        var user = await _userRepo.GetUnregisteredUserByEmailAsync(email);
+        // 1. Verify the token with Firebase Admin SDK — extract UID and email.
+        FirebaseToken decoded;
+        try
+        {
+            decoded = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken);
+        }
+        catch (FirebaseAuthException ex)
+        {
+            throw new UnauthorizedAccessException($"Firebase token verification failed: {ex.Message}");
+        }
+
+        var firebaseUid = decoded.Uid;
+        var tokenEmail  = decoded.Claims.TryGetValue("email", out var e) ? e?.ToString() : null;
+
+        if (string.IsNullOrWhiteSpace(tokenEmail))
+            throw new InvalidOperationException("Token does not contain an email claim.");
+
+        // 2. Confirm the email is still eligible (row exists, FBUID still null).
+        var user = await _userRepo.GetUnregisteredUserByEmailAsync(tokenEmail.ToLower());
 
         if (user == null)
             throw new InvalidOperationException(
                 "User is not eligible for first registration. " +
                 "Either the email does not exist in SQL or FBUID is already set.");
 
-        await _userRepo.SaveFirebaseUidAsync(email, firebaseUid);
+        // 3. Save the verified UID.
+        await _userRepo.SaveFirebaseUidAsync(tokenEmail.ToLower(), firebaseUid);
     }
 
     // ── Login: verify Firebase token and return profile ───────────────────

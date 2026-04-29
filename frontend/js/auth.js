@@ -233,13 +233,13 @@ regBtn.addEventListener("click", async () => {
 
     // Step 2: Create Firebase account
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    const firebaseUid = credential.user.uid;
+    const idToken = await credential.user.getIdToken();
 
-    // Step 3: Tell backend to save the Firebase UID in SQL
+    // Step 3: Tell backend to save the Firebase UID in SQL (backend verifies token)
     const completeRes = await fetch(`${API_BASE}/complete-registration`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, firebaseUid })
+      body: JSON.stringify({ idToken })
     });
 
     if (!completeRes.ok) {

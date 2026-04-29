@@ -39,21 +39,23 @@ public class AuthController : ControllerBase
     }
 
     // ── POST /api/auth/complete-registration ──────────────────────────────
-    // Frontend calls this AFTER Firebase creates the account and returns the UID.
-    // Saves the Firebase UID into the SQL User row.
+    // Frontend calls this AFTER Firebase creates the account, sending the ID token.
+    // Backend verifies the token, extracts UID + email, then saves UID to SQL.
     [HttpPost("complete-registration")]
     public async Task<IActionResult> CompleteRegistration([FromBody] CompleteRegistrationRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.FirebaseUid))
-            return BadRequest(new { error = "Email and FirebaseUid are required." });
+        if (string.IsNullOrWhiteSpace(request.IdToken))
+            return BadRequest(new { error = "IdToken is required." });
 
         try
         {
-            await _authService.CompleteRegistrationAsync(
-                request.Email.Trim().ToLower(),
-                request.FirebaseUid.Trim());
-
+            await _authService.CompleteRegistrationAsync(request.IdToken.Trim());
             return Ok(new { message = "Registration completed successfully." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning("CompleteRegistration token invalid: {Message}", ex.Message);
+            return Unauthorized(new { error = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
