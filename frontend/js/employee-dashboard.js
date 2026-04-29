@@ -163,32 +163,49 @@ async function loadMyShifts() {
     _msLoading = false;
   }
 
-  // Compute unacked briefs on upcoming shifts (for badge)
   const now = new Date();
-  const upcomingUnacked = (_msApplications ?? []).filter(s => {
-    if (s.status !== "manager_approved") return false;
-    const isFuture = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now;
-    return isFuture && getBriefsForShift(s).some(b => !b.isAcknowledged);
-  }).length;
 
-  // Update nav badge (offers only)
-  const pendingOffers = (_msOffers ?? []).length;
-  const totalBadge    = pendingOffers + upcomingUnacked;
+  // Offered: all offers waiting for a response
+  const pendingOffers = (_msOffers ?? []).filter(o =>
+    (o.status || "manager_offer_sent") === "manager_offer_sent"
+  ).length;
+
+  // Upcoming: approved shifts that haven't happened yet
+  const upcomingCount = (_msApplications ?? []).filter(s =>
+    s.status === "manager_approved" &&
+    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now
+  ).length;
+
+  // History: approved shifts that are already in the past
+  const historyCount = (_msApplications ?? []).filter(s =>
+    s.status === "manager_approved" &&
+    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
+  ).length;
+
+  // Nav badge = total actionable items
+  const totalBadge = pendingOffers + upcomingCount;
   shiftsBadge.textContent   = totalBadge;
   shiftsBadge.style.display = totalBadge > 0 ? "" : "none";
 
-  // Offers tab badge
+  // Offered tab badge
   const offersBadge = document.getElementById("ms-badge-offers");
   if (offersBadge) {
     offersBadge.textContent   = pendingOffers;
     offersBadge.style.display = pendingOffers > 0 ? "" : "none";
   }
 
-  // Upcoming tab badge (unacked briefs)
+  // Upcoming tab badge
   const upcomingBadge = document.getElementById("ms-badge-upcoming");
   if (upcomingBadge) {
-    upcomingBadge.textContent   = upcomingUnacked;
-    upcomingBadge.style.display = upcomingUnacked > 0 ? "" : "none";
+    upcomingBadge.textContent   = upcomingCount;
+    upcomingBadge.style.display = upcomingCount > 0 ? "" : "none";
+  }
+
+  // History tab badge
+  const historyBadge = document.getElementById("ms-badge-history");
+  if (historyBadge) {
+    historyBadge.textContent   = historyCount;
+    historyBadge.style.display = historyCount > 0 ? "" : "none";
   }
 
   renderActiveTab();
@@ -259,6 +276,7 @@ function renderOffersTab() {
     const shiftId = card.dataset.shiftId;
     const btnAccept  = card.querySelector(".offer-btn--accept");
     const btnDecline = card.querySelector(".offer-btn--decline");
+    if (!btnAccept || !btnDecline) return;
 
     async function respond(accept) {
       btnAccept.disabled  = true;
@@ -273,13 +291,17 @@ function renderOffersTab() {
           body:    JSON.stringify({ accept }),
         });
         if (!res.ok) throw new Error();
-        // Remove from local cache and re-render
-        _msOffers = _msOffers.filter(o => o.shiftId !== shiftId);
+        // Keep the card visible, but mark the employee's response.
+        const nextStatus = accept ? "employee_request" : "employee_request_canceled";
+        _msOffers = _msOffers.map(o =>
+          o.shiftId === shiftId ? { ...o, status: nextStatus } : o
+        );
         // Refresh badge
         const offersBadge = document.getElementById("ms-badge-offers");
         if (offersBadge) {
-          offersBadge.textContent   = _msOffers.length;
-          offersBadge.style.display = _msOffers.length > 0 ? "" : "none";
+          const pendingOffers = _msOffers.filter(o => (o.status || "manager_offer_sent") === "manager_offer_sent").length;
+          offersBadge.textContent   = pendingOffers;
+          offersBadge.style.display = pendingOffers > 0 ? "" : "none";
         }
         // Also invalidate applications cache so Upcoming/Past refresh
         _msApplications = null;
@@ -299,6 +321,14 @@ function renderOffersTab() {
 
 function renderOfferCard(o) {
   const dateStr = fmtDateRange(o.plannedStartTime || o.shiftStartTime, o.plannedEndTime || o.shiftEndTime);
+  const status = o.status || "manager_offer_sent";
+  const isOpenOffer = status === "manager_offer_sent";
+  const statusBadge =
+    status === "employee_request"
+      ? `<span class="offer-response-badge offer-response-badge--pending">Interested · pending manager approval</span>`
+      : status === "employee_request_canceled"
+        ? `<span class="offer-response-badge offer-response-badge--declined">Declined</span>`
+        : `<span class="offer-response-badge offer-response-badge--open">Response needed</span>`;
   const payLine = o.payRatePerHour > 0
     ? `<div class="offer-pay">₪${Number(o.payRatePerHour).toFixed(2)}<span>/hr</span></div>` : "";
   const loc = o.eventLocation
@@ -312,6 +342,7 @@ function renderOfferCard(o) {
         <div class="offer-project-name">${escHtml(o.projectName)}</div>
         ${o.eventType ? `<span class="offer-event-type-badge">${capitalize(o.eventType)}</span>` : ""}
       </div>
+      ${statusBadge}
       <h3 class="offer-event-name">${escHtml(o.eventName)}</h3>
       ${dateStr ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
       <div class="offer-meta-row">
@@ -324,10 +355,12 @@ function renderOfferCard(o) {
       ${payLine}
       ${notes}
       <div class="offer-by">Offered by: <strong>${escHtml(o.managerName)}</strong></div>
-      <div class="offer-actions">
-        <button class="offer-btn offer-btn--accept">I'm In ✓</button>
-        <button class="offer-btn offer-btn--decline">Can't Make It ✗</button>
-      </div>
+      ${isOpenOffer
+        ? `<div class="offer-actions">
+            <button class="offer-btn offer-btn--accept">I'm In ✓</button>
+            <button class="offer-btn offer-btn--decline">Can't Make It ✗</button>
+          </div>`
+        : ""}
     </div>`;
 }
 
