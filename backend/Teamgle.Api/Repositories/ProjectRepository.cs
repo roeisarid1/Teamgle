@@ -2306,6 +2306,39 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         return list;
     }
 
+    public async Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string projId, string briefId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Verify manager has access AND the brief belongs to the given project (directly or via an event)
+        const string accessSql = """
+            SELECT 1
+            FROM   Brief b
+            LEFT JOIN Project p  ON p.Proj_ID  = b.project_ID
+            LEFT JOIN Event   e  ON e.event_ID  = b.event_ID
+            LEFT JOIN Project ep ON ep.Proj_ID  = e.project_ID
+            WHERE b.brief_ID = @briefId
+              AND COALESCE(p.Proj_ID, ep.Proj_ID) = @projId
+              AND COALESCE(p.Proj_ID, ep.Proj_ID) IN (
+                  SELECT mp.project_ID
+                  FROM   Manager_Project mp
+                  INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                  WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @fbUid)
+              )
+            """;
+        await using (var ac = new SqlCommand(accessSql, conn))
+        {
+            ac.Parameters.AddWithValue("@briefId", briefId);
+            ac.Parameters.AddWithValue("@projId",  projId);
+            ac.Parameters.AddWithValue("@fbUid",   firebaseUid);
+            if (await ac.ExecuteScalarAsync() == null) return null;
+        }
+
+        // Delegate to the shared scope-resolution + reader logic
+        return await GetBriefAcknowledgmentsAsync(briefId, firebaseUid);
+    }
+
     public async Task<bool> AcknowledgeBriefAsync(string briefId, string firebaseUid)
     {
         await using var conn = new SqlConnection(_connectionString);

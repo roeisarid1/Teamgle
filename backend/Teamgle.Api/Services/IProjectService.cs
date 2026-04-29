@@ -69,6 +69,7 @@ public interface IProjectService
 
     // ── Brief Acknowledgment ───────────────────────────────────────────────
     Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string firebaseUid, string briefId);
+    Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string firebaseUid, string projId, string briefId);
     Task<bool> AcknowledgeBriefAsync(string firebaseUid, string briefId);
     Task<IEnumerable<EmployeeBriefItem>?> GetMyBriefsAsync(string firebaseUid);
 

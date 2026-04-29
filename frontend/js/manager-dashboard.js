@@ -1841,7 +1841,7 @@ async function openProjectDetail(projId) {
 
     currentProjectDetail = project;
     titleEl.textContent = escapeHtml(project.name);
-    subtitleEl.textContent = `${project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
+    subtitleEl.textContent = `${project.displayStatus ?? project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
     renderDashboardTab();
   } catch {
     titleEl.textContent = "Error loading project";

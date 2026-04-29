@@ -380,8 +380,8 @@ public class ProjectsController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var acks = await _projectService.GetBriefAcknowledgmentsAsync(uid, briefId);
-            if (acks == null) return NotFound(new { error = "Brief not found." });
+            var acks = await _projectService.GetProjectBriefAcknowledgmentsAsync(uid, id, briefId);
+            if (acks == null) return NotFound(new { error = "Brief not found or does not belong to this project." });
             return Ok(acks);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }

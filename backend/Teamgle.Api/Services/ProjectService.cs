@@ -466,6 +466,12 @@ public class ProjectService : IProjectService
         return await _projectRepo.GetBriefAcknowledgmentsAsync(briefId, firebaseUid);
     }
 
+    public async Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string firebaseUid, string projId, string briefId)
+    {
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.GetProjectBriefAcknowledgmentsAsync(projId, briefId, firebaseUid);
+    }
+
     public async Task<bool> AcknowledgeBriefAsync(string firebaseUid, string briefId)
     {
         return await _projectRepo.AcknowledgeBriefAsync(briefId, firebaseUid);
