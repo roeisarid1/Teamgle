@@ -3435,6 +3435,53 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-muted);
 }
 
+/* Shift summary strip */
+.ps-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--bg, #f9fafb);
+  border-top: 1px solid var(--border);
+  min-height: 36px;
+  align-items: center;
+}
+.ps-strip:empty { display: none; }
+.ps-strip-loading { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.ps-strip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ps-strip-pill--open { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.ps-strip-pill--full { background: #f1f5f9; color: var(--text-muted); border-color: #e2e8f0; }
+.ps-strip-time { opacity: .75; }
+
+/* Potential worker filters */
+.ps-potential-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg, #f9fafb);
+  border-bottom: 1px solid var(--border);
+}
+.ps-filter-select {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  background: #fff;
+  cursor: pointer;
+}
+.ps-filter-select:focus { outline: none; border-color: var(--blue); }
+
 /* Sections inside an event block: remove individual radius/shadow/margin */
 .ps-event-block .ps-section {
   border-radius: 0;
