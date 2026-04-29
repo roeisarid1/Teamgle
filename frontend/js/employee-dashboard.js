@@ -134,6 +134,56 @@ let _msBriefs       = null;
 let _msActiveTab    = "offers";
 let _msLoading      = false;
 
+// ── Tab notification helpers (seen/unseen tracking via localStorage) ──────────
+const _SEEN_KEY = { offers: "ms-seen-offers", upcoming: "ms-seen-upcoming", history: "ms-seen-history" };
+
+function _getSeenIds(tab) {
+  try { return new Set(JSON.parse(localStorage.getItem(_SEEN_KEY[tab]) || "[]")); }
+  catch { return new Set(); }
+}
+
+function _saveSeenIds(tab, ids) {
+  try {
+    const merged = _getSeenIds(tab);
+    ids.forEach(id => merged.add(id));
+    localStorage.setItem(_SEEN_KEY[tab], JSON.stringify([...merged]));
+  } catch {}
+}
+
+function _tabItems(tab) {
+  const now = new Date();
+  if (tab === "offers")
+    return (_msOffers ?? [])
+      .filter(o => (o.status || "manager_offer_sent") === "manager_offer_sent")
+      .map(o => o.shiftId);
+  if (tab === "upcoming")
+    return (_msApplications ?? [])
+      .filter(s => s.status === "manager_approved" &&
+        new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now)
+      .map(s => s.shiftId);
+  if (tab === "history")
+    return (_msApplications ?? [])
+      .filter(s => s.status === "manager_approved" &&
+        new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now)
+      .map(s => s.shiftId);
+  return [];
+}
+
+function _updateTabBadge(tab) {
+  const badge = document.getElementById(`ms-badge-${tab}`);
+  if (!badge) return;
+  const seen  = _getSeenIds(tab);
+  const count = _tabItems(tab).filter(id => !seen.has(id)).length;
+  badge.textContent   = count;
+  badge.style.display = count > 0 ? "" : "none";
+}
+
+function _markTabSeen(tab) {
+  _saveSeenIds(tab, _tabItems(tab));
+  const badge = document.getElementById(`ms-badge-${tab}`);
+  if (badge) badge.style.display = "none";
+}
+
 // ── Load all shift data in parallel ──────────────────────────────────────────
 async function loadMyShifts() {
   if (_msLoading) return;
@@ -163,50 +213,18 @@ async function loadMyShifts() {
     _msLoading = false;
   }
 
-  const now = new Date();
+  // Update unseen badges for all tabs; active tab is marked seen immediately
+  ["offers", "upcoming", "history"].forEach(tab => {
+    if (tab === _msActiveTab) _markTabSeen(tab);
+    else _updateTabBadge(tab);
+  });
 
-  // Offered: all offers waiting for a response
-  const pendingOffers = (_msOffers ?? []).filter(o =>
-    (o.status || "manager_offer_sent") === "manager_offer_sent"
-  ).length;
-
-  // Upcoming: approved shifts that haven't happened yet
-  const upcomingCount = (_msApplications ?? []).filter(s =>
-    s.status === "manager_approved" &&
-    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now
-  ).length;
-
-  // History: approved shifts that are already in the past
-  const historyCount = (_msApplications ?? []).filter(s =>
-    s.status === "manager_approved" &&
-    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
-  ).length;
-
-  // Nav badge = total actionable items
-  const totalBadge = pendingOffers + upcomingCount;
-  shiftsBadge.textContent   = totalBadge;
-  shiftsBadge.style.display = totalBadge > 0 ? "" : "none";
-
-  // Offered tab badge
-  const offersBadge = document.getElementById("ms-badge-offers");
-  if (offersBadge) {
-    offersBadge.textContent   = pendingOffers;
-    offersBadge.style.display = pendingOffers > 0 ? "" : "none";
-  }
-
-  // Upcoming tab badge
-  const upcomingBadge = document.getElementById("ms-badge-upcoming");
-  if (upcomingBadge) {
-    upcomingBadge.textContent   = upcomingCount;
-    upcomingBadge.style.display = upcomingCount > 0 ? "" : "none";
-  }
-
-  // History tab badge
-  const historyBadge = document.getElementById("ms-badge-history");
-  if (historyBadge) {
-    historyBadge.textContent   = historyCount;
-    historyBadge.style.display = historyCount > 0 ? "" : "none";
-  }
+  // Nav badge = total unseen across offers + upcoming
+  const navCount =
+    _tabItems("offers").filter(id => !_getSeenIds("offers").has(id)).length +
+    _tabItems("upcoming").filter(id => !_getSeenIds("upcoming").has(id)).length;
+  shiftsBadge.textContent   = navCount;
+  shiftsBadge.style.display = navCount > 0 ? "" : "none";
 
   renderActiveTab();
 }
@@ -226,6 +244,8 @@ function activateMsTab(name, render = true) {
   document.querySelectorAll(".ms-panel").forEach(p => {
     p.style.display = p.id === `ms-panel-${name}` ? "" : "none";
   });
+  // Mark items in the tab being opened as seen
+  _markTabSeen(name);
   if (render) renderActiveTab();
 }
 
