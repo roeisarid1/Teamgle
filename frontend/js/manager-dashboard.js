@@ -12,11 +12,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile } from "./chat-service.js";
 import { initChat, destroyChat, openChatWith, openEventChat, openShiftChat } from "./chat-ui.js";
+import { initI18n, applyTranslations, _t } from "./i18n.js";
 
 const API_BASE = "http://localhost:5000/api";
-
-// ── Language helper ───────────────────────────────────────────────────────────
-const _t = (en, he) => document.documentElement.lang === "he" ? he : en;
 
 // ── DOM ────────────────────────────────────────────────────────────────────
 const navUsername = document.getElementById("nav-username");
@@ -39,6 +37,21 @@ const sidebar = document.querySelector(".sidebar");
 const sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
 const MOBILE_BREAKPOINT = 768;
+initI18n();
+
+window.addEventListener("teamgle:languagechange", () => {
+  applyTranslations();
+  const activeSection = document.querySelector(".page-section:not([style*='display:none'])")?.dataset.section;
+  if (activeSection === "events") renderProjectsKanban(_applyProjectFilters(_allProjects ?? []));
+  if (activeSection === "event-detail" && currentEventId) activateEventTab(
+    document.querySelector("#event-detail-tabs .pd-tab.active")?.dataset.etab ?? "staffing",
+  );
+  if (activeSection === "chats") {
+    destroyChat();
+    chatInitialized = false;
+    _initChatSection();
+  }
+});
 
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);

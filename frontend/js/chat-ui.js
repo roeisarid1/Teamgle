@@ -14,9 +14,7 @@ import {
   markConversationRead,
   unsubscribeAll
 } from "./chat-service.js";
-
-// ── Language helper ───────────────────────────────────────────────────────────
-const _t = (en, he) => document.documentElement.lang === "he" ? he : en;
+import { _t } from "./i18n.js";
 
 // ── Module state ──────────────────────────────────────────────────────────────
 let _user                     = null;   // { uid, firstName, lastName, email, companyId, role }

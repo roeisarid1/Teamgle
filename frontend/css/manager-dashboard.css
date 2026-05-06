@@ -200,6 +200,47 @@ body {
   background: var(--red-light);
 }
 
+.btn-language-toggle {
+  min-width: 76px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.btn-language-toggle:hover {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
+body.rtl {
+  direction: rtl;
+}
+
+body.rtl input,
+body.rtl textarea,
+body.rtl select {
+  text-align: right;
+}
+
+body.rtl input[type="email"],
+body.rtl input[type="url"],
+body.rtl input[type="number"],
+body.rtl input[type="datetime-local"],
+body.rtl input[type="date"],
+body.rtl input[type="time"],
+body.rtl .chip-value,
+body.rtl .inv-number,
+body.rtl code {
+  direction: ltr;
+  text-align: left;
+}
+
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .body-layout {
   display: flex;

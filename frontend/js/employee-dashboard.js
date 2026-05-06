@@ -4,11 +4,9 @@ import { auth }                        from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { writeUserProfile }            from "./chat-service.js";
 import { initChat, destroyChat, openEventChat, openShiftChat } from "./chat-ui.js";
+import { initI18n, applyTranslations, _t } from "./i18n.js";
 
 const API_BASE = "http://localhost:5000/api";
-
-// ── Language helper ───────────────────────────────────────────────────────────
-const _t = (en, he) => document.documentElement.lang === "he" ? he : en;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const navUsername      = document.getElementById("nav-username");
@@ -25,6 +23,17 @@ const chatSection      = document.getElementById("section-chats");
 const shiftsBadge      = document.getElementById("shifts-badge");
 
 const MOBILE_BREAKPOINT = 768;
+initI18n();
+
+window.addEventListener("teamgle:languagechange", () => {
+  applyTranslations();
+  if (_msActiveTab) renderActiveTab();
+  if (pageContent?.classList.contains("chat-mode")) {
+    destroyChat();
+    _chatInitialized = false;
+    _initChatSection();
+  }
+});
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function setSidebarOpen(open) {
