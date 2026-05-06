@@ -210,7 +210,7 @@
       <!-- Filter bar -->
       <div class="inv-filter-bar">
         <input type="search" class="search-input" id="inv-search"
-          placeholder="Search by invoice #, customer, project…" autocomplete="off" />
+          placeholder="Search by invoice #, customer, event…" autocomplete="off" />
         <select class="emp-filter-select" id="inv-filter-status">
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -229,7 +229,7 @@
             <tr>
               <th>Invoice #</th>
               <th>Customer</th>
-              <th>Project / Event</th>
+              <th>Event</th>
               <th>Invoice Date</th>
               <th>Due Date</th>
               <th>Amount</th>
@@ -280,7 +280,6 @@
           Status
         </button>
         <div class="filter-status-popup" id="filter-status-popup" hidden>
-          <label><input type="checkbox" value="draft"> Draft</label>
           <label><input type="checkbox" value="planning"> Planning</label>
           <label><input type="checkbox" value="active"> Active</label>
           <label><input type="checkbox" value="completed"> Completed</label>
@@ -306,7 +305,7 @@
           <div class="kanban-col-body" id="kanban-completed"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-grey">Draft Events</div>
+          <div class="kanban-col-header kanban-grey">Planning Events</div>
           <div class="kanban-col-body" id="kanban-draft"></div>
         </div>
       </div>
@@ -329,7 +328,7 @@
           </div>
         </div>
         <div class="cp-header-right">
-          <button class="btn-cancel btn-with-icon" id="btn-save-draft" type="button">
+          <button class="btn-cancel btn-with-icon" id="btn-save-draft" type="button" style="display:none">
             <i data-lucide="save"></i>
             Save Draft
           </button>
@@ -374,7 +373,21 @@
               </div>
               <div class="field">
                 <label for="ev-type">Event Type</label>
-                <input type="text" id="ev-type" placeholder="e.g. Conference, Wedding…" autocomplete="off" />
+                <select id="ev-type">
+                  <option value="">— Select type —</option>
+                  <option value="conference">Conference</option>
+                  <option value="party">Party</option>
+                  <option value="wedding">Wedding</option>
+                  <option value="corporate">Corporate</option>
+                  <option value="bar_mitzvah">Bar Mitzvah</option>
+                  <option value="birthday">Birthday</option>
+                  <option value="concert">Concert</option>
+                  <option value="exhibition">Exhibition</option>
+                  <option value="seminar">Seminar</option>
+                  <option value="gala">Gala</option>
+                  <option value="trip">Trip</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
             </div>
             <div class="create-date-row">
@@ -1312,19 +1325,19 @@
 
       <div class="modal-body grouped">
         <div class="form-group">
-          <p class="form-group-title">Customer &amp; Project</p>
+          <p class="form-group-title">Customer &amp; Event</p>
           <div class="form-row">
             <div class="field">
               <label for="inv-customer">Customer <span class="req">*</span></label>
               <select id="inv-customer"></select>
             </div>
-            <div class="field">
+            <div class="field" style="display:none">
               <label for="inv-project">Project</label>
-              <select id="inv-project"><option value="">— select project —</option></select>
+              <select id="inv-project"><option value="">— technical wrapper —</option></select>
             </div>
           </div>
           <div class="field">
-            <label for="inv-event">Event (optional)</label>
+            <label for="inv-event">Event</label>
             <select id="inv-event"><option value="">— select event —</option></select>
           </div>
         </div>
