@@ -183,6 +183,13 @@
   color: #2a7d2e;
 }
 
+.conv-avatar.group-avatar,
+.chat-header-avatar.group-avatar {
+  background: rgba(79,110,247,.12);
+  color: var(--blue);
+  border-radius: 12px;
+}
+
 /* ── Conversation text info ──────────────────────────────────────────────── */
 .conv-info {
   flex: 1;

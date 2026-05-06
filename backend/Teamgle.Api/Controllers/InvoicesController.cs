@@ -224,12 +224,8 @@ public class InvoicesController : ControllerBase
                     col.Item().PaddingTop(20).Text("Bill To").FontSize(9).FontColor("#94a3b8");
                     col.Item().Text(inv.CustomerCompanyName ?? "—").Bold().FontSize(13);
 
-                    if (!string.IsNullOrWhiteSpace(inv.ProjectName))
-                    {
-                        col.Item().PaddingTop(4).Text($"Project: {inv.ProjectName}").FontColor("#475569");
-                        if (!string.IsNullOrWhiteSpace(inv.EventName))
-                            col.Item().Text($"Event: {inv.EventName}").FontColor("#475569");
-                    }
+                    if (!string.IsNullOrWhiteSpace(inv.EventName))
+                        col.Item().PaddingTop(4).Text($"Event: {inv.EventName}").FontColor("#475569");
 
                     col.Item().PaddingVertical(20).LineHorizontal(1).LineColor("#e2e8f0");
 

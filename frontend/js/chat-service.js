@@ -106,6 +106,89 @@ export async function getOrCreateConversation(currentUid, otherUid, companyId, p
 }
 
 /**
+ * Find or create a scoped group conversation for an event or shift.
+ * @param {"event"|"shift"} type
+ * @param {string} scopeId - eventId or shiftId
+ * @param {string} companyId
+ * @param {string[]} participants
+ * @param {Object} participantInfo - map of uid -> { name, email, role }
+ * @param {{ title: string, subtitle?: string, eventId?: string, shiftId?: string }} scope
+ * @returns {Promise<string>} conversationId
+ */
+export async function getOrCreateScopedConversation(
+  type,
+  scopeId,
+  companyId,
+  participants,
+  participantInfo,
+  scope,
+) {
+  if (type !== "event" && type !== "shift") {
+    throw new Error("Unsupported conversation type.");
+  }
+  const uniqueParticipants = [...new Set(participants.filter(Boolean))].sort();
+  if (uniqueParticipants.length === 0) {
+    throw new Error("Conversation must include at least one participant.");
+  }
+
+  const safeScopeId = String(scopeId).replaceAll("/", "_");
+  const convDocId = `conv_${type}_${safeScopeId}`;
+  const convRef = doc(db, "conversations", convDocId);
+
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(convRef);
+    if (!snap.exists()) {
+      const unreadCounts = {};
+      uniqueParticipants.forEach(uid => { unreadCounts[uid] = 0; });
+
+      tx.set(convRef, {
+        companyId,
+        type,
+        scope: {
+          ...scope,
+          id: scopeId,
+          title: scope?.title || (type === "event" ? "Event Chat" : "Shift Chat")
+        },
+        participants: uniqueParticipants,
+        participantInfo,
+        lastMessage: null,
+        lastMessageAt: serverTimestamp(),
+        lastMessageSenderId: null,
+        createdAt: serverTimestamp(),
+        unreadCounts
+      });
+      return;
+    }
+
+    const existing = snap.data();
+    const mergedParticipants = [
+      ...new Set([...(existing.participants ?? []), ...uniqueParticipants])
+    ].sort();
+    const mergedInfo = { ...(existing.participantInfo ?? {}), ...participantInfo };
+    const mergedUnread = { ...(existing.unreadCounts ?? {}) };
+    mergedParticipants.forEach(uid => {
+      if (mergedUnread[uid] == null) mergedUnread[uid] = 0;
+    });
+
+    tx.update(convRef, {
+      companyId,
+      type,
+      scope: {
+        ...(existing.scope ?? {}),
+        ...scope,
+        id: scopeId,
+        title: scope?.title || existing.scope?.title || (type === "event" ? "Event Chat" : "Shift Chat")
+      },
+      participants: mergedParticipants,
+      participantInfo: mergedInfo,
+      unreadCounts: mergedUnread
+    });
+  });
+
+  return convDocId;
+}
+
+/**
  * Subscribe to all conversations for a user in a company.
  * Conversations are sorted by most recent activity (client-side).
  * Calls callback(conversations[]) on every change.

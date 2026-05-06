@@ -1667,7 +1667,7 @@ tr.expanded-row > td {
 /* Kanban board */
 .events-kanban {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   padding: 20px 24px;
   overflow-x: auto;
@@ -4110,6 +4110,10 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 10px;
 }
 
+.offer-actions--chat {
+  margin-bottom: 10px;
+}
+
 .offer-btn {
   flex: 1;
   min-height: 48px;
@@ -4146,6 +4150,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .offer-btn--decline:hover:not(:disabled) {
   background: #fff1f2;
+}
+
+.offer-btn--secondary {
+  min-height: 40px;
+  background: #fff;
+  color: var(--blue);
+  border: 1.5px solid var(--border);
+}
+
+.offer-btn--secondary:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: var(--blue-light);
 }
 
 /* Empty state */
@@ -5440,6 +5456,34 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .ms-shift-info { flex: 1; min-width: 0; }
 
+.ms-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ms-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ms-chat-btn:hover {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
 /* "Open Shift" button */
 .ms-open-shift-btn {
   flex-shrink: 0;
@@ -5727,6 +5771,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 @media (max-width: 560px) {
   .ms-card-header { flex-direction: column; gap: 10px; }
+  .ms-card-actions { width: 100%; flex-wrap: wrap; }
+  .ms-chat-btn { flex: 1; justify-content: center; }
   .ms-open-shift-btn { width: 100%; }
   .ed-pr-row-header  { flex-direction: column; align-items: flex-start; }
   .ed-pr-review-btn  { width: 100%; margin-left: 0; }

@@ -505,8 +505,8 @@ public class ProjectService : IProjectService
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new ArgumentException("Event name is required.");
-        if (request.EndTime < request.StartTime)
-            throw new ArgumentException("End time cannot be before start time.");
+        if (request.EndTime <= request.StartTime)
+            throw new ArgumentException("End time must be after start time.");
 
         var companyId = await ResolveCompanyIdAsync(firebaseUid);
         var managerId = await _projectRepo.GetManagerUserIdAsync(firebaseUid)
