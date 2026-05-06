@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Teamgle — Manager Dashboard</title>
+  <title>Teamgle — לוח מנהל</title>
   <link rel="stylesheet" href="css/manager-dashboard.css" />
   <link rel="stylesheet" href="css/chat.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -31,26 +31,26 @@
     </div>
     <div class="navbar-info">
       <div class="navbar-chip">
-        <span class="chip-label">Name</span>
+        <span class="chip-label">שם</span>
         <span class="chip-value" id="info-name">—</span>
       </div>
       <div class="navbar-chip">
-        <span class="chip-label">Role</span>
+        <span class="chip-label">תפקיד</span>
         <span class="chip-value" id="info-role">—</span>
       </div>
       <div class="navbar-chip">
-        <span class="chip-label">Company</span>
+        <span class="chip-label">חברה</span>
         <span class="chip-value" id="info-company">—</span>
       </div>
     </div>
     <div class="navbar-user">
-      <span id="nav-username">Loading…</span>
-      <button class="btn-logout" id="btn-logout">Sign Out</button>
+      <span id="nav-username">טוען…</span>
+      <button class="btn-logout" id="btn-logout">התנתק</button>
     </div>
   </nav>
 
   <!-- ── Sidebar reopen button (visible only when sidebar is collapsed) ── -->
-  <button class="btn-sidebar-reopen" id="btn-sidebar-reopen" aria-label="Open sidebar">
+  <button class="btn-sidebar-reopen" id="btn-sidebar-reopen" aria-label="פתח סרגל צד">
     <i data-lucide="panel-left-open"></i>
   </button>
 
@@ -63,7 +63,7 @@
   <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
   <aside class="sidebar">
     <div class="sidebar-header">
-      <p class="sidebar-title">Menu</p>
+      <p class="sidebar-title">תפריט</p>
       <button class="btn-hamburger" id="btn-hamburger">
         <i data-lucide="panel-left-close"></i>
       </button>
@@ -71,27 +71,27 @@
     <nav class="sidebar-nav">
       <a href="#" class="nav-item active" data-section="events">
         <i data-lucide="calendar-days"></i>
-        <span>Events</span>
+        <span>אירועים</span>
       </a>
       <a href="#" class="nav-item" data-section="employees">
         <i data-lucide="users"></i>
-        <span>Employees</span>
+        <span>עובדים</span>
       </a>
       <a href="#" class="nav-item" data-section="customers">
         <i data-lucide="building-2"></i>
-        <span>Customers</span>
+        <span>לקוחות</span>
       </a>
       <a href="#" class="nav-item disabled">
         <i data-lucide="calendar"></i>
-        <span>Calendar</span>
+        <span>לוח שנה</span>
       </a>
       <a href="#" class="nav-item" data-section="invoices">
         <i data-lucide="receipt"></i>
-        <span>Payment Requests</span>
+        <span>דרישות תשלום</span>
       </a>
       <a href="#" class="nav-item" data-section="chats">
         <i data-lucide="message-square"></i>
-        <span>Chats</span>
+        <span>הודעות</span>
       </a>
     </nav>
   </aside>
@@ -102,42 +102,42 @@
     <!-- Employee management section -->
     <div class="section-card page-section" id="section-employees" data-section="employees" style="display:none">
       <div class="section-header">
-        <h2>👥 Employees</h2>
+        <h2>👥 עובדים</h2>
         <button class="btn-primary btn-with-icon" id="btn-add-employee">
           <i data-lucide="user-plus"></i>
-          Add Employee
+          הוסף עובד
         </button>
       </div>
       <div class="emp-filter-bar">
         <input type="search" class="search-input" id="employee-search"
-          placeholder="Search by name…" autocomplete="off" />
+          placeholder="חפש לפי שם…" autocomplete="off" />
         <div class="emp-filter-group">
-          <label class="emp-filter-label">Status</label>
+          <label class="emp-filter-label">סטטוס</label>
           <select class="emp-filter-select" id="emp-filter-status">
-            <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="">הכל</option>
+            <option value="active">פעיל</option>
+            <option value="inactive">לא פעיל</option>
           </select>
         </div>
-        <button class="emp-filter-clear" id="emp-filter-clear" style="display:none">Clear filters</button>
+        <button class="emp-filter-clear" id="emp-filter-clear" style="display:none">נקה מסננים</button>
       </div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Cost / hr</th>
-              <th>Roles</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>שם</th>
+              <th>אימייל</th>
+              <th>טלפון</th>
+              <th>עלות לשעה</th>
+              <th>תפקידים</th>
+              <th>סטטוס</th>
+              <th>פעולות</th>
             </tr>
           </thead>
           <tbody id="employee-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Loading employees…</td>
+              <td colspan="7" class="empty-state">טוען עובדים…</td>
             </tr>
           </tbody>
         </table>
@@ -147,31 +147,31 @@
     <!-- Customer management section -->
     <div class="section-card page-section" id="section-customers" data-section="customers" style="display:none">
       <div class="section-header">
-        <h2>🏢 Customers</h2>
+        <h2>🏢 לקוחות</h2>
         <button class="btn-primary btn-with-icon" id="btn-add-customer">
           <i data-lucide="building-2"></i>
-          Add Customer
+          הוסף לקוח
         </button>
       </div>
       <div class="search-bar">
         <input type="search" class="search-input" id="customer-search"
-          placeholder="Search by company name…" autocomplete="off" />
+          placeholder="חפש לפי שם חברה…" autocomplete="off" />
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Company Name</th>
-              <th>Phone</th>
-              <th>Email</th>
-              <th>City</th>
-              <th>Business #</th>
-              <th>Added</th>
-              <th>Actions</th>
+              <th>שם חברה</th>
+              <th>טלפון</th>
+              <th>אימייל</th>
+              <th>עיר</th>
+              <th>ח.פ</th>
+              <th>נוסף</th>
+              <th>פעולות</th>
             </tr>
           </thead>
           <tbody id="customer-tbody">
-            <tr><td colspan="7" class="empty-state">Select "Customers" to load.</td></tr>
+            <tr><td colspan="7" class="empty-state">בחר "לקוחות" לטעינה.</td></tr>
           </tbody>
         </table>
       </div>
@@ -180,29 +180,29 @@
     <!-- Invoices section -->
     <div class="section-card page-section" id="section-invoices" data-section="invoices" style="display:none">
       <div class="section-header">
-        <h2>Payment Requests</h2>
+        <h2>דרישות תשלום</h2>
         <button class="btn-primary btn-with-icon" id="btn-create-invoice">
           <i data-lucide="plus"></i>
-          New Payment Request
+          דרישת תשלום חדשה
         </button>
       </div>
 
       <!-- Summary cards -->
       <div class="inv-summary-cards" id="inv-summary-cards">
         <div class="inv-card inv-card--total">
-          <div class="inv-card-label">Total Requested</div>
+          <div class="inv-card-label">סה"כ בוקש</div>
           <div class="inv-card-value" id="inv-stat-total">—</div>
         </div>
         <div class="inv-card inv-card--paid">
-          <div class="inv-card-label">Paid</div>
+          <div class="inv-card-label">שולם</div>
           <div class="inv-card-value" id="inv-stat-paid">—</div>
         </div>
         <div class="inv-card inv-card--outstanding">
-          <div class="inv-card-label">Outstanding</div>
+          <div class="inv-card-label">יתרה</div>
           <div class="inv-card-value" id="inv-stat-outstanding">—</div>
         </div>
         <div class="inv-card inv-card--overdue">
-          <div class="inv-card-label">Overdue</div>
+          <div class="inv-card-label">באיחור</div>
           <div class="inv-card-value" id="inv-stat-overdue">—</div>
         </div>
       </div>
@@ -210,15 +210,15 @@
       <!-- Filter bar -->
       <div class="inv-filter-bar">
         <input type="search" class="search-input" id="inv-search"
-          placeholder="Search by request #, customer, event…" autocomplete="off" />
+          placeholder="חפש לפי מס' דרישה, לקוח, אירוע…" autocomplete="off" />
         <select class="emp-filter-select" id="inv-filter-status">
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="partial">Partial</option>
-          <option value="paid">Paid</option>
-          <option value="overdue">Overdue</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="">כל הסטטוסים</option>
+          <option value="draft">טיוטה</option>
+          <option value="sent">נשלח</option>
+          <option value="partial">חלקי</option>
+          <option value="paid">שולם</option>
+          <option value="overdue">באיחור</option>
+          <option value="cancelled">בוטל</option>
         </select>
       </div>
 
@@ -227,19 +227,19 @@
         <table>
           <thead>
             <tr>
-              <th>Request #</th>
-              <th>Customer</th>
-              <th>Event</th>
-              <th>Request Date</th>
-              <th>Due Date</th>
-              <th>Amount</th>
-              <th>Paid</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>מס' דרישה</th>
+              <th>לקוח</th>
+              <th>אירוע</th>
+              <th>תאריך דרישה</th>
+              <th>תאריך פירעון</th>
+              <th>סכום</th>
+              <th>שולם</th>
+              <th>סטטוס</th>
+              <th>פעולות</th>
             </tr>
           </thead>
           <tbody id="inv-tbody">
-            <tr><td colspan="9" class="empty-state">Select "Payment Requests" to load.</td></tr>
+            <tr><td colspan="9" class="empty-state">בחר "דרישות תשלום" לטעינה.</td></tr>
           </tbody>
         </table>
       </div>
@@ -250,13 +250,13 @@
 
       <!-- Page Header -->
       <div class="section-header">
-        <h2>Events</h2>
+        <h2>אירועים</h2>
         <div class="events-header-actions">
           <input type="search" class="search-input events-search" id="search-projects"
-            placeholder="Search events…" autocomplete="off" />
+            placeholder="חפש אירועים…" autocomplete="off" />
           <button class="btn-primary btn-with-icon" id="btn-create-project">
             <i data-lucide="calendar-plus"></i>
-            Create Event
+            צור אירוע
           </button>
         </div>
       </div>
@@ -265,27 +265,27 @@
       <div class="events-filter-row">
         <button class="btn-filter" id="filter-date">
           <span class="material-symbols-outlined">calendar_month</span>
-          Date
+          תאריך
         </button>
         <div class="filter-date-popup" id="filter-date-popup" hidden>
-          <label>From <input type="date" id="filter-date-from"></label>
-          <label>To <input type="date" id="filter-date-to"></label>
+          <label>מ <input type="date" id="filter-date-from"></label>
+          <label>עד <input type="date" id="filter-date-to"></label>
           <div class="filter-date-actions">
-            <button class="filter-date-clear" id="filter-date-clear">Clear</button>
-            <button class="filter-date-apply" id="filter-date-apply">Apply</button>
+            <button class="filter-date-clear" id="filter-date-clear">נקה</button>
+            <button class="filter-date-apply" id="filter-date-apply">החל</button>
           </div>
         </div>
         <button class="btn-filter" id="filter-status">
           <span class="material-symbols-outlined">tune</span>
-          Status
+          סטטוס
         </button>
         <div class="filter-status-popup" id="filter-status-popup" hidden>
-          <label><input type="checkbox" value="planning"> Planning</label>
-          <label><input type="checkbox" value="active"> Active</label>
-          <label><input type="checkbox" value="completed"> Completed</label>
-          <label><input type="checkbox" value="canceled"> Canceled</label>
+          <label><input type="checkbox" value="planning"> תכנון</label>
+          <label><input type="checkbox" value="active"> פעיל</label>
+          <label><input type="checkbox" value="completed"> הסתיים</label>
+          <label><input type="checkbox" value="canceled"> בוטל</label>
           <div class="filter-date-actions">
-            <button class="filter-date-clear" id="filter-status-clear">Clear</button>
+            <button class="filter-date-clear" id="filter-status-clear">נקה</button>
           </div>
         </div>
       </div>
@@ -293,15 +293,15 @@
       <!-- Kanban Board -->
       <div class="events-kanban">
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-blue">Today's Events</div>
+          <div class="kanban-col-header kanban-blue">אירועים היום</div>
           <div class="kanban-col-body" id="kanban-today"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-amber">Upcoming Events</div>
+          <div class="kanban-col-header kanban-amber">אירועים קרובים</div>
           <div class="kanban-col-body" id="kanban-upcoming"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-green">Completed Events</div>
+          <div class="kanban-col-header kanban-green">אירועים שהסתיימו</div>
           <div class="kanban-col-body" id="kanban-completed"></div>
         </div>
       </div>
@@ -316,21 +316,21 @@
         <div class="cp-header-left">
           <button class="cp-back-btn" id="btn-back-to-projects" type="button">
             <i data-lucide="arrow-left"></i>
-            Back
+            חזור
           </button>
           <div>
-            <div class="cp-title">Create New Event</div>
-            <div class="cp-subtitle">Event details and staffing structure</div>
+            <div class="cp-title">צור אירוע חדש</div>
+            <div class="cp-subtitle">פרטי האירוע ומבנה המשמרות</div>
           </div>
         </div>
         <div class="cp-header-right">
           <button class="btn-cancel btn-with-icon" id="btn-save-draft" type="button" style="display:none">
             <i data-lucide="save"></i>
-            Save Draft
+            שמור טיוטה
           </button>
           <button class="btn-primary btn-with-icon" id="btn-submit-project" type="button">
             <i data-lucide="calendar-plus"></i>
-            Create Event
+            צור אירוע
           </button>
         </div>
       </div>
@@ -344,72 +344,72 @@
           <div class="form-section-header">
             <span class="form-section-title">
               <span class="form-section-icon"><i data-lucide="calendar-days"></i></span>
-              Event Details
+              פרטי האירוע
             </span>
           </div>
           <div class="form-section-body create-project-grid">
             <div class="field create-project-name" id="field-proj-name">
-              <label for="proj-name">Event Name <span class="req">*</span></label>
-              <input type="text" id="proj-name" placeholder="Annual Gala 2025" autocomplete="off" />
+              <label for="proj-name">שם האירוע <span class="req">*</span></label>
+              <input type="text" id="proj-name" placeholder="גאלה שנתית 2025" autocomplete="off" />
             </div>
             <div class="create-date-row">
               <div class="field create-date-card" id="field-ev-start">
-                <label for="ev-start-time">Start <span class="req">*</span></label>
+                <label for="ev-start-time">התחלה <span class="req">*</span></label>
                 <input type="datetime-local" id="ev-start-time" />
               </div>
               <div class="field create-date-card" id="field-ev-end">
-                <label for="ev-end-time">End <span class="req">*</span></label>
+                <label for="ev-end-time">סיום <span class="req">*</span></label>
                 <input type="datetime-local" id="ev-end-time" />
               </div>
             </div>
             <div class="create-date-row">
               <div class="field">
-                <label for="ev-location">Location</label>
-                <input type="text" id="ev-location" placeholder="Venue name or address" autocomplete="off" />
+                <label for="ev-location">מיקום</label>
+                <input type="text" id="ev-location" placeholder="שם הגן אירועים או כתובת" autocomplete="off" />
               </div>
               <div class="field">
-                <label for="ev-type">Event Type</label>
+                <label for="ev-type">סוג אירוע</label>
                 <select id="ev-type">
-                  <option value="">— Select type —</option>
-                  <option value="conference">Conference</option>
-                  <option value="party">Party</option>
-                  <option value="wedding">Wedding</option>
-                  <option value="corporate">Corporate</option>
-                  <option value="bar_mitzvah">Bar Mitzvah</option>
-                  <option value="birthday">Birthday</option>
-                  <option value="concert">Concert</option>
-                  <option value="exhibition">Exhibition</option>
-                  <option value="seminar">Seminar</option>
-                  <option value="gala">Gala</option>
-                  <option value="trip">Trip</option>
-                  <option value="other">Other</option>
+                  <option value="">— בחר סוג —</option>
+                  <option value="conference">כנס</option>
+                  <option value="party">מסיבה</option>
+                  <option value="wedding">חתונה</option>
+                  <option value="corporate">ארגוני</option>
+                  <option value="bar_mitzvah">בר מצווה</option>
+                  <option value="birthday">יום הולדת</option>
+                  <option value="concert">קונצרט</option>
+                  <option value="exhibition">תערוכה</option>
+                  <option value="seminar">סמינר</option>
+                  <option value="gala">גאלה</option>
+                  <option value="trip">טיול</option>
+                  <option value="other">אחר</option>
                 </select>
               </div>
             </div>
             <div class="create-date-row">
               <div class="field">
-                <label for="ev-attendees">Attendees Count</label>
+                <label for="ev-attendees">מספר אורחים</label>
                 <input type="number" id="ev-attendees" min="0" placeholder="0" />
               </div>
               <div class="field">
-                <label for="ev-budget">Planned Budget</label>
+                <label for="ev-budget">תקציב מתוכנן</label>
                 <input type="number" id="ev-budget" min="0" step="0.01" placeholder="0.00" />
               </div>
               <div class="field">
-                <label for="ev-revenue">Expected Revenue</label>
+                <label for="ev-revenue">הכנסה צפויה</label>
                 <input type="number" id="ev-revenue" min="0" step="0.01" placeholder="0.00" />
               </div>
             </div>
             <div class="customer-field-row">
               <div class="field">
-                <label for="proj-customer">Customer</label>
+                <label for="proj-customer">לקוח</label>
                 <select id="proj-customer">
-                  <option value="">— None —</option>
+                  <option value="">— ללא —</option>
                 </select>
               </div>
               <button class="btn-add-inline btn-with-icon" id="btn-proj-new-customer" type="button">
                 <i data-lucide="building-2"></i>
-                New Customer
+                לקוח חדש
               </button>
             </div>
           </div>
@@ -420,12 +420,12 @@
           <div class="form-section-header">
             <span class="form-section-title">
               <span class="form-section-icon"><i data-lucide="users"></i></span>
-              Shifts
+              משמרות
             </span>
             <div class="form-section-header-actions">
               <button class="btn-add-shift btn-with-icon" id="btn-add-event" type="button">
                 <i data-lucide="plus"></i>
-                Add Shift
+                הוסף משמרת
               </button>
             </div>
           </div>
@@ -446,32 +446,32 @@
         <div class="cp-header-left">
           <button class="cp-back-btn" id="btn-back-from-project-detail" type="button">
             <i data-lucide="arrow-left"></i>
-            Back
+            חזור
           </button>
           <div>
-            <div class="cp-title" id="project-detail-title">Project</div>
+            <div class="cp-title" id="project-detail-title">פרויקט</div>
             <div class="cp-subtitle" id="project-detail-subtitle"></div>
           </div>
         </div>
         <div class="cp-header-actions">
-          <button class="btn-header-action" id="btn-edit-project" type="button" title="Edit project">
+          <button class="btn-header-action" id="btn-edit-project" type="button" title="ערוך פרויקט">
             <i data-lucide="pencil"></i>
-            Edit
+            ערוך
           </button>
-          <button class="btn-header-action btn-header-action--danger" id="btn-delete-project" type="button" title="Delete project">
+          <button class="btn-header-action btn-header-action--danger" id="btn-delete-project" type="button" title="מחק פרויקט">
             <i data-lucide="trash-2"></i>
-            Delete
+            מחק
           </button>
         </div>
       </div>
 
       <!-- Tab navigation -->
       <div class="pd-tabs">
-        <button class="pd-tab active" data-tab="dashboard">Events</button>
-        <button class="pd-tab" data-tab="schedule">Gantt</button>
-        <button class="pd-tab" data-tab="tasks">Tasks</button>
-        <button class="pd-tab" data-tab="brief">Brief</button>
-        <button class="pd-tab" data-tab="finance">Finance</button>
+        <button class="pd-tab active" data-tab="dashboard">אירועים</button>
+        <button class="pd-tab" data-tab="schedule">גאנט</button>
+        <button class="pd-tab" data-tab="tasks">משימות</button>
+        <button class="pd-tab" data-tab="brief">תדריכים</button>
+        <button class="pd-tab" data-tab="finance">כספים</button>
       </div>
 
       <!-- Tab panels -->
@@ -484,47 +484,47 @@
         </div>
         <div class="pd-panel" data-tab-panel="tasks" style="display:none">
           <div class="pd-section-header">
-            <h3 class="pd-section-title">Tasks</h3>
-            <button class="pd-add-btn" id="btn-add-task">+ Add Task</button>
+            <h3 class="pd-section-title">משימות</h3>
+            <button class="pd-add-btn" id="btn-add-task">+ הוסף משימה</button>
           </div>
           <div class="pd-filter-bar" id="pd-task-filter-bar">
             <div class="pd-filter-section">
-              <span class="pd-field-label">Priority</span>
+              <span class="pd-field-label">עדיפות</span>
               <div class="pd-filter-group" data-filter-type="priority">
-                <button class="pd-filter-pill active" data-filter="priority" data-value="all">All</button>
-                <button class="pd-filter-pill pd-filter-pill--urgent"  data-filter="priority" data-value="urgent">urgent</button>
-                <button class="pd-filter-pill pd-filter-pill--high"    data-filter="priority" data-value="high">high</button>
-                <button class="pd-filter-pill pd-filter-pill--medium"  data-filter="priority" data-value="medium">medium</button>
-                <button class="pd-filter-pill pd-filter-pill--low"     data-filter="priority" data-value="low">low</button>
+                <button class="pd-filter-pill active" data-filter="priority" data-value="all">הכל</button>
+                <button class="pd-filter-pill pd-filter-pill--urgent"  data-filter="priority" data-value="urgent">דחוף</button>
+                <button class="pd-filter-pill pd-filter-pill--high"    data-filter="priority" data-value="high">גבוה</button>
+                <button class="pd-filter-pill pd-filter-pill--medium"  data-filter="priority" data-value="medium">בינוני</button>
+                <button class="pd-filter-pill pd-filter-pill--low"     data-filter="priority" data-value="low">נמוך</button>
               </div>
             </div>
-            <button class="pd-filter-clear" id="btn-clear-task-filters" style="display:none">Clear filters</button>
+            <button class="pd-filter-clear" id="btn-clear-task-filters" style="display:none">נקה מסננים</button>
           </div>
           <div class="pd-kanban-board" id="pd-task-board">
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--open">
-                <span class="pd-kanban-col-title">Open</span>
+                <span class="pd-kanban-col-title">פתוח</span>
                 <span class="pd-kanban-col-count" id="pd-col-count-open">0</span>
               </div>
               <div class="pd-kanban-col-list" id="pd-col-open"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--in_progress">
-                <span class="pd-kanban-col-title">In Progress</span>
+                <span class="pd-kanban-col-title">בביצוע</span>
                 <span class="pd-kanban-col-count" id="pd-col-count-in_progress">0</span>
               </div>
               <div class="pd-kanban-col-list" id="pd-col-in_progress"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--done">
-                <span class="pd-kanban-col-title">Done</span>
+                <span class="pd-kanban-col-title">הושלם</span>
                 <span class="pd-kanban-col-count" id="pd-col-count-done">0</span>
               </div>
               <div class="pd-kanban-col-list" id="pd-col-done"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--canceled">
-                <span class="pd-kanban-col-title">Canceled</span>
+                <span class="pd-kanban-col-title">בוטל</span>
                 <span class="pd-kanban-col-count" id="pd-col-count-canceled">0</span>
               </div>
               <div class="pd-kanban-col-list" id="pd-col-canceled"></div>
@@ -533,8 +533,8 @@
         </div>
         <div class="pd-panel" data-tab-panel="brief" style="display:none">
           <div class="pd-section-header">
-            <h3 class="pd-section-title">Briefs</h3>
-            <button class="pd-add-btn" id="btn-add-brief">+ Add Brief</button>
+            <h3 class="pd-section-title">תדריכים</h3>
+            <button class="pd-add-btn" id="btn-add-brief">+ הוסף תדריך</button>
           </div>
           <div class="pd-brief-list" id="pd-brief-list"></div>
         </div>
@@ -552,38 +552,38 @@
         <div class="cp-header-left">
           <button class="cp-back-btn" id="btn-back-from-event-detail" type="button">
             <i data-lucide="arrow-left"></i>
-            Back
+            חזור
           </button>
           <div>
-            <div class="cp-title" id="event-detail-title">Event</div>
+            <div class="cp-title" id="event-detail-title">אירוע</div>
             <div class="cp-subtitle" id="event-detail-subtitle"></div>
           </div>
         </div>
         <div class="cp-header-actions">
-          <button class="btn-header-action" id="btn-event-chat" type="button" title="Open event chat">
+          <button class="btn-header-action" id="btn-event-chat" type="button" title="פתח צ'אט אירוע">
             <i data-lucide="messages-square"></i>
-            Chat
+            צ'אט
           </button>
-          <button class="btn-header-action" id="btn-edit-event" type="button" title="Edit event">
+          <button class="btn-header-action" id="btn-edit-event" type="button" title="ערוך אירוע">
             <i data-lucide="pencil"></i>
-            Edit
+            ערוך
           </button>
-          <button class="btn-header-action btn-header-action--danger" id="btn-delete-event" type="button" title="Delete event">
+          <button class="btn-header-action btn-header-action--danger" id="btn-delete-event" type="button" title="מחק אירוע">
             <i data-lucide="trash-2"></i>
-            Delete
+            מחק
           </button>
         </div>
       </div>
 
       <div class="pd-tabs" id="event-detail-tabs">
-        <button class="pd-tab active" data-etab="staffing">Staffing</button>
-        <button class="pd-tab" data-etab="workers">Workers</button>
-        <button class="pd-tab" data-etab="gantt">Gantt</button>
-        <button class="pd-tab" data-etab="tasks">Tasks</button>
-        <button class="pd-tab" data-etab="briefs">Briefs</button>
-        <button class="pd-tab" data-etab="expenses">Expenses</button>
-        <button class="pd-tab" data-etab="payroll">Hours &amp; Payroll</button>
-        <button class="pd-tab" data-etab="finance">Finance</button>
+        <button class="pd-tab active" data-etab="staffing">שיבוץ עובדים</button>
+        <button class="pd-tab" data-etab="workers">עובדים</button>
+        <button class="pd-tab" data-etab="gantt">גאנט</button>
+        <button class="pd-tab" data-etab="tasks">משימות</button>
+        <button class="pd-tab" data-etab="briefs">תדריכים</button>
+        <button class="pd-tab" data-etab="expenses">הוצאות</button>
+        <button class="pd-tab" data-etab="payroll">שעות ושכר</button>
+        <button class="pd-tab" data-etab="finance">כספים</button>
       </div>
 
       <div class="pd-tab-body">
@@ -606,46 +606,46 @@
         <!-- Tasks tab -->
         <div class="ed-panel" data-etab-panel="tasks" style="display:none">
           <div class="pd-section-header">
-            <h3 class="pd-section-title">Tasks</h3>
-            <button class="pd-add-btn" id="ed-btn-add-task">+ Add Task</button>
+            <h3 class="pd-section-title">משימות</h3>
+            <button class="pd-add-btn" id="ed-btn-add-task">+ הוסף משימה</button>
           </div>
           <div class="pd-filter-bar">
             <div class="pd-filter-section">
-              <span class="pd-field-label">Priority</span>
+              <span class="pd-field-label">עדיפות</span>
               <div class="pd-filter-group" id="ed-task-priority-filters">
-                <button class="pd-filter-pill active" data-value="all">All</button>
-                <button class="pd-filter-pill pd-filter-pill--urgent" data-value="urgent">urgent</button>
-                <button class="pd-filter-pill pd-filter-pill--high"   data-value="high">high</button>
-                <button class="pd-filter-pill pd-filter-pill--medium" data-value="medium">medium</button>
-                <button class="pd-filter-pill pd-filter-pill--low"    data-value="low">low</button>
+                <button class="pd-filter-pill active" data-value="all">הכל</button>
+                <button class="pd-filter-pill pd-filter-pill--urgent" data-value="urgent">דחוף</button>
+                <button class="pd-filter-pill pd-filter-pill--high"   data-value="high">גבוה</button>
+                <button class="pd-filter-pill pd-filter-pill--medium" data-value="medium">בינוני</button>
+                <button class="pd-filter-pill pd-filter-pill--low"    data-value="low">נמוך</button>
               </div>
             </div>
           </div>
           <div class="pd-kanban-board" id="ed-task-board">
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--open">
-                <span class="pd-kanban-col-title">Open</span>
+                <span class="pd-kanban-col-title">פתוח</span>
                 <span class="pd-kanban-col-count" id="ed-col-count-open">0</span>
               </div>
               <div class="pd-kanban-col-list" id="ed-col-open"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--in_progress">
-                <span class="pd-kanban-col-title">In Progress</span>
+                <span class="pd-kanban-col-title">בביצוע</span>
                 <span class="pd-kanban-col-count" id="ed-col-count-in_progress">0</span>
               </div>
               <div class="pd-kanban-col-list" id="ed-col-in_progress"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--done">
-                <span class="pd-kanban-col-title">Done</span>
+                <span class="pd-kanban-col-title">הושלם</span>
                 <span class="pd-kanban-col-count" id="ed-col-count-done">0</span>
               </div>
               <div class="pd-kanban-col-list" id="ed-col-done"></div>
             </div>
             <div class="pd-kanban-col">
               <div class="pd-kanban-col-header pd-kanban-col-header--canceled">
-                <span class="pd-kanban-col-title">Canceled</span>
+                <span class="pd-kanban-col-title">בוטל</span>
                 <span class="pd-kanban-col-count" id="ed-col-count-canceled">0</span>
               </div>
               <div class="pd-kanban-col-list" id="ed-col-canceled"></div>
@@ -656,8 +656,8 @@
         <!-- Briefs tab -->
         <div class="ed-panel" data-etab-panel="briefs" style="display:none">
           <div class="pd-section-header">
-            <h3 class="pd-section-title">Briefs</h3>
-            <button class="pd-add-btn" id="ed-btn-add-brief">+ Add Brief</button>
+            <h3 class="pd-section-title">תדריכים</h3>
+            <button class="pd-add-btn" id="ed-btn-add-brief">+ הוסף תדריך</button>
           </div>
           <div class="pd-brief-list" id="ed-brief-list"></div>
         </div>
@@ -665,8 +665,8 @@
         <!-- Expenses tab -->
         <div class="ed-panel" data-etab-panel="expenses" style="display:none">
           <div class="pd-section-header">
-            <h3 class="pd-section-title">Expenses</h3>
-            <button class="pd-add-btn" id="ed-btn-add-expense">+ Add Expense</button>
+            <h3 class="pd-section-title">הוצאות</h3>
+            <button class="pd-add-btn" id="ed-btn-add-expense">+ הוסף הוצאה</button>
           </div>
           <div id="ed-expense-list"></div>
         </div>
@@ -700,11 +700,11 @@
             <i data-lucide="user-plus"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="modal-title">Add New Employee</h3>
-            <p class="modal-subtitle">Team member details, roles, and optional documents</p>
+            <h3 id="modal-title">הוסף עובד חדש</h3>
+            <p class="modal-subtitle">פרטי העובד, תפקידים ומסמכים</p>
           </div>
         </div>
-        <button class="btn-close" id="modal-close" aria-label="Close">
+        <button class="btn-close" id="modal-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -713,28 +713,28 @@
 
         <!-- Group 1: Identity -->
         <div class="form-group">
-          <p class="form-group-title">Identity</p>
+          <p class="form-group-title">פרטים אישיים</p>
           <div class="form-row">
             <div class="field">
-              <label for="emp-firstname">First Name <span class="req">*</span></label>
-              <input type="text" id="emp-firstname" placeholder="e.g. Jane" />
+              <label for="emp-firstname">שם פרטי <span class="req">*</span></label>
+              <input type="text" id="emp-firstname" placeholder="לדוגמה: ישראל" />
             </div>
             <div class="field">
-              <label for="emp-lastname">Last Name <span class="req">*</span></label>
-              <input type="text" id="emp-lastname" placeholder="e.g. Doe" />
+              <label for="emp-lastname">שם משפחה <span class="req">*</span></label>
+              <input type="text" id="emp-lastname" placeholder="לדוגמה: כהן" />
             </div>
           </div>
           <div class="field">
-            <label for="emp-email">Email Address <span class="req">*</span></label>
+            <label for="emp-email">כתובת אימייל <span class="req">*</span></label>
             <input type="email" id="emp-email" placeholder="employee@company.com" />
           </div>
           <div class="form-row">
             <div class="field">
-              <label for="emp-phone">Phone Number</label>
-              <input type="tel" id="emp-phone" placeholder="+1 234 567 8900" />
+              <label for="emp-phone">מספר טלפון</label>
+              <input type="tel" id="emp-phone" placeholder="050-123-4567" />
             </div>
             <div class="field">
-              <label for="emp-cost">Cost per Hour (₪) <span class="req">*</span></label>
+              <label for="emp-cost">עלות לשעה (₪) <span class="req">*</span></label>
               <input type="number" id="emp-cost" placeholder="0.00" min="0" step="0.01" />
             </div>
           </div>
@@ -742,21 +742,21 @@
 
         <!-- Group 2: Roles -->
         <div class="form-group">
-          <p class="form-group-title">Roles</p>
+          <p class="form-group-title">תפקידים</p>
           <div class="field">
             <div class="roles-label-row">
-              <label>Assign roles <span class="req">*</span> (select at least one)</label>
+              <label>הקצה תפקידים <span class="req">*</span> (בחר לפחות אחד)</label>
               <button type="button" id="btn-add-role" class="btn-add-role btn-with-icon">
-                <i data-lucide="plus"></i> New Role
+                <i data-lucide="plus"></i> תפקיד חדש
               </button>
             </div>
             <div class="roles-grid" id="roles-grid">
-              <span style="color:#6b7280;font-size:13px">Loading roles…</span>
+              <span style="color:#6b7280;font-size:13px">טוען תפקידים…</span>
             </div>
             <div class="add-role-inline" id="add-role-inline" style="display:none">
-              <input type="text" id="new-role-input" placeholder="e.g. photographer" maxlength="50" />
-              <button type="button" id="btn-save-role" class="btn-save-role">Save</button>
-              <button type="button" id="btn-cancel-role" class="btn-cancel-role">Cancel</button>
+              <input type="text" id="new-role-input" placeholder="לדוגמה: צלם" maxlength="50" />
+              <button type="button" id="btn-save-role" class="btn-save-role">שמור</button>
+              <button type="button" id="btn-cancel-role" class="btn-cancel-role">ביטול</button>
             </div>
             <div id="role-error" class="msg-error" style="margin-top:4px"></div>
           </div>
@@ -764,39 +764,39 @@
 
         <!-- Group 3: Files -->
         <div class="form-group">
-          <p class="form-group-title">Files</p>
+          <p class="form-group-title">קבצים</p>
 
           <!-- Profile image -->
           <div class="field">
-            <label>Profile Image</label>
+            <label>תמונת פרופיל</label>
             <label class="profile-upload-zone" id="profile-upload-zone" for="profile-file-input">
               <div class="upload-zone-inner" id="profile-placeholder">
                 <svg class="upload-zone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="8" r="4"/>
                   <path d="M20 21a8 8 0 1 0-16 0"/>
                 </svg>
-                <span>Click to upload profile image</span>
-                <span class="upload-hint">JPG, PNG, WEBP · max 5 MB</span>
+                <span>לחץ להעלאת תמונת פרופיל</span>
+                <span class="upload-hint">JPG, PNG, WEBP · מקסימום 5 MB</span>
               </div>
               <img id="profile-preview" class="profile-preview" alt="Preview" style="display:none" />
               <input type="file" id="profile-file-input" accept=".jpg,.jpeg,.png,.webp" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden" />
             </label>
-            <button type="button" id="btn-remove-profile" class="btn-remove-file" style="display:none">Remove image</button>
+            <button type="button" id="btn-remove-profile" class="btn-remove-file" style="display:none">הסר תמונה</button>
           </div>
 
           <!-- Documents -->
           <div class="field">
             <div class="roles-label-row">
-              <label>Documents</label>
+              <label>מסמכים</label>
               <button type="button" id="btn-add-doc" class="btn-add-role btn-with-icon">
-                <i data-lucide="paperclip"></i> Add Document
+                <i data-lucide="paperclip"></i> הוסף מסמך
               </button>
             </div>
             <!-- existing files shown only in edit mode -->
             <div id="existing-docs-section" style="display:none">
-              <p class="field-sublabel">Current files (click to remove on save):</p>
+              <p class="field-sublabel">קבצים קיימים (לחץ להסרה בשמירה):</p>
               <div id="existing-docs-list" class="documents-list"></div>
-              <div class="field-sublabel" id="new-docs-label" style="display:none;margin-top:10px">Upload new files:</div>
+              <div class="field-sublabel" id="new-docs-label" style="display:none;margin-top:10px">העלאת קבצים חדשים:</div>
             </div>
             <div id="documents-list" class="documents-list"></div>
           </div>
@@ -808,9 +808,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="modal-cancel">Cancel</button>
+        <button class="btn-cancel" id="modal-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="btn-save-employee">
-          <i data-lucide="check"></i> Save Employee
+          <i data-lucide="check"></i> שמור עובד
         </button>
       </div>
 
@@ -822,16 +822,16 @@
     <div class="modal view-modal" role="dialog" aria-modal="true" aria-labelledby="view-modal-title">
 
       <div class="modal-header">
-        <h3 id="view-modal-title">Employee Details</h3>
-        <button class="btn-close" id="view-modal-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="view-modal-title">פרטי עובד</h3>
+        <button class="btn-close" id="view-modal-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="view-modal-body">
-        <div class="empty-state">Loading…</div>
+        <div class="empty-state">טוען…</div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="view-modal-cancel">Close</button>
+        <button class="btn-cancel" id="view-modal-cancel">סגור</button>
       </div>
 
     </div>
@@ -842,18 +842,18 @@
     <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
 
       <div class="modal-header">
-        <h3 id="delete-modal-title">Delete Employee</h3>
-        <button class="btn-close" id="delete-modal-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="delete-modal-title">מחק עובד</h3>
+        <button class="btn-close" id="delete-modal-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
         <p id="delete-confirm-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
-        <p class="delete-warning">This will permanently delete all employee data and any associated files. This action cannot be undone.</p>
+        <p class="delete-warning">פעולה זו תמחק לצמיתות את כל נתוני העובד וכל הקבצים הקשורים. לא ניתן לבטל פעולה זו.</p>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="delete-cancel">Cancel</button>
-        <button class="btn-danger" id="btn-confirm-delete">Delete Employee</button>
+        <button class="btn-cancel" id="delete-cancel">ביטול</button>
+        <button class="btn-danger" id="btn-confirm-delete">מחק עובד</button>
       </div>
 
     </div>
@@ -869,11 +869,11 @@
             <i data-lucide="building-2"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="customer-form-title">Add New Customer</h3>
-            <p class="modal-subtitle">Company details, billing info, and optional contacts</p>
+            <h3 id="customer-form-title">הוסף לקוח חדש</h3>
+            <p class="modal-subtitle">פרטי החברה, פרטי חיוב ואנשי קשר</p>
           </div>
         </div>
-        <button class="btn-close" id="customer-form-close" aria-label="Close">
+        <button class="btn-close" id="customer-form-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -882,53 +882,53 @@
 
         <!-- Group 1: Core info -->
         <div class="form-group">
-          <p class="form-group-title">Company Details</p>
+          <p class="form-group-title">פרטי החברה</p>
           <div class="field">
-            <label for="cust-name">Company Name <span class="req">*</span></label>
-            <input type="text" id="cust-name" placeholder="e.g. Acme Corp" />
+            <label for="cust-name">שם חברה <span class="req">*</span></label>
+            <input type="text" id="cust-name" placeholder="לדוגמה: אקמה בע"מ" />
           </div>
           <div class="form-row">
             <div class="field">
-              <label for="cust-phone">Phone</label>
-              <input type="tel" id="cust-phone" placeholder="+1 234 567 8900" />
+              <label for="cust-phone">טלפון</label>
+              <input type="tel" id="cust-phone" placeholder="03-123-4567" />
             </div>
             <div class="field">
-              <label for="cust-email">Company Email</label>
+              <label for="cust-email">אימייל חברה</label>
               <input type="email" id="cust-email" placeholder="info@company.com" />
             </div>
           </div>
           <div class="form-row">
             <div class="field">
-              <label for="cust-city">City</label>
-              <input type="text" id="cust-city" placeholder="Tel Aviv" />
+              <label for="cust-city">עיר</label>
+              <input type="text" id="cust-city" placeholder="תל אביב" />
             </div>
             <div class="field">
-              <label for="cust-address">Address</label>
-              <input type="text" id="cust-address" placeholder="123 Main St" />
+              <label for="cust-address">כתובת</label>
+              <input type="text" id="cust-address" placeholder="רחוב הרצל 1" />
             </div>
           </div>
         </div>
 
         <!-- Group 2: Billing -->
         <div class="form-group">
-          <p class="form-group-title">Billing</p>
+          <p class="form-group-title">חיוב</p>
           <div class="form-row">
             <div class="field">
-              <label for="cust-billing-email">Billing Email</label>
+              <label for="cust-billing-email">אימייל לחיוב</label>
               <input type="email" id="cust-billing-email" placeholder="billing@company.com" />
             </div>
             <div class="field">
-              <label for="cust-business-number">Business Number</label>
+              <label for="cust-business-number">ח.פ.</label>
               <input type="text" id="cust-business-number" placeholder="123456789" />
             </div>
           </div>
           <div class="field">
-            <label for="cust-payment-terms">Payment Terms</label>
-            <input type="text" id="cust-payment-terms" placeholder="e.g. Net 30" />
+            <label for="cust-payment-terms">תנאי תשלום</label>
+            <input type="text" id="cust-payment-terms" placeholder="לדוגמה: שוטף + 30" />
           </div>
           <div class="field">
-            <label for="cust-notes">Notes</label>
-            <textarea id="cust-notes" rows="2" placeholder="Additional notes…"></textarea>
+            <label for="cust-notes">הערות</label>
+            <textarea id="cust-notes" rows="2" placeholder="הערות נוספות…"></textarea>
           </div>
         </div>
 
@@ -937,40 +937,40 @@
           <div class="optional-section collapsed">
             <div class="optional-section-header" onclick="this.closest('.optional-section').classList.toggle('collapsed')">
               <span class="optional-section-title">
-                Contact Person
-                <span class="optional-badge">optional</span>
+                איש קשר
+                <span class="optional-badge">אופציונלי</span>
               </span>
               <span class="optional-chevron">▾</span>
             </div>
             <div class="optional-section-body">
               <div class="form-row">
                 <div class="field">
-                  <label for="cust-ct-firstname">First Name</label>
-                  <input type="text" id="cust-ct-firstname" placeholder="Jane" />
+                  <label for="cust-ct-firstname">שם פרטי</label>
+                  <input type="text" id="cust-ct-firstname" placeholder="ישראל" />
                 </div>
                 <div class="field">
-                  <label for="cust-ct-lastname">Last Name</label>
-                  <input type="text" id="cust-ct-lastname" placeholder="Doe" />
+                  <label for="cust-ct-lastname">שם משפחה</label>
+                  <input type="text" id="cust-ct-lastname" placeholder="כהן" />
                 </div>
               </div>
               <div class="form-row">
                 <div class="field">
-                  <label for="cust-ct-jobtitle">Job Title</label>
-                  <input type="text" id="cust-ct-jobtitle" placeholder="e.g. CEO" />
+                  <label for="cust-ct-jobtitle">תפקיד</label>
+                  <input type="text" id="cust-ct-jobtitle" placeholder="לדוגמה: מנכ"ל" />
                 </div>
                 <div class="field">
-                  <label for="cust-ct-phone">Contact Phone</label>
-                  <input type="tel" id="cust-ct-phone" placeholder="+1 234 567 8900" />
+                  <label for="cust-ct-phone">טלפון</label>
+                  <input type="tel" id="cust-ct-phone" placeholder="050-123-4567" />
                 </div>
               </div>
               <div class="field">
-                <label for="cust-ct-email">Contact Email</label>
+                <label for="cust-ct-email">אימייל</label>
                 <input type="email" id="cust-ct-email" placeholder="jane@company.com" />
               </div>
               <div class="field">
                 <label class="role-check" style="border:none;padding:0;gap:10px;font-size:13px;font-weight:600">
                   <input type="checkbox" id="cust-ct-primary" style="accent-color:var(--green);width:16px;height:16px" />
-                  Primary Contact
+                  איש קשר ראשי
                 </label>
               </div>
             </div>
@@ -982,16 +982,16 @@
           <div class="optional-section collapsed">
             <div class="optional-section-header" onclick="this.closest('.optional-section').classList.toggle('collapsed')">
               <span class="optional-section-title">
-                Company Documents
-                <span class="optional-badge">optional</span>
+                מסמכי חברה
+                <span class="optional-badge">אופציונלי</span>
               </span>
               <span class="optional-chevron">▾</span>
             </div>
             <div class="optional-section-body">
               <div class="roles-label-row" style="margin-bottom:4px">
-                <span style="font-size:12px;color:var(--text-muted)">Attach contracts, certificates, or any relevant files.</span>
+                <span style="font-size:12px;color:var(--text-muted)">צרף חוזים, תעודות או כל קובץ רלוונטי.</span>
                 <button type="button" id="btn-cust-add-doc" class="btn-add-role btn-with-icon">
-                  <i data-lucide="paperclip"></i> Add Document
+                  <i data-lucide="paperclip"></i> הוסף מסמך
                 </button>
               </div>
               <div id="cust-docs-list" class="documents-list"></div>
@@ -1004,9 +1004,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="customer-form-cancel">Cancel</button>
+        <button class="btn-cancel" id="customer-form-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="btn-save-customer">
-          <i data-lucide="check"></i> Save Customer
+          <i data-lucide="check"></i> שמור לקוח
         </button>
       </div>
 
@@ -1018,16 +1018,16 @@
     <div class="modal customer-view-modal" role="dialog" aria-modal="true" aria-labelledby="customer-view-title">
 
       <div class="modal-header">
-        <h3 id="customer-view-title">Customer Details</h3>
-        <button class="btn-close" id="customer-view-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="customer-view-title">פרטי לקוח</h3>
+        <button class="btn-close" id="customer-view-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="customer-view-body">
-        <div class="empty-state">Loading…</div>
+        <div class="empty-state">טוען…</div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="customer-view-done">Close</button>
+        <button class="btn-cancel" id="customer-view-done">סגור</button>
       </div>
 
     </div>
@@ -1038,18 +1038,18 @@
     <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="customer-delete-title">
 
       <div class="modal-header">
-        <h3 id="customer-delete-title">Delete Customer</h3>
-        <button class="btn-close" id="customer-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="customer-delete-title">מחק לקוח</h3>
+        <button class="btn-close" id="customer-delete-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
         <p id="customer-delete-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
-        <p class="delete-warning">This will permanently delete the customer, all their contact persons, and associated files. This action cannot be undone.</p>
+        <p class="delete-warning">פעולה זו תמחק לצמיתות את הלקוח, כל אנשי הקשר שלו והקבצים הקשורים. לא ניתן לבטל פעולה זו.</p>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="customer-delete-cancel">Cancel</button>
-        <button class="btn-danger" id="btn-confirm-customer-delete">Delete Customer</button>
+        <button class="btn-cancel" id="customer-delete-cancel">ביטול</button>
+        <button class="btn-danger" id="btn-confirm-customer-delete">מחק לקוח</button>
       </div>
 
     </div>
@@ -1065,11 +1065,11 @@
             <i data-lucide="user-round"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="contact-form-title">Add Contact Person</h3>
-            <p class="modal-subtitle">Add a contact person associated with this customer</p>
+            <h3 id="contact-form-title">הוסף איש קשר</h3>
+            <p class="modal-subtitle">הוסף איש קשר הקשור ללקוח זה</p>
           </div>
         </div>
-        <button class="btn-close" id="contact-form-close" aria-label="Close">
+        <button class="btn-close" id="contact-form-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -1077,37 +1077,37 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="ct-firstname">First Name *</label>
-            <input type="text" id="ct-firstname" placeholder="e.g. Jane" />
+            <label for="ct-firstname">שם פרטי *</label>
+            <input type="text" id="ct-firstname" placeholder="לדוגמה: ישראל" />
           </div>
           <div class="field">
-            <label for="ct-lastname">Last Name *</label>
-            <input type="text" id="ct-lastname" placeholder="e.g. Doe" />
+            <label for="ct-lastname">שם משפחה *</label>
+            <input type="text" id="ct-lastname" placeholder="לדוגמה: כהן" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="ct-phone">Phone</label>
-            <input type="tel" id="ct-phone" placeholder="+1 234 567 8900" />
+            <label for="ct-phone">טלפון</label>
+            <input type="tel" id="ct-phone" placeholder="050-123-4567" />
           </div>
           <div class="field">
-            <label for="ct-email">Email</label>
+            <label for="ct-email">אימייל</label>
             <input type="email" id="ct-email" placeholder="contact@company.com" />
           </div>
         </div>
         <div class="field">
-          <label for="ct-jobtitle">Job Title</label>
-          <input type="text" id="ct-jobtitle" placeholder="e.g. Procurement Manager" />
+          <label for="ct-jobtitle">תפקיד</label>
+          <input type="text" id="ct-jobtitle" placeholder="לדוגמה: מנהל רכש" />
         </div>
         <div class="field">
           <label class="role-check" style="border:none;padding:0;gap:10px;font-size:13px;font-weight:600">
             <input type="checkbox" id="ct-primary" style="accent-color:var(--green);width:16px;height:16px" />
-            Primary Contact
+            איש קשר ראשי
           </label>
         </div>
         <div class="field">
-          <label for="ct-notes">Notes</label>
-          <textarea id="ct-notes" rows="2" placeholder="Additional notes…"></textarea>
+          <label for="ct-notes">הערות</label>
+          <textarea id="ct-notes" rows="2" placeholder="הערות נוספות…"></textarea>
         </div>
 
         <div id="ct-form-error"   class="msg-error"   role="alert"></div>
@@ -1115,9 +1115,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="contact-form-cancel">Cancel</button>
+        <button class="btn-cancel" id="contact-form-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="btn-save-contact">
-          <i data-lucide="check"></i> Save Contact
+          <i data-lucide="check"></i> שמור איש קשר
         </button>
       </div>
 
@@ -1129,16 +1129,16 @@
     <div class="modal view-modal" role="dialog" aria-modal="true" aria-labelledby="contact-view-title">
 
       <div class="modal-header">
-        <h3 id="contact-view-title">Contact Details</h3>
-        <button class="btn-close" id="contact-view-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="contact-view-title">פרטי איש קשר</h3>
+        <button class="btn-close" id="contact-view-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body" id="contact-view-body">
-        <div class="empty-state">Loading…</div>
+        <div class="empty-state">טוען…</div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="contact-view-done">Close</button>
+        <button class="btn-cancel" id="contact-view-done">סגור</button>
       </div>
 
     </div>
@@ -1149,18 +1149,18 @@
     <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="contact-delete-title">
 
       <div class="modal-header">
-        <h3 id="contact-delete-title">Delete Contact</h3>
-        <button class="btn-close" id="contact-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="contact-delete-title">מחק איש קשר</h3>
+        <button class="btn-close" id="contact-delete-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
         <p id="contact-delete-text" style="font-size:14px;line-height:1.6;color:var(--text)"></p>
-        <p class="delete-warning">This will permanently remove this contact person. This action cannot be undone.</p>
+        <p class="delete-warning">פעולה זו תמחק לצמיתות את איש הקשר. לא ניתן לבטל פעולה זו.</p>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="contact-delete-cancel">Cancel</button>
-        <button class="btn-danger" id="btn-confirm-contact-delete">Delete Contact</button>
+        <button class="btn-cancel" id="contact-delete-cancel">ביטול</button>
+        <button class="btn-danger" id="btn-confirm-contact-delete">מחק איש קשר</button>
       </div>
 
     </div>
@@ -1178,36 +1178,36 @@
             <i data-lucide="pencil"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="shift-edit-title">Edit Shift</h3>
-            <p class="modal-subtitle">Update role, timing, or required staff count</p>
+            <h3 id="shift-edit-title">ערוך משמרת</h3>
+            <p class="modal-subtitle">עדכן תפקיד, זמן או מספר עובדים נדרש</p>
           </div>
         </div>
-        <button class="btn-close" id="shift-edit-close" aria-label="Close">
+        <button class="btn-close" id="shift-edit-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
 
       <div class="modal-body grouped">
         <div class="form-group">
-          <p class="form-group-title">Role &amp; Staffing</p>
+          <p class="form-group-title">תפקיד ואיוש</p>
           <div class="field">
-            <label for="shift-edit-role">Role <span class="req">*</span></label>
+            <label for="shift-edit-role">תפקיד <span class="req">*</span></label>
             <select id="shift-edit-role"></select>
           </div>
           <div class="field">
-            <label for="shift-edit-qty">Required Staff Count <span class="req">*</span></label>
+            <label for="shift-edit-qty">מספר עובדים נדרש <span class="req">*</span></label>
             <input type="number" id="shift-edit-qty" min="1" />
           </div>
         </div>
         <div class="form-group">
-          <p class="form-group-title">Time Window</p>
+          <p class="form-group-title">טווח זמן</p>
           <div class="form-row">
             <div class="field">
-              <label for="shift-edit-start">Start Time <span class="req">*</span></label>
+              <label for="shift-edit-start">שעת התחלה <span class="req">*</span></label>
               <input type="datetime-local" id="shift-edit-start" step="300" />
             </div>
             <div class="field">
-              <label for="shift-edit-end">End Time <span class="req">*</span></label>
+              <label for="shift-edit-end">שעת סיום <span class="req">*</span></label>
               <input type="datetime-local" id="shift-edit-end" step="300" />
             </div>
           </div>
@@ -1216,9 +1216,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="shift-edit-cancel">Cancel</button>
+        <button class="btn-cancel" id="shift-edit-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="btn-save-shift">
-          <i data-lucide="check"></i> Save Changes
+          <i data-lucide="check"></i> שמור שינויים
         </button>
       </div>
 
@@ -1230,18 +1230,18 @@
     <div class="modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="shift-delete-title">
 
       <div class="modal-header">
-        <h3 id="shift-delete-title">Delete Shift</h3>
-        <button class="btn-close" id="shift-delete-close" aria-label="Close"><i data-lucide="x"></i></button>
+        <h3 id="shift-delete-title">מחק משמרת</h3>
+        <button class="btn-close" id="shift-delete-close" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
 
       <div class="modal-body">
-        <p style="font-size:14px;line-height:1.6;color:var(--text)">Are you sure you want to delete this shift?</p>
-        <p class="delete-warning">This action cannot be undone.</p>
+        <p style="font-size:14px;line-height:1.6;color:var(--text)">האם אתה בטוח שברצונך למחוק משמרת זו?</p>
+        <p class="delete-warning">לא ניתן לבטל פעולה זו.</p>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="shift-delete-cancel">Cancel</button>
-        <button class="btn-danger" id="btn-confirm-shift-delete">Delete</button>
+        <button class="btn-cancel" id="shift-delete-cancel">ביטול</button>
+        <button class="btn-danger" id="btn-confirm-shift-delete">מחק</button>
       </div>
 
     </div>
@@ -1257,36 +1257,36 @@
             <i data-lucide="clock-plus"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="shift-add-title">Add Shift</h3>
-            <p class="modal-subtitle">Set role, time window, and required staff count</p>
+            <h3 id="shift-add-title">הוסף משמרת</h3>
+            <p class="modal-subtitle">הגדר תפקיד, טווח זמן ומספר עובדים נדרש</p>
           </div>
         </div>
-        <button class="btn-close" id="shift-add-close" aria-label="Close">
+        <button class="btn-close" id="shift-add-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
 
       <div class="modal-body grouped">
         <div class="form-group">
-          <p class="form-group-title">Role &amp; Staffing</p>
+          <p class="form-group-title">תפקיד ואיוש</p>
           <div class="field">
-            <label for="shift-add-role">Role <span class="req">*</span></label>
+            <label for="shift-add-role">תפקיד <span class="req">*</span></label>
             <select id="shift-add-role"></select>
           </div>
           <div class="field">
-            <label for="shift-add-qty">Required Staff Count <span class="req">*</span></label>
+            <label for="shift-add-qty">מספר עובדים נדרש <span class="req">*</span></label>
             <input type="number" id="shift-add-qty" min="1" value="1" />
           </div>
         </div>
         <div class="form-group">
-          <p class="form-group-title">Time Window</p>
+          <p class="form-group-title">טווח זמן</p>
           <div class="form-row">
             <div class="field">
-              <label for="shift-add-start">Start Time <span class="req">*</span></label>
+              <label for="shift-add-start">שעת התחלה <span class="req">*</span></label>
               <input type="time" id="shift-add-start" step="300" />
             </div>
             <div class="field">
-              <label for="shift-add-end">End Time <span class="req">*</span></label>
+              <label for="shift-add-end">שעת סיום <span class="req">*</span></label>
               <input type="time" id="shift-add-end" step="300" />
             </div>
           </div>
@@ -1295,9 +1295,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="shift-add-cancel">Cancel</button>
+        <button class="btn-cancel" id="shift-add-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="btn-save-shift-add">
-          <i data-lucide="plus"></i> Add Shift
+          <i data-lucide="plus"></i> הוסף משמרת
         </button>
       </div>
 
@@ -1314,73 +1314,73 @@
             <i data-lucide="receipt"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="inv-modal-title">New Payment Request</h3>
-            <p class="modal-subtitle" id="inv-modal-subtitle">Fill in the payment request details below</p>
+            <h3 id="inv-modal-title">דרישת תשלום חדשה</h3>
+            <p class="modal-subtitle" id="inv-modal-subtitle">מלא את פרטי דרישת התשלום</p>
           </div>
         </div>
-        <button class="btn-close" id="inv-modal-close" aria-label="Close">
+        <button class="btn-close" id="inv-modal-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
 
       <div class="modal-body grouped">
         <div class="form-group">
-          <p class="form-group-title">Customer &amp; Event</p>
+          <p class="form-group-title">לקוח ואירוע</p>
           <div class="form-row">
             <div class="field">
-              <label for="inv-customer">Customer <span class="req">*</span></label>
+              <label for="inv-customer">לקוח <span class="req">*</span></label>
               <select id="inv-customer"></select>
             </div>
             <div class="field" style="display:none">
-              <label for="inv-project">Project</label>
+              <label for="inv-project">פרויקט</label>
               <select id="inv-project"><option value="">— technical wrapper —</option></select>
             </div>
           </div>
           <div class="field">
-            <label for="inv-event">Event</label>
-            <select id="inv-event"><option value="">— select event —</option></select>
+            <label for="inv-event">אירוע</label>
+            <select id="inv-event"><option value="">— בחר אירוע —</option></select>
           </div>
         </div>
 
         <div class="form-group">
-          <p class="form-group-title">Payment Request Details</p>
+          <p class="form-group-title">פרטי דרישת התשלום</p>
           <div class="form-row">
             <div class="field">
-              <label for="inv-number">Request # <span class="req">*</span></label>
-              <input type="text" id="inv-number" placeholder="e.g. INV-2026-001" />
+              <label for="inv-number">מס' דרישה <span class="req">*</span></label>
+              <input type="text" id="inv-number" placeholder="לדוגמה: INV-2026-001" />
             </div>
             <div class="field">
-              <label for="inv-status">Status</label>
+              <label for="inv-status">סטטוס</label>
               <select id="inv-status">
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="partial">Partial</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="draft">טיוטה</option>
+                <option value="sent">נשלח</option>
+                <option value="partial">חלקי</option>
+                <option value="paid">שולם</option>
+                <option value="overdue">באיחור</option>
+                <option value="cancelled">בוטל</option>
               </select>
             </div>
           </div>
           <div class="form-row">
             <div class="field">
-              <label for="inv-date">Request Date <span class="req">*</span></label>
+              <label for="inv-date">תאריך דרישה <span class="req">*</span></label>
               <input type="date" id="inv-date" />
             </div>
             <div class="field">
-              <label for="inv-due-date">Due Date <span class="req">*</span></label>
+              <label for="inv-due-date">תאריך פירעון <span class="req">*</span></label>
               <input type="date" id="inv-due-date" />
             </div>
           </div>
           <div class="field">
-            <label for="inv-amount">Amount (₪) <span class="req">*</span></label>
+            <label for="inv-amount">סכום (₪) <span class="req">*</span></label>
             <input type="number" id="inv-amount" min="0.01" step="0.01" placeholder="0.00" />
           </div>
         </div>
 
         <div class="form-group">
-          <p class="form-group-title">Notes</p>
+          <p class="form-group-title">הערות</p>
           <div class="field">
-            <textarea id="inv-notes" rows="3" placeholder="Optional notes…"></textarea>
+            <textarea id="inv-notes" rows="3" placeholder="הערות אופציונליות…"></textarea>
           </div>
         </div>
 
@@ -1388,10 +1388,10 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="inv-modal-cancel">Cancel</button>
+        <button class="btn-cancel" id="inv-modal-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="inv-modal-save">
           <i data-lucide="save"></i>
-          <span id="inv-modal-save-label">Save Request</span>
+          <span id="inv-modal-save-label">שמור דרישה</span>
         </button>
       </div>
 
@@ -1408,38 +1408,38 @@
             <i data-lucide="banknote"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="inv-pay-title">Record Payment</h3>
-            <p class="modal-subtitle" id="inv-pay-subtitle">Update payment details for this request</p>
+            <h3 id="inv-pay-title">תעד תשלום</h3>
+            <p class="modal-subtitle" id="inv-pay-subtitle">עדכן פרטי תשלום עבור דרישה זו</p>
           </div>
         </div>
-        <button class="btn-close" id="inv-pay-close" aria-label="Close">
+        <button class="btn-close" id="inv-pay-close" aria-label="סגור">
           <i data-lucide="x"></i>
         </button>
       </div>
 
       <div class="modal-body grouped">
         <div class="form-group">
-          <p class="form-group-title">Payment Details</p>
+          <p class="form-group-title">פרטי תשלום</p>
           <div class="form-row">
             <div class="field">
-              <label for="inv-pay-amount">Paid Amount (₪) <span class="req">*</span></label>
+              <label for="inv-pay-amount">סכום ששולם (₪) <span class="req">*</span></label>
               <input type="number" id="inv-pay-amount" min="0" step="0.01" placeholder="0.00" />
             </div>
             <div class="field">
-              <label for="inv-pay-date">Payment Date</label>
+              <label for="inv-pay-date">תאריך תשלום</label>
               <input type="date" id="inv-pay-date" />
             </div>
           </div>
           <div class="field">
-            <label for="inv-pay-status">Status (auto-calculated if blank)</label>
+            <label for="inv-pay-status">סטטוס (חישוב אוטומטי אם ריק)</label>
             <select id="inv-pay-status">
-              <option value="">Auto</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="">אוטומטי</option>
+              <option value="draft">טיוטה</option>
+              <option value="sent">נשלח</option>
+              <option value="partial">חלקי</option>
+              <option value="paid">שולם</option>
+              <option value="overdue">באיחור</option>
+              <option value="cancelled">בוטל</option>
             </select>
           </div>
         </div>
@@ -1447,9 +1447,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" id="inv-pay-cancel">Cancel</button>
+        <button class="btn-cancel" id="inv-pay-cancel">ביטול</button>
         <button class="btn-primary btn-with-icon" id="inv-pay-save">
-          <i data-lucide="check"></i> Save Payment
+          <i data-lucide="check"></i> שמור תשלום
         </button>
       </div>
 
@@ -1465,39 +1465,39 @@
             <i data-lucide="folder-kanban"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="proj-edit-title">Edit Project</h3>
-            <p class="modal-subtitle">Update timeline, customer, and lifecycle status</p>
+            <h3 id="proj-edit-title">ערוך פרויקט</h3>
+            <p class="modal-subtitle">עדכן ציר זמן, לקוח וסטטוס</p>
           </div>
         </div>
-        <button class="btn-close" id="proj-edit-close" type="button" aria-label="Close"><i data-lucide="x"></i></button>
+        <button class="btn-close" id="proj-edit-close" type="button" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body grouped edit-entity-body">
         <div class="form-group edit-section">
           <p class="form-group-title">
             <span class="form-group-icon"><i data-lucide="info"></i></span>
-            Project Details
+            פרטי פרויקט
           </p>
           <div class="field">
-            <label for="proj-edit-name">Project Name <span class="req">*</span></label>
-            <input id="proj-edit-name" type="text" maxlength="255" placeholder="Project name" />
+            <label for="proj-edit-name">שם פרויקט <span class="req">*</span></label>
+            <input id="proj-edit-name" type="text" maxlength="255" placeholder="שם הפרויקט" />
           </div>
           <div class="edit-two-col">
             <div class="field">
-              <label for="proj-edit-customer">Customer</label>
+              <label for="proj-edit-customer">לקוח</label>
               <select id="proj-edit-customer">
-                <option value="">No customer</option>
+                <option value="">ללא לקוח</option>
               </select>
             </div>
             <div class="field">
-              <label for="proj-edit-status">Stored Status <span class="req">*</span></label>
+              <label for="proj-edit-status">סטטוס <span class="req">*</span></label>
               <select id="proj-edit-status">
-                <option value="draft">Draft</option>
-                <option value="planning">Planning</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="canceled">Canceled</option>
+                <option value="draft">טיוטה</option>
+                <option value="planning">תכנון</option>
+                <option value="active">פעיל</option>
+                <option value="completed">הושלם</option>
+                <option value="canceled">בוטל</option>
               </select>
-              <div class="field-hint">Display status is calculated from dates on the dashboard.</div>
+              <div class="field-hint">הסטטוס המוצג מחושב לפי תאריכים בלוח הבקרה.</div>
             </div>
           </div>
         </div>
@@ -1505,15 +1505,15 @@
         <div class="form-group edit-section">
           <p class="form-group-title">
             <span class="form-group-icon"><i data-lucide="calendar-days"></i></span>
-            Timeline
+            ציר זמן
           </p>
           <div class="edit-date-grid">
             <div class="field edit-date-card">
-              <label for="proj-edit-start">Start Date</label>
+              <label for="proj-edit-start">תאריך התחלה</label>
               <input id="proj-edit-start" type="date" />
             </div>
             <div class="field edit-date-card">
-              <label for="proj-edit-end">End Date</label>
+              <label for="proj-edit-end">תאריך סיום</label>
               <input id="proj-edit-end" type="date" />
             </div>
           </div>
@@ -1521,10 +1521,10 @@
         <p class="modal-field-error" id="proj-edit-error" style="display:none"></p>
       </div>
       <div class="modal-footer">
-        <button class="btn-cancel" id="proj-edit-cancel" type="button">Cancel</button>
+        <button class="btn-cancel" id="proj-edit-cancel" type="button">ביטול</button>
         <button class="btn-primary btn-with-icon" id="proj-edit-save" type="button">
           <i data-lucide="save"></i>
-          <span>Save Changes</span>
+          <span>שמור שינויים</span>
         </button>
       </div>
     </div>
@@ -1539,45 +1539,45 @@
             <i data-lucide="calendar-clock"></i>
           </div>
           <div class="modal-header-text">
-            <h3 id="event-edit-title">Edit Event</h3>
-            <p class="modal-subtitle">Adjust event timing, classification, and financial planning</p>
+            <h3 id="event-edit-title">ערוך אירוע</h3>
+            <p class="modal-subtitle">עדכן תזמון, סיווג ותכנון פיננסי</p>
           </div>
         </div>
-        <button class="btn-close" id="event-edit-close" type="button" aria-label="Close"><i data-lucide="x"></i></button>
+        <button class="btn-close" id="event-edit-close" type="button" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body grouped edit-entity-body">
         <div class="form-group edit-section">
           <p class="form-group-title">
             <span class="form-group-icon"><i data-lucide="map-pin"></i></span>
-            Event Details
+            פרטי אירוע
           </p>
           <div class="field">
-            <label for="event-edit-name">Event Name <span class="req">*</span></label>
-            <input id="event-edit-name" type="text" maxlength="255" placeholder="Event name" />
+            <label for="event-edit-name">שם האירוע <span class="req">*</span></label>
+            <input id="event-edit-name" type="text" maxlength="255" placeholder="שם האירוע" />
           </div>
           <div class="field">
-            <label for="event-edit-location">Location</label>
-            <input id="event-edit-location" type="text" maxlength="255" placeholder="Location" />
+            <label for="event-edit-location">מיקום</label>
+            <input id="event-edit-location" type="text" maxlength="255" placeholder="מיקום" />
           </div>
           <div class="edit-two-col">
             <div class="field">
-              <label for="event-edit-status">Status <span class="req">*</span></label>
+              <label for="event-edit-status">סטטוס <span class="req">*</span></label>
               <select id="event-edit-status">
-                <option value="planning">Planning</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="canceled">Canceled</option>
+                <option value="planning">תכנון</option>
+                <option value="active">פעיל</option>
+                <option value="completed">הושלם</option>
+                <option value="canceled">בוטל</option>
               </select>
             </div>
             <div class="field">
-              <label for="event-edit-type">Event Type</label>
+              <label for="event-edit-type">סוג אירוע</label>
               <select id="event-edit-type">
-                <option value="conference">Conference</option>
-                <option value="wedding">Wedding</option>
-                <option value="corporate">Corporate</option>
-                <option value="concert">Concert</option>
-                <option value="exhibition">Exhibition</option>
-                <option value="other">Other</option>
+                <option value="conference">כנס</option>
+                <option value="wedding">חתונה</option>
+                <option value="corporate">ארגוני</option>
+                <option value="concert">קונצרט</option>
+                <option value="exhibition">תערוכה</option>
+                <option value="other">אחר</option>
               </select>
             </div>
           </div>
@@ -1586,15 +1586,15 @@
         <div class="form-group edit-section">
           <p class="form-group-title">
             <span class="form-group-icon"><i data-lucide="clock"></i></span>
-            Schedule
+            לוח זמנים
           </p>
           <div class="edit-date-grid">
             <div class="field edit-date-card">
-              <label for="event-edit-start">Start Time <span class="req">*</span></label>
+              <label for="event-edit-start">שעת התחלה <span class="req">*</span></label>
               <input id="event-edit-start" type="datetime-local" />
             </div>
             <div class="field edit-date-card">
-              <label for="event-edit-end">End Time <span class="req">*</span></label>
+              <label for="event-edit-end">שעת סיום <span class="req">*</span></label>
               <input id="event-edit-end" type="datetime-local" />
             </div>
           </div>
@@ -1603,30 +1603,30 @@
         <div class="form-group edit-section">
           <p class="form-group-title">
             <span class="form-group-icon"><i data-lucide="wallet"></i></span>
-            Planning Numbers
+            נתוני תכנון
           </p>
           <div class="edit-three-col">
             <div class="field">
-              <label for="event-edit-budget">Planned Budget</label>
+              <label for="event-edit-budget">תקציב מתוכנן</label>
               <input id="event-edit-budget" type="number" min="0" step="0.01" placeholder="0.00" />
             </div>
             <div class="field">
-              <label for="event-edit-revenue">Expected Revenue</label>
+              <label for="event-edit-revenue">הכנסה צפויה</label>
               <input id="event-edit-revenue" type="number" min="0" step="0.01" placeholder="0.00" />
             </div>
             <div class="field">
-              <label for="event-edit-attendees">Attendees</label>
-              <input id="event-edit-attendees" type="number" min="0" placeholder="Expected" />
+              <label for="event-edit-attendees">אורחים</label>
+              <input id="event-edit-attendees" type="number" min="0" placeholder="צפוי" />
             </div>
           </div>
         </div>
         <p class="modal-field-error" id="event-edit-error" style="display:none"></p>
       </div>
       <div class="modal-footer">
-        <button class="btn-cancel" id="event-edit-cancel" type="button">Cancel</button>
+        <button class="btn-cancel" id="event-edit-cancel" type="button">ביטול</button>
         <button class="btn-primary btn-with-icon" id="event-edit-save" type="button">
           <i data-lucide="save"></i>
-          <span>Save Changes</span>
+          <span>שמור שינויים</span>
         </button>
       </div>
     </div>
@@ -1636,16 +1636,16 @@
   <div class="modal-overlay" id="delete-confirm-overlay" style="display:none">
     <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
       <div class="modal-header">
-        <h2 class="modal-title modal-title--danger" id="delete-confirm-title">Confirm Delete</h2>
-        <button class="modal-close" id="delete-confirm-close" type="button" aria-label="Close"><i data-lucide="x"></i></button>
+        <h2 class="modal-title modal-title--danger" id="delete-confirm-title">אישור מחיקה</h2>
+        <button class="modal-close" id="delete-confirm-close" type="button" aria-label="סגור"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
         <p id="delete-confirm-message" class="delete-confirm-msg"></p>
         <p class="delete-confirm-warning"><i data-lucide="triangle-alert"></i> <span id="delete-confirm-warning-text"></span></p>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" id="delete-confirm-cancel" type="button">Cancel</button>
-        <button class="btn btn-danger" id="delete-confirm-ok" type="button">Delete</button>
+        <button class="btn btn-outline" id="delete-confirm-cancel" type="button">ביטול</button>
+        <button class="btn btn-danger" id="delete-confirm-ok" type="button">מחק</button>
       </div>
     </div>
   </div>
