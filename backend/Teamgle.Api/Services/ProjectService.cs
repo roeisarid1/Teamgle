@@ -486,4 +486,58 @@ public class ProjectService : IProjectService
     {
         return await _projectRepo.AutoAssignShiftAsync(shiftId, firebaseUid);
     }
+
+    // ── Event-first (standalone events) ───────────────────────────────────
+    public async Task<IEnumerable<EventListItemResponse>> GetEventsAsync(string firebaseUid)
+    {
+        var events = await _projectRepo.GetEventsByManagerAsync(firebaseUid);
+        foreach (var e in events)
+            e.DisplayStatus = ComputeDisplayStatus(e.Status, e.StartTime, e.EndTime);
+        return events;
+    }
+
+    public async Task<ScheduleEventItem?> GetEventScheduleAsync(string firebaseUid, string eventId)
+    {
+        return await _projectRepo.GetEventScheduleByIdAsync(eventId, firebaseUid);
+    }
+
+    public async Task<EventListItemResponse> CreateStandaloneEventAsync(string firebaseUid, CreateEventStandaloneRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Event name is required.");
+        if (request.EndTime < request.StartTime)
+            throw new ArgumentException("End time cannot be before start time.");
+
+        var companyId = await ResolveCompanyIdAsync(firebaseUid);
+        var managerId = await _projectRepo.GetManagerUserIdAsync(firebaseUid)
+            ?? throw new UnauthorizedAccessException("User is not a registered manager.");
+
+        var eventId = await _projectRepo.CreateStandaloneEventAsync(companyId, managerId, request);
+
+        return new EventListItemResponse
+        {
+            EventId         = eventId,
+            Name            = request.Name,
+            StartTime       = request.StartTime,
+            EndTime         = request.EndTime,
+            Status          = request.Status,
+            DisplayStatus   = ComputeDisplayStatus(request.Status, request.StartTime, request.EndTime),
+            EventType       = request.EventType,
+            Location        = request.Location,
+            CustomerId      = request.CustomerId,
+            PlannedBudget   = request.PlannedBudget,
+            ExpectedRevenue = request.ExpectedRevenue,
+            AttendeesCount  = request.AttendeesCount,
+        };
+    }
+
+    public async Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersForEventAsync(string firebaseUid, string eventId)
+    {
+        return await _projectRepo.GetPotentialWorkersByEventAsync(eventId, firebaseUid);
+    }
+
+    public async Task SendOfferForEventAsync(string firebaseUid, string eventId, string employeeFbUid, SendOfferRequest request)
+    {
+        await _projectRepo.SendOfferByEventAsync(eventId, employeeFbUid, request.ShiftIds, firebaseUid);
+    }
 }

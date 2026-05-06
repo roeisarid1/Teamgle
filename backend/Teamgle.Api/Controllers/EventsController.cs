@@ -436,6 +436,109 @@ public class EventsController : ControllerBase
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  EVENT LIST / CREATE (event-first)
+    // ══════════════════════════════════════════════════════════════════════
+
+    // GET /api/events
+    [HttpGet]
+    public async Task<IActionResult> GetEvents()
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var events = await _projectService.GetEventsAsync(uid);
+            return Ok(events);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching events list");
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // POST /api/events
+    [HttpPost]
+    public async Task<IActionResult> CreateStandaloneEvent([FromBody] CreateEventStandaloneRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var ev = await _projectService.CreateStandaloneEventAsync(uid, request);
+            return StatusCode(201, ev);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating standalone event");
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // GET /api/events/{eventId}/schedule
+    [HttpGet("{eventId}/schedule")]
+    public async Task<IActionResult> GetEventSchedule(string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var schedule = await _projectService.GetEventScheduleAsync(uid, eventId);
+            if (schedule == null) return NotFound(new { error = "Event not found." });
+            return Ok(schedule);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching schedule for event {EventId}", eventId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // GET /api/events/{eventId}/potential-workers
+    [HttpGet("{eventId}/potential-workers")]
+    public async Task<IActionResult> GetPotentialWorkers(string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var workers = await _projectService.GetPotentialWorkersForEventAsync(uid, eventId);
+            if (workers == null) return NotFound(new { error = "Event not found." });
+            return Ok(workers);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching potential workers for event {EventId}", eventId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // POST /api/events/{eventId}/potential-workers/{employeeFbUid}/send-offer
+    [HttpPost("{eventId}/potential-workers/{employeeFbUid}/send-offer")]
+    public async Task<IActionResult> SendOffer(string eventId, string employeeFbUid, [FromBody] SendOfferRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            await _projectService.SendOfferForEventAsync(uid, eventId, employeeFbUid, request);
+            return Ok(new { message = "Offer sent." });
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending offer for event {EventId} to employee {EmployeeFbUid}", eventId, employeeFbUid);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  EVENT CRUD
     // ══════════════════════════════════════════════════════════════════════
 

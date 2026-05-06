@@ -149,7 +149,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   await Promise.all([loadRoles(), loadEmployees()]);
-  activateSection("projects");
+  activateSection("events");
 });
 
 // ── Token helper (auto-refresh) ────────────────────────────────────────────
@@ -1489,11 +1489,11 @@ function activateSection(name) {
     .classList.toggle("chat-mode", name === "chats");
 
   if (name === "customers") loadCustomers();
-  if (name === "projects") {
+  if (name === "events") {
     _initProjectFilters();
     loadProjects();
   }
-  if (name === "create-project") loadProjectCustomerDropdown();
+  if (name === "create-event") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
   if (name === "invoices") loadInvoices();
 }
@@ -1637,10 +1637,10 @@ async function loadProjects() {
 
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/projects`, {
+    const res = await fetch(`${API_BASE}/events`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error("Failed to load projects.");
+    if (!res.ok) throw new Error("Failed to load events.");
     _allProjects = await res.json();
     _applyProjectFilters();
   } catch {
@@ -1686,7 +1686,7 @@ function _renderProjectKanban(projects) {
     const items = buckets[key];
     col.innerHTML = items.length
       ? items.map((p) => renderProjectCard(p)).join("")
-      : `<div class="empty-col">No projects</div>`;
+      : `<div class="empty-col">No events</div>`;
   }
 }
 
@@ -1723,14 +1723,14 @@ function renderProjectCard(project) {
     : "No customer";
 
   return `
-    <div class="event-card" data-proj-id="${escapeHtml(project.projId)}">
+    <div class="event-card" data-event-id="${escapeHtml(project.eventId)}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
         <span class="event-status-badge ${badge.cls}">${badge.label}</span>
       </div>
       <div class="event-title">${escapeHtml(project.name)}</div>
       <div class="event-meta">
         <span class="material-symbols-outlined" style="font-size:13px">calendar_month</span>
-        ${fmt(project.startDate)} – ${fmt(project.endDate)}
+        ${fmt(project.startTime)} – ${fmt(project.endTime)}
       </div>
       <div class="event-meta">
         <span class="material-symbols-outlined" style="font-size:13px">business</span>
@@ -1756,15 +1756,16 @@ document.getElementById("search-projects")?.addEventListener("input", (e) => {
 });
 
 document.getElementById("btn-create-project").addEventListener("click", () => {
-  activateSection("create-project");
-  initCreateProjectForm();
+  activateSection("create-event");
+  initCreateEventForm();
 });
 
-// ── Double-click on kanban card → open project detail ───────────────────────
+// ── Double-click on kanban card → open event detail ────────────────────────
 document.querySelector(".events-kanban").addEventListener("dblclick", (e) => {
-  const card = e.target.closest(".event-card[data-proj-id]");
+  const card = e.target.closest(".event-card[data-event-id]");
   if (!card) return;
-  openProjectDetail(card.dataset.projId);
+  const evData = (_allProjects ?? []).find((p) => p.eventId === card.dataset.eventId);
+  openEventDetail(card.dataset.eventId, evData ?? null);
 });
 
 // ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
@@ -1987,7 +1988,7 @@ async function loadProjectSchedule(projId) {
     );
     if (!res.ok) throw new Error("Failed to load schedule.");
     const schedule = await res.json();
-    renderGantt(schedule);
+    renderGantt(schedule, container);
   } catch {
     container.innerHTML = `
       <div class="pd-placeholder" style="color:var(--red)">
@@ -1997,8 +1998,34 @@ async function loadProjectSchedule(projId) {
   }
 }
 
-function renderGantt(schedule) {
-  const container = document.getElementById("gantt-container");
+async function loadEventSchedule(eventId) {
+  const container = document.getElementById("ed-gantt-container");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="pd-placeholder">
+      <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">hourglass_top</span>
+      Loading schedule…
+    </div>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/schedule`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error("Failed to load schedule.");
+    const eventSchedule = await res.json();
+    renderGantt({ events: [eventSchedule] }, container);
+  } catch {
+    container.innerHTML = `
+      <div class="pd-placeholder" style="color:var(--red)">
+        <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">error</span>
+        Failed to load schedule.
+      </div>`;
+  }
+}
+
+function renderGantt(schedule, container) {
+  if (!container) container = document.getElementById("gantt-container");
 
   if (!schedule.events || schedule.events.length === 0) {
     container.innerHTML = `
@@ -4061,87 +4088,21 @@ document
   });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ── CREATE PROJECT FORM ────────────────────────────────────────────────────
+// ── CREATE EVENT FORM ──────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 
-let projectEventCounter = 0; // monotonic counter for unique event block IDs
+let projectEventCounter = 0; // monotonic counter for unique shift block IDs
 let cachedRoles = []; // roles loaded once per session
-let _projEndDateTouched = false; // true once the user manually changes End Date
 
-// ── Project date DOM refs (static elements) ───────────────────────────────
-const _projStartInput = document.getElementById("proj-start-date");
-const _projEndInput = document.getElementById("proj-end-date");
-
-// ── Revalidate every event-date field against the current project range ────
 function revalidateEventDates() {
-  const startDate = _projStartInput.value;
-  const endDate = _projEndInput.value;
-
-  // Project-level: mark End Date red if it precedes Start Date
-  const projEndFieldEl = document.getElementById("field-proj-end");
-  const projDatesInvalid = !!(startDate && endDate && endDate < startDate);
-  projEndFieldEl?.classList.toggle("has-range-error", projDatesInvalid);
-
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
-    const dateInput = document.getElementById(`event-start-date-${idx}`);
-    const fieldEl = block.querySelector(`[data-field="event-start-date-${idx}"]`);
-    if (!dateInput || !fieldEl) return;
-    const dateVal = dateInput.value;
-    // Out-of-range only when all three dates are present
-    const outOfRange = !!(
-      dateVal &&
-      startDate &&
-      endDate &&
-      (dateVal < startDate || dateVal > endDate)
-    );
-    fieldEl.classList.toggle("has-range-error", outOfRange);
-  });
+  // no-op: no project-level date range in standalone event form
 }
-
-// ── Project Start Date change ─────────────────────────────────────────────
-_projStartInput.addEventListener("change", () => {
-  const startVal = _projStartInput.value;
-  // Keep end-date's minimum in sync
-  _projEndInput.min = startVal;
-  // Auto-set End Date only if the user has never touched it
-  if (startVal && !_projEndDateTouched) {
-    _projEndInput.value = startVal;
-  }
-  // Auto-fill every untouched event date
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
-    const startDateInput = document.getElementById(`event-start-date-${idx}`);
-    const endDateInput = document.getElementById(`event-end-date-${idx}`);
-    if (startDateInput && !startDateInput.dataset.touched) {
-      startDateInput.value = startVal;
-      if (endDateInput && !endDateInput.dataset.touched) endDateInput.value = startVal;
-      // Refresh the header summary for this block
-      const nameVal =
-        document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-      const summaryEl = document.getElementById(`event-summary-${idx}`);
-      if (summaryEl) {
-        const parts = [];
-        if (nameVal) parts.push(nameVal);
-        if (startVal) parts.push(startVal);
-        summaryEl.textContent = parts.length ? ` · ${parts.join(" · ")}` : "";
-      }
-    }
-  });
-  revalidateEventDates();
-});
-
-// ── Project End Date change ───────────────────────────────────────────────
-_projEndInput.addEventListener("change", () => {
-  _projEndDateTouched = true;
-  revalidateEventDates();
-});
 
 // ── Back button ────────────────────────────────────────────────────────────
 document
   .getElementById("btn-back-to-projects")
   .addEventListener("click", () => {
-    activateSection("projects");
+    activateSection("events");
   });
 
 // ── Save Draft ──────────────────────────────────────────────────────────────
@@ -4158,13 +4119,13 @@ document
     const name = document.getElementById("proj-name").value.trim();
     if (!name) {
       document.getElementById("field-proj-name").classList.add("has-error");
-      errBanner.textContent = "Project name is required.";
+      errBanner.textContent = "Event name is required.";
       errBanner.classList.add("visible");
       return;
     }
 
-    const startDate = document.getElementById("proj-start-date").value || null;
-    const endDate = document.getElementById("proj-end-date").value || null;
+    const startTime = document.getElementById("ev-start-time").value || null;
+    const endTime   = document.getElementById("ev-end-time").value   || null;
     const customerId = document.getElementById("proj-customer").value || null;
 
     const btn = document.getElementById("btn-save-draft");
@@ -4173,7 +4134,7 @@ document
 
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/projects`, {
+      const res = await fetch(`${API_BASE}/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -4181,11 +4142,11 @@ document
         },
         body: JSON.stringify({
           name,
-          startDate,
-          endDate,
+          startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
+          endTime:   endTime   ? new Date(endTime).toISOString()   : new Date().toISOString(),
           customerId,
           status: "draft",
-          events: [],
+          shifts: [],
         }),
       });
       const data = await res.json();
@@ -4194,7 +4155,7 @@ document
         errBanner.classList.add("visible");
         return;
       }
-      activateSection("projects");
+      activateSection("events");
     } catch {
       errBanner.textContent = "Network error. Please check your connection.";
       errBanner.classList.add("visible");
@@ -4211,13 +4172,60 @@ document
     openCustomerFormModal(null);
   });
 
-// ── ＋ Add Event button ────────────────────────────────────────────────────
-document.getElementById("btn-add-event").addEventListener("click", () => {
-  appendEventBlock();
+// ── ＋ Add Shift button (standalone event form) ───────────────────────────
+document.getElementById("btn-add-event").addEventListener("click", async () => {
+  const roles = await ensureRolesLoaded();
+  appendStandaloneShiftRow(roles);
 });
 
+async function appendStandaloneShiftRow(roles) {
+  if (!roles) roles = await ensureRolesLoaded();
+  const container = document.getElementById("events-container");
+  if (!container) return;
+
+  const roleOptions = roles.length
+    ? roles.map((r) => `<option value="${r.rollId}">${escapeHtml(r.rollName)}</option>`).join("")
+    : `<option value="">No roles available</option>`;
+
+  const row = document.createElement("div");
+  row.className = "shift-row";
+  row.innerHTML = `
+    <div class="field">
+      <label>Role *</label>
+      <select>
+        <option value="">— Select role —</option>
+        ${roleOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>Qty *</label>
+      <input type="number" placeholder="1" min="1" value="1" />
+    </div>
+    <div class="field datetime-field">
+      <label>Start *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-start-date" />
+        <input type="time" class="dt-time shift-start-time" step="300" />
+      </div>
+    </div>
+    <div class="field datetime-field">
+      <label>End *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-end-date" />
+        <input type="time" class="dt-time shift-end-time" step="300" />
+      </div>
+    </div>
+    <button class="btn-remove-shift" type="button" title="Remove shift">
+      <i data-lucide="x"></i>
+    </button>
+  `;
+  row.querySelector(".btn-remove-shift").addEventListener("click", () => row.remove());
+  container.appendChild(row);
+  if (window.lucide) lucide.createIcons();
+}
+
 // ── Collapse All / Expand All events ──────────────────────────────────────
-document.getElementById("btn-collapse-events").addEventListener("click", () => {
+document.getElementById("btn-collapse-events")?.addEventListener("click", () => {
   const blocks = document.querySelectorAll(".event-block");
   const anyExpanded = [...blocks].some(
     (b) => !b.classList.contains("collapsed"),
@@ -4226,29 +4234,27 @@ document.getElementById("btn-collapse-events").addEventListener("click", () => {
   updateCollapseAllBtn();
 });
 
-// ── Initialise the form (called when navigating to create-project) ─────────
-function initCreateProjectForm() {
-  // Clear project-level fields
+// ── Initialise the form (called when navigating to create-event) ───────────
+function initCreateEventForm() {
   document.getElementById("proj-name").value = "";
-  _projStartInput.value = "";
-  _projStartInput.max = "";
-  _projEndInput.value = "";
-  _projEndInput.min = "";
-  _projEndDateTouched = false;
+  document.getElementById("ev-start-time").value = "";
+  document.getElementById("ev-end-time").value = "";
+  document.getElementById("ev-location").value = "";
+  document.getElementById("ev-type").value = "";
+  document.getElementById("ev-attendees").value = "";
+  document.getElementById("ev-budget").value = "";
+  document.getElementById("ev-revenue").value = "";
   document.getElementById("proj-customer").value = "";
-  ["field-proj-name", "field-proj-start", "field-proj-end"].forEach((id) =>
+  ["field-proj-name", "field-ev-start", "field-ev-end"].forEach((id) =>
     document.getElementById(id)?.classList.remove("has-error"),
   );
 
-  // Clear error banner
   const errBanner = document.getElementById("create-project-error");
   errBanner.textContent = "";
   errBanner.classList.remove("visible");
 
-  // Clear events container and render first event block
   projectEventCounter = 0;
   document.getElementById("events-container").innerHTML = "";
-  appendEventBlock();
 }
 
 // ── Load customers into the project customer dropdown ──────────────────────
@@ -4309,7 +4315,7 @@ _origSaveCustBtn.addEventListener("click", async () => {
   // After a short delay (enough for the existing handler's setTimeout to fire),
   // refresh the dropdown if the create-project section is visible.
   setTimeout(async () => {
-    const cpSection = document.getElementById("section-create-project");
+    const cpSection = document.getElementById("section-create-event");
     if (cpSection && cpSection.style.display !== "none") {
       // Find the newest customer (last in list) and auto-select it
       try {
@@ -4537,15 +4543,7 @@ async function appendEventBlock() {
     revalidateEventDates();
   });
 
-  // Default event start/end dates to project start date (if already chosen)
-  const projStartVal = _projStartInput.value;
-  if (projStartVal) {
-    document.getElementById(`event-start-date-${idx}`).value = projStartVal;
-    document.getElementById(`event-end-date-${idx}`).value = projStartVal;
-    updateSummary();
-  }
-
-  // Revalidate so new block is checked immediately against current project range
+  // Revalidate so new block is checked immediately
   revalidateEventDates();
 
   // Render first shift row immediately
@@ -4627,42 +4625,15 @@ function appendShiftRow(eventIdx, roles) {
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
-function collectProjectFormData() {
-  const events = [];
+function collectEventFormData() {
   let valid = true;
 
-  // Clear previous error highlights
   document
     .querySelectorAll(".field.has-error")
     .forEach((f) => f.classList.remove("has-error"));
   const errBanner = document.getElementById("create-project-error");
   errBanner.textContent = "";
   errBanner.classList.remove("visible");
-
-  // Project-level fields
-  const name = document.getElementById("proj-name").value.trim();
-  const startDate = document.getElementById("proj-start-date").value;
-  const endDate = document.getElementById("proj-end-date").value;
-  const customer = document.getElementById("proj-customer").value || null;
-
-  if (!name) {
-    document.getElementById("field-proj-name").classList.add("has-error");
-    valid = false;
-  }
-  if (!startDate) {
-    document.getElementById("field-proj-start").classList.add("has-error");
-    valid = false;
-  }
-  if (!endDate) {
-    document.getElementById("field-proj-end").classList.add("has-error");
-    valid = false;
-  }
-  if (startDate && endDate && endDate < startDate) {
-    document.getElementById("field-proj-end").classList.add("has-error");
-    errBanner.textContent = "End date cannot be before start date.";
-    errBanner.classList.add("visible");
-    valid = false;
-  }
 
   const showError = (msg) => {
     if (!errBanner.classList.contains("visible")) {
@@ -4672,109 +4643,64 @@ function collectProjectFormData() {
     valid = false;
   };
 
-  // Event blocks
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
+  const name = document.getElementById("proj-name").value.trim();
+  const startTimeVal = document.getElementById("ev-start-time").value;
+  const endTimeVal   = document.getElementById("ev-end-time").value;
+  const location     = document.getElementById("ev-location").value.trim() || null;
+  const eventType    = document.getElementById("ev-type").value.trim() || null;
+  const attendees    = document.getElementById("ev-attendees").value;
+  const budget       = document.getElementById("ev-budget").value;
+  const revenue      = document.getElementById("ev-revenue").value;
+  const customerId   = document.getElementById("proj-customer").value || null;
 
-    const evtName =
-      document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-    const evtStartDate = document.getElementById(`event-start-date-${idx}`)?.value || "";
-    const evtStartTime = document.getElementById(`event-start-time-${idx}`)?.value || "";
-    const evtEndDate = document.getElementById(`event-end-date-${idx}`)?.value || "";
-    const evtEndTime = document.getElementById(`event-end-time-${idx}`)?.value || "";
-    const location =
-      document.getElementById(`event-location-${idx}`)?.value.trim() || null;
-    const evtType = document.getElementById(`event-type-${idx}`)?.value || null;
-    const attendees = document.getElementById(`event-attendees-${idx}`)?.value;
-    const budget = document.getElementById(`event-budget-${idx}`)?.value;
-    const revenue = document.getElementById(`event-revenue-${idx}`)?.value;
+  if (!name) {
+    document.getElementById("field-proj-name").classList.add("has-error");
+    valid = false;
+  }
+  if (!startTimeVal) {
+    document.getElementById("field-ev-start")?.classList.add("has-error");
+    valid = false;
+  }
+  if (!endTimeVal) {
+    document.getElementById("field-ev-end")?.classList.add("has-error");
+    valid = false;
+  }
 
-    if (!evtName) {
-      block.querySelector(`[data-field="event-name-${idx}"]`)?.classList.add("has-error");
+  const startDT = startTimeVal ? new Date(startTimeVal) : null;
+  const endDT   = endTimeVal   ? new Date(endTimeVal)   : null;
+  if (startDT && endDT && endDT <= startDT) {
+    document.getElementById("field-ev-end")?.classList.add("has-error");
+    showError("End time cannot be before start time.");
+  }
+
+  // Collect shifts from shift rows
+  const shifts = [];
+  document.querySelectorAll(".shift-row").forEach((row) => {
+    const rollId = row.querySelector("select")?.value || "";
+    const qty = parseInt(row.querySelector('input[type="number"]')?.value, 10) || 1;
+    const shtStartDate = row.querySelector(".shift-start-date")?.value || "";
+    const shtStartTime = row.querySelector(".shift-start-time")?.value || "";
+    const shtEndDate   = row.querySelector(".shift-end-date")?.value   || "";
+    const shtEndTime   = row.querySelector(".shift-end-time")?.value   || "";
+
+    if (!rollId || !shtStartDate || !shtStartTime || !shtEndDate || !shtEndTime) {
+      row.querySelector(".field")?.classList.add("has-error");
       valid = false;
     }
-    if (!evtStartDate || !evtStartTime) {
-      block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
-      valid = false;
-    }
-    if (!evtEndDate || !evtEndTime) {
-      block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-      valid = false;
-    }
 
-    // Combine date + time into Date objects for range checks
-    const evtStartDT = evtStartDate && evtStartTime ? new Date(`${evtStartDate}T${evtStartTime}`) : null;
-    const evtEndDT   = evtEndDate   && evtEndTime   ? new Date(`${evtEndDate}T${evtEndTime}`)     : null;
+    const shtStartDT = shtStartDate && shtStartTime ? new Date(`${shtStartDate}T${shtStartTime}`) : null;
+    const shtEndDT   = shtEndDate   && shtEndTime   ? new Date(`${shtEndDate}T${shtEndTime}`)     : null;
 
-    if (evtStartDT && evtEndDT) {
-      if (evtEndDT <= evtStartDT) {
-        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: end must be after start.`);
-      }
-      if (startDate && evtStartDate < startDate) {
-        block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: start is before the project start date.`);
-      }
-      if (endDate && evtEndDate > endDate) {
-        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: end is after the project end date.`);
-      }
+    if (shtStartDT && shtEndDT && shtEndDT <= shtStartDT) {
+      row.querySelector(".field")?.classList.add("has-error");
+      showError("A shift's end time must be after its start time.");
     }
 
-    const startDateTime = evtStartDT ? evtStartDT.toISOString() : null;
-    const endDateTime   = evtEndDT   ? evtEndDT.toISOString()   : null;
-
-    // Collect shifts
-    const shifts = [];
-    block.querySelectorAll(".shift-row").forEach((row) => {
-      const rollId = row.querySelector("select")?.value || "";
-      const qty = parseInt(row.querySelector('input[type="number"]')?.value, 10) || 1;
-      const shtStartDate = row.querySelector(".shift-start-date")?.value || "";
-      const shtStartTime = row.querySelector(".shift-start-time")?.value || "";
-      const shtEndDate = row.querySelector(".shift-end-date")?.value || "";
-      const shtEndTime = row.querySelector(".shift-end-time")?.value || "";
-
-      if (!rollId || !shtStartDate || !shtStartTime || !shtEndDate || !shtEndTime) {
-        row.querySelector(".field")?.classList.add("has-error");
-        valid = false;
-      }
-
-      const shtStartDT = shtStartDate && shtStartTime ? new Date(`${shtStartDate}T${shtStartTime}`) : null;
-      const shtEndDT   = shtEndDate   && shtEndTime   ? new Date(`${shtEndDate}T${shtEndTime}`)     : null;
-
-      if (shtStartDT && shtEndDT) {
-        if (shtEndDT <= shtStartDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: end must be after start.`);
-        }
-        if (evtStartDT && shtStartDT < evtStartDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: starts before the event.`);
-        }
-        if (evtEndDT && shtEndDT > evtEndDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: ends after the event.`);
-        }
-      }
-
-      shifts.push({
-        rollId,
-        requiredQuantity: qty,
-        startTime: shtStartDT ? shtStartDT.toISOString() : null,
-        endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
-      });
-    });
-
-    events.push({
-      name: evtName,
-      startTime: startDateTime,
-      endTime: endDateTime,
-      location: location || null,
-      attendeesCount: attendees ? parseInt(attendees, 10) : null,
-      eventType: evtType || null,
-      plannedBudget: budget ? parseFloat(budget) : null,
-      expectedRevenue: revenue ? parseFloat(revenue) : null,
-      shifts,
+    shifts.push({
+      rollId,
+      requiredQuantity: qty,
+      startTime: shtStartDT ? shtStartDT.toISOString() : null,
+      endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
     });
   });
 
@@ -4787,20 +4713,26 @@ function collectProjectFormData() {
   }
 
   return {
-    name: name,
-    startDate: startDate,
-    endDate: endDate,
-    customerId: customer,
-    events,
+    name,
+    startTime:      startDT ? startDT.toISOString() : null,
+    endTime:        endDT   ? endDT.toISOString()   : null,
+    location,
+    eventType,
+    attendeesCount: attendees ? parseInt(attendees, 10) : null,
+    plannedBudget:  budget    ? parseFloat(budget)      : null,
+    expectedRevenue: revenue  ? parseFloat(revenue)     : null,
+    customerId,
+    status: "planning",
+    shifts,
   };
 }
 
-// ── Submit project ──────────────────────────────────────────────────────────
+// ── Submit event ────────────────────────────────────────────────────────────
 document
   .getElementById("btn-submit-project")
   .addEventListener("click", async () => {
-    const body = collectProjectFormData();
-    if (!body) return; // validation failed — errors already shown
+    const body = collectEventFormData();
+    if (!body) return;
 
     const btn = document.getElementById("btn-submit-project");
     btn.disabled = true;
@@ -4811,28 +4743,28 @@ document
 
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/projects`, {
+      const res = await fetch(`${API_BASE}/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ ...body, status: "planning" }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
-        errBanner.textContent = data.error || "Failed to create project.";
+        errBanner.textContent = data.error || "Failed to create event.";
         errBanner.classList.add("visible");
         return;
       }
-      // Success — return to projects board
-      activateSection("projects");
+      activateSection("events");
     } catch {
       errBanner.textContent = "Network error. Please check your connection.";
       errBanner.classList.add("visible");
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `${_ICON.folder} Create Project`;
+      btn.innerHTML = `<i data-lucide="calendar-plus"></i> Create Event`;
+      if (window.lucide) lucide.createIcons();
     }
   });
 
@@ -4995,7 +4927,8 @@ document
       }
 
       closeShiftEditModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
@@ -5056,7 +4989,8 @@ document
       }
 
       closeShiftDeleteModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       alert("Network error. Please try again.");
     } finally {
@@ -5199,7 +5133,8 @@ document
       }
 
       closeShiftAddModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
@@ -5273,8 +5208,7 @@ function renderStaffingTab() {
   // Fetch potential workers for each real event in background
   const events = currentProjectDetail?.events ?? [];
   events.forEach((ev) => {
-    if (currentProjectId)
-      loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+    loadAndRenderPotentialWorkers(ev.eventId);
     loadAndRenderEventWorkers(ev.eventId);
   });
 }
@@ -5852,8 +5786,7 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
     if (!res.ok) throw new Error("Failed to remove assignment");
 
     await loadAndRenderEventWorkers(eventId);
-    if (currentProjectId)
-      await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+    await loadAndRenderPotentialWorkers(eventId);
 
     // Auto-open the Potential Workers section so the returned worker is visible
     const potentialSection = document.getElementById(
@@ -6039,11 +5972,11 @@ function _replacePotentialContent(eventId, workers) {
   _applyStaffingFilters();
 }
 
-async function loadAndRenderPotentialWorkers(projectId, eventId) {
+async function loadAndRenderPotentialWorkers(eventId) {
   try {
     const token = await getToken();
     const res = await fetch(
-      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers`,
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/potential-workers`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error("Failed to load");
@@ -6071,7 +6004,7 @@ function _attachPotentialWorkerHandlers(eventId) {
       e.stopPropagation();
       const row = btn.closest(".ps-row--potential");
       const fbuid = row?.dataset.workerFbuid;
-      if (!fbuid || !currentProjectId) return;
+      if (!fbuid) return;
 
       const shiftIds = [
         ...row.querySelectorAll("input[data-shift-id]:checked"),
@@ -6082,7 +6015,6 @@ function _attachPotentialWorkerHandlers(eventId) {
       }
 
       await _sendOfferToWorker(
-        currentProjectId,
         eventId,
         fbuid,
         shiftIds,
@@ -6130,7 +6062,6 @@ function _attachPotentialWorkerHandlers(eventId) {
         if (!fbuid || shiftIds.length === 0) continue;
         const btn = row.querySelector(".ps-btn--send-worker");
         await _sendOfferToWorker(
-          currentProjectId,
           eventId,
           fbuid,
           shiftIds,
@@ -6148,7 +6079,6 @@ function _attachPotentialWorkerHandlers(eventId) {
 }
 
 async function _sendOfferToWorker(
-  projectId,
   eventId,
   fbuid,
   shiftIds,
@@ -6163,7 +6093,7 @@ async function _sendOfferToWorker(
   try {
     const token = await getToken();
     const res = await fetch(
-      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
       {
         method: "POST",
         headers: {
@@ -6423,7 +6353,7 @@ let _edTaskFilterPriority = "all";
 document
   .getElementById("btn-back-from-event-detail")
   .addEventListener("click", () => {
-    activateSection("project-detail");
+    activateSection("events");
   });
 
 // ── Tab switching ──────────────────────────────────────────────────────────
@@ -6442,6 +6372,7 @@ function activateEventTab(name) {
   });
   if (name === "staffing") renderEdStaffingTab();
   if (name === "workers") renderEdWorkersTab();
+  if (name === "gantt" && currentEventId) loadEventSchedule(currentEventId);
   if (name === "tasks") renderEdTasksTab();
   if (name === "briefs") renderEdBriefsTab();
   if (name === "expenses") renderEdExpensesTab();
@@ -6449,9 +6380,12 @@ function activateEventTab(name) {
   if (name === "finance") renderEdFinanceTab();
 }
 
+let _currentEventData = null; // cached EventListItemResponse for the open event
+
 // ── Open event detail ──────────────────────────────────────────────────────
-async function openEventDetail(eventId) {
+async function openEventDetail(eventId, evData) {
   currentEventId = eventId;
+  _currentEventData = evData ?? null;
   _edTasksData = null;
   _edBriefsData = null;
   _edExpandedRow = null;
@@ -6459,12 +6393,8 @@ async function openEventDetail(eventId) {
   _edPayrollData = null;
   _edTaskFilterPriority = "all";
 
-  // Update header from cached project data
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === eventId,
-  );
-  document.getElementById("event-detail-project-name").textContent =
-    currentProjectDetail?.name ?? "";
+  // Update header — evData comes from the kanban list, or fallback from project detail cache
+  const ev = evData ?? (currentProjectDetail?.events ?? []).find((e) => e.eventId === eventId);
   document.getElementById("event-detail-title").textContent =
     ev?.name ?? "Event";
   document.getElementById("event-detail-subtitle").textContent = ev
@@ -6526,9 +6456,8 @@ function renderEdStaffingTab() {
   const root = document.getElementById("ed-staffing-root");
   if (!root) return;
 
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === currentEventId,
-  );
+  const ev = _currentEventData
+    ?? (currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId);
 
   root.innerHTML = `
     <div class="ps-header">
@@ -6556,8 +6485,7 @@ function renderEdStaffingTab() {
   _initStaffingHandlers();
   _startStaffingPoll();
 
-  if (currentProjectId)
-    loadAndRenderPotentialWorkers(currentProjectId, currentEventId);
+  loadAndRenderPotentialWorkers(currentEventId);
   loadAndRenderEventWorkers(currentEventId);
 }
 
@@ -8862,14 +8790,11 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
       throw new Error(data.error || "Failed to update event.");
     }
     _closeEventEditModal();
-    // Refresh project detail so events list is up-to-date, then stay on event detail
-    await openProjectDetail(currentProjectId);
-    const updatedEv = (currentProjectDetail?.events ?? []).find(
-      (e) => e.eventId === currentEventId,
-    );
-    if (updatedEv) {
-      document.getElementById("event-detail-title").textContent    = escapeHtml(updatedEv.name);
-      document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(updatedEv);
+    // Refresh the header with the updated form values
+    const updatedName = document.getElementById("edit-event-name")?.value.trim();
+    if (updatedName) {
+      document.getElementById("event-detail-title").textContent = escapeHtml(updatedName);
+      if (_currentEventData) _currentEventData.name = updatedName;
     }
     activateSection("event-detail");
   } catch (err) {
@@ -8898,8 +8823,9 @@ async function _executeDeleteEvent() {
       throw new Error(data.error || "Failed to delete event.");
     }
     _closeDeleteConfirm();
-    await openProjectDetail(currentProjectId);
-    activateSection("project-detail");
+    _stopStaffingPoll();
+    await loadProjects();
+    activateSection("events");
   } catch (err) {
     document.getElementById("delete-confirm-message").textContent = err.message;
   } finally {

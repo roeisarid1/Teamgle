@@ -69,9 +69,9 @@
       </button>
     </div>
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active" data-section="projects">
-        <i data-lucide="folder-kanban"></i>
-        <span>Projects</span>
+      <a href="#" class="nav-item active" data-section="events">
+        <i data-lucide="calendar-days"></i>
+        <span>Events</span>
       </a>
       <a href="#" class="nav-item" data-section="employees">
         <i data-lucide="users"></i>
@@ -246,17 +246,17 @@
     </div>
 
     <!-- Projects section -->
-    <div class="section-card page-section" id="section-projects" data-section="projects" style="display:none">
+    <div class="section-card page-section" id="section-events" data-section="events" style="display:none">
 
       <!-- Page Header -->
       <div class="section-header">
-        <h2>Projects</h2>
+        <h2>Events</h2>
         <div class="events-header-actions">
           <input type="search" class="search-input events-search" id="search-projects"
-            placeholder="Search projects…" autocomplete="off" />
+            placeholder="Search events…" autocomplete="off" />
           <button class="btn-primary btn-with-icon" id="btn-create-project">
-            <i data-lucide="folder-plus"></i>
-            Create Project
+            <i data-lucide="calendar-plus"></i>
+            Create Event
           </button>
         </div>
       </div>
@@ -294,27 +294,27 @@
       <!-- Kanban Board -->
       <div class="events-kanban">
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-blue">Today's Projects</div>
+          <div class="kanban-col-header kanban-blue">Today's Events</div>
           <div class="kanban-col-body" id="kanban-today"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-amber">Upcoming Projects</div>
+          <div class="kanban-col-header kanban-amber">Upcoming Events</div>
           <div class="kanban-col-body" id="kanban-upcoming"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-green">Completed Projects</div>
+          <div class="kanban-col-header kanban-green">Completed Events</div>
           <div class="kanban-col-body" id="kanban-completed"></div>
         </div>
         <div class="kanban-column">
-          <div class="kanban-col-header kanban-grey">Draft Projects</div>
+          <div class="kanban-col-header kanban-grey">Draft Events</div>
           <div class="kanban-col-body" id="kanban-draft"></div>
         </div>
       </div>
 
     </div>
 
-    <!-- Create Project full-page form -->
-    <div class="page-section" id="section-create-project" data-section="create-project" style="display:none">
+    <!-- Create Event full-page form -->
+    <div class="page-section" id="section-create-event" data-section="create-event" style="display:none">
 
       <!-- Header bar -->
       <div class="cp-header">
@@ -324,8 +324,8 @@
             Back
           </button>
           <div>
-            <div class="cp-title">Create New Project</div>
-            <div class="cp-subtitle">Project timeline, events, and staffing structure</div>
+            <div class="cp-title">Create New Event</div>
+            <div class="cp-subtitle">Event details and staffing structure</div>
           </div>
         </div>
         <div class="cp-header-right">
@@ -334,8 +334,8 @@
             Save Draft
           </button>
           <button class="btn-primary btn-with-icon" id="btn-submit-project" type="button">
-            <i data-lucide="folder-plus"></i>
-            Create Project
+            <i data-lucide="calendar-plus"></i>
+            Create Event
           </button>
         </div>
       </div>
@@ -344,27 +344,51 @@
 
       <div class="cp-body">
 
-        <!-- Section 1: Project Details -->
+        <!-- Event Details -->
         <div class="form-section-card">
           <div class="form-section-header">
             <span class="form-section-title">
-              <span class="form-section-icon"><i data-lucide="folder-kanban"></i></span>
-              Project Details
+              <span class="form-section-icon"><i data-lucide="calendar-days"></i></span>
+              Event Details
             </span>
           </div>
           <div class="form-section-body create-project-grid">
             <div class="field create-project-name" id="field-proj-name">
-              <label for="proj-name">Project Name <span class="req">*</span></label>
+              <label for="proj-name">Event Name <span class="req">*</span></label>
               <input type="text" id="proj-name" placeholder="Annual Gala 2025" autocomplete="off" />
             </div>
             <div class="create-date-row">
-              <div class="field create-date-card" id="field-proj-start">
-                <label for="proj-start-date">Start Date <span class="req">*</span></label>
-                <input type="date" id="proj-start-date" />
+              <div class="field create-date-card" id="field-ev-start">
+                <label for="ev-start-time">Start <span class="req">*</span></label>
+                <input type="datetime-local" id="ev-start-time" />
               </div>
-              <div class="field create-date-card" id="field-proj-end">
-                <label for="proj-end-date">End Date <span class="req">*</span></label>
-                <input type="date" id="proj-end-date" />
+              <div class="field create-date-card" id="field-ev-end">
+                <label for="ev-end-time">End <span class="req">*</span></label>
+                <input type="datetime-local" id="ev-end-time" />
+              </div>
+            </div>
+            <div class="create-date-row">
+              <div class="field">
+                <label for="ev-location">Location</label>
+                <input type="text" id="ev-location" placeholder="Venue name or address" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="ev-type">Event Type</label>
+                <input type="text" id="ev-type" placeholder="e.g. Conference, Wedding…" autocomplete="off" />
+              </div>
+            </div>
+            <div class="create-date-row">
+              <div class="field">
+                <label for="ev-attendees">Attendees Count</label>
+                <input type="number" id="ev-attendees" min="0" placeholder="0" />
+              </div>
+              <div class="field">
+                <label for="ev-budget">Planned Budget</label>
+                <input type="number" id="ev-budget" min="0" step="0.01" placeholder="0.00" />
+              </div>
+              <div class="field">
+                <label for="ev-revenue">Expected Revenue</label>
+                <input type="number" id="ev-revenue" min="0" step="0.01" placeholder="0.00" />
               </div>
             </div>
             <div class="customer-field-row">
@@ -382,29 +406,28 @@
           </div>
         </div>
 
-        <!-- Section 2: Events -->
+        <!-- Shifts -->
         <div class="form-section-card">
           <div class="form-section-header">
             <span class="form-section-title">
-              <span class="form-section-icon"><i data-lucide="calendar-days"></i></span>
-              Events
+              <span class="form-section-icon"><i data-lucide="users"></i></span>
+              Shifts
             </span>
             <div class="form-section-header-actions">
-              <button class="btn-link" id="btn-collapse-events" type="button">Collapse all</button>
               <button class="btn-add-shift btn-with-icon" id="btn-add-event" type="button">
-                <i data-lucide="calendar-plus"></i>
-                Add Event
+                <i data-lucide="plus"></i>
+                Add Shift
               </button>
             </div>
           </div>
           <div class="form-section-body" id="events-container">
-            <!-- Event blocks injected by JS -->
+            <!-- Shift blocks injected by JS -->
           </div>
         </div>
 
       </div>
 
-    </div><!-- end #section-create-project -->
+    </div><!-- end #section-create-event -->
 
     <!-- Project Detail full-page view -->
     <div class="page-section" id="section-project-detail" data-section="project-detail" style="display:none">
@@ -523,11 +546,7 @@
             Back
           </button>
           <div>
-            <div class="cp-title cp-title--breadcrumb">
-              <span class="ed-crumb-project" id="event-detail-project-name"></span>
-              <span class="ed-crumb-sep"> / </span>
-              <span id="event-detail-title">Event</span>
-            </div>
+            <div class="cp-title" id="event-detail-title">Event</div>
             <div class="cp-subtitle" id="event-detail-subtitle"></div>
           </div>
         </div>
@@ -546,6 +565,7 @@
       <div class="pd-tabs" id="event-detail-tabs">
         <button class="pd-tab active" data-etab="staffing">Staffing</button>
         <button class="pd-tab" data-etab="workers">Workers</button>
+        <button class="pd-tab" data-etab="gantt">Gantt</button>
         <button class="pd-tab" data-etab="tasks">Tasks</button>
         <button class="pd-tab" data-etab="briefs">Briefs</button>
         <button class="pd-tab" data-etab="expenses">Expenses</button>
@@ -563,6 +583,11 @@
         <!-- Workers tab -->
         <div class="ed-panel" data-etab-panel="workers" style="display:none">
           <div id="ed-workers-root"></div>
+        </div>
+
+        <!-- Gantt tab -->
+        <div class="ed-panel" data-etab-panel="gantt" style="display:none">
+          <div id="ed-gantt-container"></div>
         </div>
 
         <!-- Tasks tab -->
