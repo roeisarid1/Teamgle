@@ -2203,7 +2203,7 @@ function renderGantt(schedule, container) {
                   data-event-id="${escapeHtml(ev.eventId)}"
                   data-event-date="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).date : ""}"
                   data-event-start-time="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).time : ""}"
-                  data-event-end-time="${ev.endTime ? _splitIsoToLocalParts(ev.endTime).time : ""}">+ Add Shift</button>
+                  data-event-end-time="${ev.endTime ? _splitIsoToLocalParts(ev.endTime).time : ""}">${_t("+ Add Shift", "+ הוסף משמרת")}</button>
         </div>
       </div>`;
     })
@@ -2979,7 +2979,7 @@ function wireBriefDeleteBtn(row, deleteBtn, brief) {
 }
 
 function briefEmptyStateHtml() {
-  return '<div class="pd-empty-state">No briefs yet. Start by adding your first brief.</div>';
+  return `<div class="pd-empty-state">${_t("No briefs yet. Start by adding your first brief.", "אין תדריכים עדיין. התחל בהוספת התדריך הראשון.")}</div>`;
 }
 
 function formatBriefDate(isoString) {
@@ -4246,18 +4246,18 @@ async function appendStandaloneShiftRow(roles) {
   row.className = "shift-row";
   row.innerHTML = `
     <div class="field">
-      <label>Role *</label>
+      <label>${_t("Role", "תפקיד")} *</label>
       <select>
-        <option value="">— Select role —</option>
+        <option value="">${_t("— Select role —", "— בחר תפקיד —")}</option>
         ${roleOptions}
       </select>
     </div>
     <div class="field">
-      <label>Qty *</label>
+      <label>${_t("Qty", "כמות")} *</label>
       <input type="number" placeholder="1" min="1" value="1" />
     </div>
     <div class="field datetime-field">
-      <label>Start *</label>
+      <label>${_t("Start", "התחלה")} *</label>
       <div class="datetime-group">
         <input type="date" class="dt-date shift-start-date" />
         <input type="time" class="dt-time shift-start-time" step="300" />
@@ -4520,17 +4520,17 @@ async function appendEventBlock() {
       <!-- Shifts sub-section -->
       <div class="shifts-subsection">
         <div class="shifts-subheader">
-          <span class="shifts-subheader-label"><i data-lucide="users"></i> Shifts</span>
+          <span class="shifts-subheader-label"><i data-lucide="users"></i> ${_t("Shifts", "משמרות")}</span>
           <button class="btn-add-shift btn-with-icon" type="button" data-add-shift="${idx}">
             <i data-lucide="plus"></i>
-            Add Shift
+            ${_t("Add Shift", "הוסף משמרת")}
           </button>
         </div>
         <div class="shifts-col-headers">
-          <span>Role</span>
-          <span>Qty</span>
-          <span>Start (date &amp; time)</span>
-          <span>End (date &amp; time)</span>
+          <span>${_t("Role", "תפקיד")}</span>
+          <span>${_t("Qty", "כמות")}</span>
+          <span>${_t("Start (date & time)", "התחלה (תאריך ושעה)")}</span>
+          <span>${_t("End (date & time)", "סיום (תאריך ושעה)")}</span>
           <span></span>
         </div>
         <div class="shifts-list" id="shifts-list-${idx}">
@@ -4643,31 +4643,31 @@ function appendShiftRow(eventIdx, roles) {
   row.className = "shift-row";
   row.innerHTML = `
     <div class="field">
-      <label>Role *</label>
+      <label>${_t("Role", "תפקיד")} *</label>
       <select>
-        <option value="">— Select role —</option>
+        <option value="">${_t("— Select role —", "— בחר תפקיד —")}</option>
         ${roleOptions}
       </select>
     </div>
     <div class="field">
-      <label>Qty *</label>
+      <label>${_t("Qty", "כמות")} *</label>
       <input type="number" placeholder="1" min="1" value="1" />
     </div>
     <div class="field datetime-field">
-      <label>Start *</label>
+      <label>${_t("Start", "התחלה")} *</label>
       <div class="datetime-group">
         <input type="date" class="dt-date shift-start-date" />
         <input type="time" class="dt-time shift-start-time" step="300" />
       </div>
     </div>
     <div class="field datetime-field">
-      <label>End *</label>
+      <label>${_t("End", "סיום")} *</label>
       <div class="datetime-group">
         <input type="date" class="dt-date shift-end-date" />
         <input type="time" class="dt-time shift-end-time" step="300" />
       </div>
     </div>
-    <button class="btn-remove-shift" type="button" title="Remove shift" aria-label="Remove shift">
+    <button class="btn-remove-shift" type="button" title="${_t("Remove shift", "הסר משמרת")}" aria-label="${_t("Remove shift", "הסר משמרת")}">
       <i data-lucide="x"></i>
     </button>
   `;
@@ -5204,7 +5204,7 @@ document
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `${_ICON.plus} Add Shift`;
+      btn.innerHTML = `${_ICON.plus} ${_t("Add Shift", "הוסף משמרת")}`;
     }
   });
 
@@ -5430,7 +5430,7 @@ function _buildWorkerRow(worker, sectionType) {
     if (sectionType !== "rejected")
       btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
     if (sectionType === "rejected")
-      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="${_t("Move to Potential", "העבר לעובדים פוטנציאליים")}"><i data-lucide="users"></i> ${_t("Return to Pool", "החזר למאגר")}</button>`;
   }
   btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Direct message"><i data-lucide="message-circle"></i></button>`;
   if (worker.shiftId) {
@@ -5928,7 +5928,7 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
     // btn may be detached after partial re-render — re-query or restore if still attached
     if (btn.isConnected) {
       btn.disabled = false;
-      btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
+    btn.innerHTML = `<i data-lucide="users"></i> ${_t("Return to Pool", "החזר למאגר")}`;
       if (window.lucide) lucide.createIcons();
     }
     alert("Failed to return worker to pool. Please try again.");
@@ -6005,7 +6005,7 @@ function _replacePotentialContent(eventId, workers) {
       `<option value="">All Roles</option>` +
       roles.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
     shiftSelect.innerHTML =
-      `<option value="">All Shifts</option>` +
+      `<option value="">${_t("All Shifts", "כל המשמרות")}</option>` +
       shifts
         .map((s) => {
           const fmt = (dt) =>
@@ -7444,7 +7444,7 @@ async function renderEdExpensesTab() {
 function _edRenderExpenseList(list) {
   if (_edExpensesData.length === 0) {
     list.innerHTML =
-      '<div class="pd-empty-state">No expenses recorded yet.</div>';
+      `<div class="pd-empty-state">${_t("No expenses recorded yet.", "לא נרשמו הוצאות עדיין.")}</div>`;
     return;
   }
   list.innerHTML = "";
@@ -7720,7 +7720,7 @@ function _edAddNewExpenseRow() {
     row.remove();
     if (_edExpensesData !== null && _edExpensesData.length === 0) {
       list.innerHTML =
-        '<div class="pd-empty-state">No expenses recorded yet.</div>';
+        `<div class="pd-empty-state">${_t("No expenses recorded yet.", "לא נרשמו הוצאות עדיין.")}</div>`;
     }
   });
 
@@ -7969,7 +7969,7 @@ function _edBuildPayrollRowHTML(item, idx) {
 
 function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
-    return '<div class="pd-empty-state">No approved workers for payroll.</div>';
+    return `<div class="pd-empty-state">${_t("No approved workers for payroll.", "אין עובדים מאושרים לשכר.")}</div>`;
   }
   const rows = items
     .map((item, idx) => _edBuildPayrollRowHTML(item, idx))
@@ -8168,7 +8168,10 @@ function _edBuildFinanceHTML(payroll, expenses) {
     .join("");
 
   if (financePayroll.length === 0 && Object.keys(byType).length === 0) {
-    return '<div class="pd-empty-state">No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.</div>';
+    return `<div class="pd-empty-state">${_t(
+      "No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.",
+      "אין עדיין נתונים מוכנים לכספים. יש לאשר שעות ולהגדיר סטטוס תשלום כמאושר או שולם.",
+    )}</div>`;
   }
 
   const grandTotal = totalLabor + totalExpenses;
@@ -8708,7 +8711,10 @@ function _invBuildFinanceBlock(invoices, opts = {}) {
       <table class="ed-worker-table">
         <thead><tr><th>Request #</th><th>Status</th><th>Date</th><th>Due</th><th>Amount</th><th>Paid</th><th>Balance</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>` : `<p class="pd-empty-state" style="padding:12px 0">No payment requests yet for this ${opts.context || "item"}.</p>`}
+      </table>` : `<p class="pd-empty-state" style="padding:12px 0">${opts.context === "event"
+        ? _t("No payment requests yet for this event.", "אין עדיין דרישות תשלום לאירוע הזה.")
+        : _t("No payment requests yet for this item.", "אין עדיין דרישות תשלום לפריט הזה.")
+      }</p>`}
   </div>`;
 }
 
