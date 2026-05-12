@@ -398,7 +398,7 @@ public class ProjectService : IProjectService
 
     // ── Event Expenses ─────────────────────────────────────────────────────
     private static readonly HashSet<string> ValidExpenseTypes =
-        ["venue", "catering", "equipment", "staffing", "transport", "marketing", "other"];
+        ["venue", "catering", "equipment", "staff", "transport", "marketing", "other"];
 
     public async Task<IEnumerable<EventExpenseItem>?> GetEventExpensesAsync(string firebaseUid, string eventId)
     {
@@ -410,6 +410,8 @@ public class ProjectService : IProjectService
     {
         if (string.IsNullOrWhiteSpace(request.ExpenseType))
             throw new ArgumentException("Expense type is required.");
+        if (!ValidExpenseTypes.Contains(request.ExpenseType))
+            throw new ArgumentException($"Invalid expense_type '{request.ExpenseType}'. Allowed: venue, catering, equipment, staff, transport, marketing, other.");
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.CreateEventExpenseAsync(eventId, request, firebaseUid);
     }
@@ -418,6 +420,8 @@ public class ProjectService : IProjectService
     {
         if (string.IsNullOrWhiteSpace(request.ExpenseType))
             throw new ArgumentException("Expense type is required.");
+        if (!ValidExpenseTypes.Contains(request.ExpenseType))
+            throw new ArgumentException($"Invalid expense_type '{request.ExpenseType}'. Allowed: venue, catering, equipment, staff, transport, marketing, other.");
         await ResolveCompanyIdAsync(firebaseUid);
         return await _projectRepo.UpdateEventExpenseAsync(expenseId, eventId, request, firebaseUid);
     }

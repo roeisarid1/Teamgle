@@ -1,6 +1,84 @@
 const LANGUAGE_KEY = "teamgle-language";
 
 const HE_BY_EN = {
+  "Teamgle — Sign In": "Teamgle — התחברות",
+  "Teamgle — Manager Dashboard": "Teamgle — לוח מנהל",
+  "Teamgle — Employee Dashboard": "Teamgle — לוח עובד",
+  "Workforce management platform": "מערכת לניהול עובדים ואירועים",
+  "Sign In": "התחברות",
+  "First Registration": "רישום ראשוני",
+  "Email address": "כתובת אימייל",
+  "Password": "סיסמה",
+  "Your password": "הסיסמה שלך",
+  "Forgot password?": "שכחת סיסמה?",
+  "Only pre-registered team members can sign in.": "רק אנשי צוות שנרשמו מראש יכולים להתחבר.",
+  "🔐 Only pre-registered team members can sign in.": "🔐 רק אנשי צוות שנרשמו מראש יכולים להתחבר.",
+  "Contact your manager if you need access.": "פנה למנהל שלך אם אתה צריך גישה.",
+  "← Back to Sign In": "חזרה להתחברות ←",
+  "Back to Sign In": "חזרה להתחברות",
+  "Reset your password": "איפוס סיסמה",
+  "Enter your email and we'll send you a reset link.": "הזן אימייל ונשלח לך קישור לאיפוס הסיסמה.",
+  "Send Reset Email": "שלח אימייל איפוס",
+  "The email your manager registered you with": "האימייל שהמנהל רשם עבורך",
+  "Create password": "יצירת סיסמה",
+  "At least 8 characters": "לפחות 8 תווים",
+  "Confirm password": "אישור סיסמה",
+  "Repeat your password": "הקלד שוב את הסיסמה",
+  "Create Account": "צור חשבון",
+  "First Registration is only available to users": "רישום ראשוני זמין רק למשתמשים",
+  "👥 First Registration is only available to users": "👥 רישום ראשוני זמין רק למשתמשים",
+  "who were already added to the system by a manager.": "שכבר נוספו למערכת על ידי מנהל.",
+  "Please enter your email address.": "אנא הזן כתובת אימייל.",
+  "Please enter a valid email address.": "אנא הזן כתובת אימייל תקינה.",
+  "If this email is registered, you will receive a password reset link shortly. Check your inbox.": "אם האימייל רשום, תקבל בקרוב קישור לאיפוס סיסמה. בדוק את תיבת הדואר.",
+  "Please wait…": "אנא המתן…",
+  "Please enter your email and password.": "אנא הזן אימייל וסיסמה.",
+  "Login verification failed.": "אימות ההתחברות נכשל.",
+  "All fields are required.": "כל השדות חובה.",
+  "Password must be at least 8 characters.": "הסיסמה חייבת להיות באורך 8 תווים לפחות.",
+  "Passwords do not match.": "הסיסמאות אינן תואמות.",
+  "You are not eligible for registration.": "אינך זכאי לרישום.",
+  "Registration could not be completed. Please try again.": "לא ניתן היה להשלים את הרישום. נסה שוב.",
+  "Registration complete! You can now log in.": "הרישום הושלם! אפשר להתחבר עכשיו.",
+  "Invalid email or password.": "אימייל או סיסמה שגויים.",
+  "This email is already registered. Please log in instead.": "האימייל הזה כבר רשום. התחבר במקום זאת.",
+  "Password is too weak. Use at least 8 characters.": "הסיסמה חלשה מדי. השתמש ב-8 תווים לפחות.",
+  "Too many attempts. Please wait a moment and try again.": "יותר מדי ניסיונות. המתן רגע ונסה שוב.",
+  "Network error. Please check your connection.": "שגיאת רשת. בדוק את החיבור שלך.",
+  "Access denied. Manager accounts only.": "גישה נדחתה. חשבונות מנהלים בלבד.",
+  "Access denied. Employee accounts only.": "גישה נדחתה. חשבונות עובדים בלבד.",
+  "Failed to load roles.": "טעינת תפקידים נכשלה.",
+  "No roles available.": "אין תפקידים זמינים.",
+  "No roles assigned": "לא שויכו תפקידים",
+  "No roles assigned.": "לא שויכו תפקידים.",
+  "Failed to load.": "הטעינה נכשלה.",
+  "Failed to load tasks.": "טעינת משימות נכשלה.",
+  "Failed to load finance data.": "טעינת נתוני כספים נכשלה.",
+  "Failed to load users. Please try again.": "טעינת משתמשים נכשלה. נסה שוב.",
+  "Loading messages…": "טוען הודעות…",
+  "Loading schedule…": "טוען לוח זמנים…",
+  "Loading workers…": "טוען עובדים…",
+  "Loading finance summary…": "טוען סיכום כספי…",
+  "Loading project finances…": "טוען כספי פרויקט…",
+  "Loading briefs…": "טוען תדריכים…",
+  "Loading expenses…": "טוען הוצאות…",
+  "Loading payroll…": "טוען שכר…",
+  "Failed to load schedule.": "טעינת לוח הזמנים נכשלה.",
+  "Failed to load workers.": "טעינת עובדים נכשלה.",
+  "Failed to load briefs.": "טעינת תדריכים נכשלה.",
+  "Failed to load expenses.": "טעינת הוצאות נכשלה.",
+  "Failed to load payroll.": "טעינת שכר נכשלה.",
+  "Delete this task?": "למחוק את המשימה הזו?",
+  "Saving…": "שומר…",
+  "Saving...": "שומר...",
+  "Acknowledged": "אושר",
+  "✓ Acknowledged": "✓ אושר",
+  "Please enter a start time.": "אנא הזן שעת התחלה.",
+  "Please enter an end time.": "אנא הזן שעת סיום.",
+  "Switch to Hebrew": "מעבר לעברית",
+  "Switch to English": "מעבר לאנגלית",
+  "Manager": "מנהל",
+  "Employee": "עובד",
   "Name": "שם",
   "Role": "תפקיד",
   "Company": "חברה",
@@ -30,6 +108,8 @@ const HE_BY_EN = {
   "Roles": "תפקידים",
   "Actions": "פעולות",
   "Add Customer": "הוסף לקוח",
+  "New Customer": "לקוח חדש",
+  "None": "ללא",
   "Company Name": "שם חברה",
   "Contact": "איש קשר",
   "New Payment Request": "דרישת תשלום חדשה",
@@ -57,6 +137,11 @@ const HE_BY_EN = {
   "Edit": "ערוך",
   "Delete": "מחק",
   "Chat": "צ'אט",
+  "Shift Chat": "צ'אט משמרת",
+  "Open shift chat": "פתח צ'אט משמרת",
+  "Choose a shift…": "בחר משמרת…",
+  "No shifts defined for this event.": "לא הוגדרו משמרות לאירוע הזה.",
+  "Failed to load shifts.": "טעינת המשמרות נכשלה.",
   "Staffing": "שיבוץ עובדים",
   "Workers": "עובדים",
   "Gantt": "גאנט",
@@ -135,6 +220,43 @@ const HE_BY_EN = {
   "Paid Amount (₪)": "סכום ששולם (₪)",
   "Payment Date": "תאריך תשלום",
   "Status (auto-calculated if blank)": "סטטוס (יחושב אוטומטית אם ריק)",
+  "Auto": "אוטומטי",
+  "Partial": "חלקי",
+  "Edit Payment Request": "ערוך דרישת תשלום",
+  "Update Request": "עדכן דרישה",
+  "Save Request": "שמור דרישה",
+  "Request #": "מספר דרישה",
+  "Amount (₪)": "סכום (₪)",
+  "e.g. REQ-2026-001": "לדוגמה: REQ-2026-001",
+  "— select customer —": "— בחר לקוח —",
+  "— select event —": "— בחר אירוע —",
+  "— select event (optional) —": "— בחר אירוע (אופציונלי) —",
+  "— select project —": "— בחר פרויקט —",
+  "Record Payment": "רישום תשלום",
+  "Update payment details for this request": "עדכן פרטי תשלום עבור דרישה זו",
+  "total": "סה\"כ",
+  "Please select a customer.": "יש לבחור לקוח.",
+  "Invoice number is required.": "מספר הדרישה הוא שדה חובה.",
+  "Invoice date is required.": "תאריך הדרישה הוא שדה חובה.",
+  "Due date is required.": "תאריך יעד הוא שדה חובה.",
+  "Amount must be greater than 0.": "הסכום חייב להיות גדול מ-0.",
+  "Paid amount must be 0 or greater.": "הסכום ששולם חייב להיות 0 או יותר.",
+  "Payment save failed.": "שמירת התשלום נכשלה.",
+  "Create failed.": "יצירת הדרישה נכשלה.",
+  "Update failed.": "עדכון הדרישה נכשל.",
+  "Failed to download PDF.": "הורדת ה-PDF נכשלה.",
+  "Download PDF": "הורד PDF",
+  "Total Planned Budget": "סה\"כ תקציב מתוכנן",
+  "Total Expected Revenue": "סה\"כ הכנסה צפויה",
+  "Total Labor Cost": "עלות עבודה כוללת",
+  "Grand Total Cost": "עלות כוללת",
+  "Profit / Loss": "רווח / הפסד",
+  "Labor Breakdown": "פירוט עבודה",
+  "Total Labor": "סה\"כ עבודה",
+  "Breakdown by Event": "פירוט לפי אירוע",
+  "No events in this project yet.": "אין עדיין אירועים בפרויקט הזה.",
+  "Cancel this payment request? It will be marked as Cancelled.": "לבטל את דרישת התשלום? הסטטוס יעודכן למבוטל.",
+  "Failed to cancel payment request.": "ביטול דרישת התשלום נכשל.",
   "First Name": "שם פרטי",
   "Last Name": "שם משפחה",
   "Job Title": "תפקיד",
@@ -219,6 +341,19 @@ const HE_BY_EN = {
   "Category": "קטגוריה",
   "Description": "תיאור",
   "Vendor": "ספק",
+  "Type": "סוג",
+  "venue": "מקום",
+  "catering": "קייטרינג",
+  "equipment": "ציוד",
+  "transport": "הסעות",
+  "marketing": "שיווק",
+  "staff": "צוות",
+  "other": "אחר",
+  "Vendor name…": "שם ספק…",
+  "Description…": "תיאור…",
+  "Delete this expense?": "למחוק את ההוצאה הזו?",
+  "Delete failed. Try again.": "המחיקה נכשלה. נסה שוב.",
+  "Dismiss": "סגור",
   "Expense Date": "תאריך הוצאה",
   "Event name": "שם האירוע",
   "Project name": "שם הפרויקט",
@@ -274,6 +409,26 @@ const HE_BY_EN = {
   "Payroll": "שכר",
   "Approve Hours": "אשר שעות",
   "Hours": "שעות",
+  "Pay": "שכר",
+  "Review": "סקור",
+  "Close": "סגור",
+  "Not reported": "לא דווח",
+  "Submitted": "הוגש",
+  "Actual Arrival": "הגעה בפועל",
+  "Actual Departure": "עזיבה בפועל",
+  "Duration": "משך",
+  "Employee Report": "דיווח עובד",
+  "Manager Approval": "אישור מנהל",
+  "Regular Hours": "שעות רגילות",
+  "Overtime is calculated automatically (first 2h ×1.25, beyond ×1.50)": "שעות נוספות מחושבות אוטומטית (שעתיים ראשונות ×1.25, מעבר לכך ×1.50)",
+  "Rate/hr (₪)": "תעריף לשעה (₪)",
+  "Travel Refund (₪)": "החזר נסיעות (₪)",
+  "Bonus (₪)": "בונוס (₪)",
+  "Penalty (₪)": "קנס (₪)",
+  "pending": "ממתין",
+  "approved": "מאושר",
+  "paid": "שולם",
+  "Employee has not reported hours yet.": "העובד עדיין לא דיווח שעות.",
   "No workers with selected shifts to send.": "אין עובדים עם משמרות נבחרות לשליחה.",
   "All available workers have been offered shifts.": "כל העובדים הזמינים קיבלו הצעות למשמרות.",
   "Send shift requests": "שלח בקשות משמרת",
@@ -300,7 +455,7 @@ function normalizeLanguage(lang) {
 }
 
 export function getCurrentLanguage() {
-  return normalizeLanguage(localStorage.getItem(LANGUAGE_KEY) || "en");
+  return normalizeLanguage(localStorage.getItem(LANGUAGE_KEY) || "he");
 }
 
 export function _t(en, he) {
@@ -333,6 +488,7 @@ export function applyTranslations(root = document) {
   try {
     const lang = getCurrentLanguage();
     applyLanguageDirection(lang);
+    translateDocumentTitle(lang);
     updateLanguageButtons(root, lang);
 
     root.querySelectorAll("[data-i18n]").forEach((el) => {
@@ -391,8 +547,17 @@ function translateTextElements(root) {
 function updateLanguageButtons(root, lang) {
   root.querySelectorAll("[data-language-toggle]").forEach((btn) => {
     btn.textContent = lang === "he" ? "English" : "עברית";
-    btn.setAttribute("title", lang === "he" ? "Switch to English" : "החלף לעברית");
+    const titleEn = lang === "he" ? "Switch to English" : "Switch to Hebrew";
+    btn.dataset.i18nTitleEn = titleEn;
+    btn.setAttribute("title", lang === "he" ? (HE_BY_EN[titleEn] ?? titleEn) : titleEn);
   });
+}
+
+function translateDocumentTitle(lang) {
+  const current = document.title;
+  const en = document.documentElement.dataset.i18nTitleEn ?? EN_BY_HE[current] ?? current;
+  document.documentElement.dataset.i18nTitleEn = en;
+  document.title = lang === "he" ? (HE_BY_EN[en] ?? en) : en;
 }
 
 function startTranslationObserver() {
@@ -405,6 +570,7 @@ function startTranslationObserver() {
   });
   observer.observe(document.body, {
     childList: true,
+    characterData: true,
     subtree: true,
   });
 }

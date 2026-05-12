@@ -119,6 +119,31 @@ body {
 .accent-bar span:nth-child(2) { background: var(--yellow); }
 .accent-bar span:nth-child(3) { background: var(--green); }
 
+.auth-language-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 32px 0;
+  background: #fff;
+}
+
+.btn-language-toggle {
+  min-width: 76px;
+  padding: 7px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.btn-language-toggle:hover {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 .auth-tabs {
   display: grid;
@@ -375,6 +400,48 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+body.rtl {
+  direction: rtl;
+}
+
+body.rtl .auth-header,
+body.rtl .form-hint {
+  text-align: center;
+}
+
+body.rtl .field label,
+body.rtl .forgot-heading,
+body.rtl .msg-error,
+body.rtl .msg-success {
+  text-align: right;
+}
+
+body.rtl .input-wrap .icon {
+  left: auto;
+  right: 12px;
+}
+
+body.rtl .field input {
+  padding: 11px 38px 11px 14px;
+  text-align: right;
+}
+
+body.rtl .field input[type="email"],
+body.rtl .field input[type="password"] {
+  direction: ltr;
+  text-align: left;
+}
+
+body.rtl .forgot-link-wrap {
+  text-align: left;
+}
+
+body.rtl .msg-error,
+body.rtl .msg-success {
+  border-left-width: 1px;
+  border-right: 3px solid currentColor;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

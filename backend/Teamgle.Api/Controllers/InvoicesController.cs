@@ -141,7 +141,7 @@ public class InvoicesController : ControllerBase
 
     // ── GET /api/invoices/{invoiceId}/pdf ─────────────────────────────────
     [HttpGet("{invoiceId}/pdf")]
-    public async Task<IActionResult> DownloadInvoicePdf(string invoiceId)
+    public async Task<IActionResult> DownloadInvoicePdf(string invoiceId, [FromQuery] string? lang = null)
     {
         var uid = await GetFirebaseUidAsync();
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
@@ -150,8 +150,10 @@ public class InvoicesController : ControllerBase
             var inv = await _invoiceService.GetInvoiceByIdAsync(invoiceId, uid);
             if (inv == null) return NotFound(new { error = "Invoice not found." });
 
-            var bytes = GenerateInvoicePdf(inv);
-            var fileName = $"invoice-{inv.InvoiceNumber.Replace("/", "-")}.pdf";
+            var isHebrew = string.Equals(lang, "he", StringComparison.OrdinalIgnoreCase);
+            var bytes = GenerateInvoicePdf(inv, isHebrew);
+            var prefix = isHebrew ? "דרישת-תשלום" : "payment-request";
+            var fileName = $"{prefix}-{inv.InvoiceNumber.Replace("/", "-")}.pdf";
             return File(bytes, "application/pdf", fileName);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
@@ -162,20 +164,21 @@ public class InvoicesController : ControllerBase
         }
     }
 
-    private static byte[] GenerateInvoicePdf(InvoiceResponse inv)
+    private static byte[] GenerateInvoicePdf(InvoiceResponse inv, bool isHebrew)
     {
         string Fmt(DateTime? d) => d.HasValue ? d.Value.ToString("dd MMM yyyy") : "—";
         string FmtMoney(decimal m) => $"₪{m:N2}";
         string StatusLabel(string s) => s switch
         {
-            "draft"     => "Draft",
-            "sent"      => "Sent",
-            "partial"   => "Partial",
-            "paid"      => "Paid",
-            "overdue"   => "Overdue",
-            "cancelled" => "Cancelled",
+            "draft"     => isHebrew ? "טיוטה" : "Draft",
+            "sent"      => isHebrew ? "נשלח" : "Sent",
+            "partial"   => isHebrew ? "חלקי" : "Partial",
+            "paid"      => isHebrew ? "שולם" : "Paid",
+            "overdue"   => isHebrew ? "באיחור" : "Overdue",
+            "cancelled" => isHebrew ? "בוטל" : "Cancelled",
             _           => s,
         };
+        string T(string en, string he) => isHebrew ? he : en;
 
         return Document.Create(container =>
         {
@@ -190,13 +193,26 @@ public class InvoicesController : ControllerBase
                     // Header
                     col.Item().Row(row =>
                     {
-                        row.RelativeItem().Text("Teamgle")
-                            .FontSize(26).Bold().FontColor("#4F6EF7");
-                        row.RelativeItem().AlignRight().Column(c =>
+                        if (isHebrew)
                         {
-                            c.Item().Text("INVOICE").FontSize(22).Bold().FontColor("#1e293b");
-                            c.Item().Text($"# {inv.InvoiceNumber}").FontSize(12).FontColor("#64748b");
-                        });
+                            row.RelativeItem().AlignRight().Column(c =>
+                            {
+                                c.Item().Text(T("PAYMENT REQUEST", "דרישת תשלום")).FontSize(22).Bold().FontColor("#1e293b");
+                                c.Item().Text($"# {inv.InvoiceNumber}").FontSize(12).FontColor("#64748b");
+                            });
+                            row.RelativeItem().AlignLeft().Text("Teamgle")
+                                .FontSize(26).Bold().FontColor("#4F6EF7");
+                        }
+                        else
+                        {
+                            row.RelativeItem().Text("Teamgle")
+                                .FontSize(26).Bold().FontColor("#4F6EF7");
+                            row.RelativeItem().AlignRight().Column(c =>
+                            {
+                                c.Item().Text("PAYMENT REQUEST").FontSize(22).Bold().FontColor("#1e293b");
+                                c.Item().Text($"# {inv.InvoiceNumber}").FontSize(12).FontColor("#64748b");
+                            });
+                        }
                     });
 
                     col.Item().PaddingVertical(12).LineHorizontal(1).LineColor("#e2e8f0");
@@ -206,26 +222,26 @@ public class InvoicesController : ControllerBase
                     {
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text("Invoice Date").FontSize(9).FontColor("#94a3b8");
+                            c.Item().Text(T("Request Date", "תאריך דרישה")).FontSize(9).FontColor("#94a3b8");
                             c.Item().Text(Fmt(inv.InvoiceDate)).Bold();
                         });
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text("Due Date").FontSize(9).FontColor("#94a3b8");
+                            c.Item().Text(T("Due Date", "תאריך יעד")).FontSize(9).FontColor("#94a3b8");
                             c.Item().Text(Fmt(inv.DueDate)).Bold();
                         });
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text("Status").FontSize(9).FontColor("#94a3b8");
+                            c.Item().Text(T("Status", "סטטוס")).FontSize(9).FontColor("#94a3b8");
                             c.Item().Text(StatusLabel(inv.PaymentStatus)).Bold();
                         });
                     });
 
-                    col.Item().PaddingTop(20).Text("Bill To").FontSize(9).FontColor("#94a3b8");
-                    col.Item().Text(inv.CustomerCompanyName ?? "—").Bold().FontSize(13);
+                    col.Item().PaddingTop(20).AlignRight().Text(T("Bill To", "לקוח")).FontSize(9).FontColor("#94a3b8");
+                    col.Item().AlignRight().Text(inv.CustomerCompanyName ?? "—").Bold().FontSize(13);
 
                     if (!string.IsNullOrWhiteSpace(inv.EventName))
-                        col.Item().PaddingTop(4).Text($"Event: {inv.EventName}").FontColor("#475569");
+                        col.Item().PaddingTop(4).AlignRight().Text($"{T("Event", "אירוע")}: {inv.EventName}").FontColor("#475569");
 
                     col.Item().PaddingVertical(20).LineHorizontal(1).LineColor("#e2e8f0");
 
@@ -240,18 +256,18 @@ public class InvoicesController : ControllerBase
 
                         table.Header(h =>
                         {
-                            h.Cell().Background("#f1f5f9").Padding(6).Text("Description").Bold();
-                            h.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text("Amount").Bold();
+                            h.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text(T("Description", "תיאור")).Bold();
+                            h.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text(T("Amount", "סכום")).Bold();
                         });
 
-                        table.Cell().Padding(6).Text("Invoice Amount");
+                        table.Cell().Padding(6).AlignRight().Text(T("Payment Request Amount", "סכום דרישת התשלום"));
                         table.Cell().Padding(6).AlignRight().Text(FmtMoney(inv.InvoiceAmount));
 
-                        table.Cell().Padding(6).Text("Paid");
+                        table.Cell().Padding(6).AlignRight().Text(T("Paid", "שולם"));
                         table.Cell().Padding(6).AlignRight().Text(FmtMoney(inv.PaidAmount)).FontColor("#16a34a");
 
                         var balance = inv.InvoiceAmount - inv.PaidAmount;
-                        table.Cell().Background("#f8fafc").Padding(6).Text("Balance Due").Bold();
+                        table.Cell().Background("#f8fafc").Padding(6).AlignRight().Text(T("Balance Due", "יתרה לתשלום")).Bold();
                         table.Cell().Background("#f8fafc").Padding(6).AlignRight()
                             .Text(FmtMoney(balance)).Bold()
                             .FontColor(balance > 0 ? "#dc2626" : "#16a34a");
@@ -259,13 +275,13 @@ public class InvoicesController : ControllerBase
 
                     if (!string.IsNullOrWhiteSpace(inv.Notes))
                     {
-                        col.Item().PaddingTop(20).Text("Notes").FontSize(9).FontColor("#94a3b8");
-                        col.Item().Text(inv.Notes).FontColor("#475569");
+                        col.Item().PaddingTop(20).AlignRight().Text(T("Notes", "הערות")).FontSize(9).FontColor("#94a3b8");
+                        col.Item().AlignRight().Text(inv.Notes).FontColor("#475569");
                     }
                 });
 
                 page.Footer().AlignCenter()
-                    .Text($"Generated by Teamgle · {DateTime.UtcNow:dd MMM yyyy}")
+                    .Text($"{T("Generated by Teamgle", "הופק על ידי Teamgle")} · {DateTime.UtcNow:dd MMM yyyy}")
                     .FontSize(9).FontColor("#94a3b8");
             });
         }).GeneratePdf();

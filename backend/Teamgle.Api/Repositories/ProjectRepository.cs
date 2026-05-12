@@ -186,6 +186,7 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@plannedBudget",   (object?)request.PlannedBudget      ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@expectedRevenue", (object?)request.ExpectedRevenue    ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@attendeesCount",  (object?)request.AttendeesCount     ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@customerId",      (object?)request.CustomerId         ?? DBNull.Value);
 
         await conn.OpenAsync();
         try
@@ -205,6 +206,8 @@ public class ProjectRepository : IProjectRepository
                     ExpectedRevenue = reader["expectedRevenue"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(reader["expectedRevenue"]),
                     AttendeesCount  = reader["attendeesCount"]  == DBNull.Value ? null : (int?)Convert.ToInt32(reader["attendeesCount"]),
                     ProjectId       = reader["projectId"]       == DBNull.Value ? null : reader["projectId"].ToString(),
+                    CustomerId      = reader["customerId"]      == DBNull.Value ? null : reader["customerId"].ToString(),
+                    CustomerName    = reader["customerName"]    == DBNull.Value ? null : reader["customerName"].ToString(),
                 };
             return null;
         }
@@ -1401,6 +1404,7 @@ public class ProjectRepository : IProjectRepository
                 s.start_time           AS ShiftStart,
                 s.end_time             AS ShiftEnd,
                 s.required_quantity    AS RequiredQuantity,
+                emp.cost_per_hour      AS CostPerHour,
                 (SELECT COUNT(*) FROM Employee_Shift ea
                  WHERE ea.shift_ID = s.Shift_ID
                    AND ea.status IN (
@@ -1409,11 +1413,12 @@ public class ProjectRepository : IProjectRepository
                    )
                 )                      AS ActiveAssignments
             FROM Employee_Shift es
-            INNER JOIN [User]  u  ON u.user_ID  = es.employee_user_ID
-            INNER JOIN Shift   s  ON s.Shift_ID = es.shift_ID
-            INNER JOIN Roll    r  ON r.Roll_ID  = s.roll_ID
-            INNER JOIN Event   e  ON e.event_ID = s.event_ID
-            INNER JOIN Project p  ON p.Proj_ID  = e.project_ID
+            INNER JOIN [User]     u   ON u.user_ID   = es.employee_user_ID
+            LEFT  JOIN Employee   emp ON emp.user_ID  = es.employee_user_ID
+            INNER JOIN Shift      s   ON s.Shift_ID  = es.shift_ID
+            INNER JOIN Roll       r   ON r.Roll_ID   = s.roll_ID
+            INNER JOIN Event      e   ON e.event_ID  = s.event_ID
+            INNER JOIN Project    p   ON p.Proj_ID   = e.project_ID
             WHERE e.event_ID  = @eventId
               AND p.Proj_ID IN (
                   SELECT mp.project_ID
@@ -1452,6 +1457,7 @@ public class ProjectRepository : IProjectRepository
         var ordShiftStart        = reader.GetOrdinal("ShiftStart");
         var ordShiftEnd          = reader.GetOrdinal("ShiftEnd");
         var ordRequiredQuantity  = reader.GetOrdinal("RequiredQuantity");
+        var ordCostPerHour       = reader.GetOrdinal("CostPerHour");
         var ordActiveAssignments = reader.GetOrdinal("ActiveAssignments");
 
         while (await reader.ReadAsync())
@@ -1468,6 +1474,7 @@ public class ProjectRepository : IProjectRepository
                 ShiftStart        = reader.IsDBNull(ordShiftStart)        ? null : reader.GetDateTime(ordShiftStart),
                 ShiftEnd          = reader.IsDBNull(ordShiftEnd)          ? null : reader.GetDateTime(ordShiftEnd),
                 RequiredQuantity  = reader.IsDBNull(ordRequiredQuantity)  ? 0    : reader.GetInt32(ordRequiredQuantity),
+                CostPerHour       = reader.IsDBNull(ordCostPerHour)       ? null : reader.GetDecimal(ordCostPerHour),
                 ActiveAssignments = reader.IsDBNull(ordActiveAssignments) ? 0    : reader.GetInt32(ordActiveAssignments),
             };
 

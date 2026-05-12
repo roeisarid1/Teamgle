@@ -476,6 +476,11 @@ body.rtl .sidebar {
 
 .search-input::placeholder { color: var(--text-muted); }
 
+body.rtl .search-input {
+  padding: 8px 36px 8px 14px;
+  background-position: right 12px center;
+}
+
 /* ── Primary button ──────────────────────────────────────────────────────── */
 .btn-primary {
   background: var(--blue);
@@ -1830,6 +1835,11 @@ tr.expanded-row > td {
   transform: translateY(-1px);
 }
 
+.event-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .event-title {
   font-size: 13px;
   font-weight: 700;
@@ -2799,6 +2809,115 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .btn-add-shift-gantt:hover { background: var(--blue-light); }
+
+.gantt-mobile-list {
+  display: none;
+}
+
+.gantt-mobile-shift {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.gantt-mobile-shift:last-child {
+  border-bottom: none;
+}
+
+.gantt-mobile-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gantt-mobile-role {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.gantt-mobile-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.gantt-mobile-count {
+  justify-self: end;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--blue-50);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gantt-mobile-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.gantt-mobile-actions .gantt-bar-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.gantt-mobile-empty {
+  padding: 18px 14px;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  #gantt-container,
+  #ed-gantt-container {
+    overflow: visible;
+  }
+
+  .gantt-event-section {
+    overflow: hidden;
+  }
+
+  .gantt-event-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 12px 14px;
+  }
+
+  .gantt-event-name {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .gantt-chart {
+    display: none;
+  }
+
+  .gantt-mobile-list {
+    display: block;
+  }
+
+  .gantt-footer {
+    justify-content: stretch;
+    padding: 12px 14px;
+  }
+
+  .btn-add-shift-gantt {
+    width: 100%;
+    min-height: 44px;
+  }
+}
 
 /* Override FullCalendar chrome to match app design language */
 #pd-calendar .fc-button {
@@ -3995,12 +4114,97 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 @media (max-width: 700px) {
   .ps-header { flex-direction: column; align-items: stretch; }
   .ps-header-actions { justify-content: flex-end; }
-  .ps-search { width: 160px; }
+  .ps-search-wrap,
+  .ps-search { width: 100%; }
+  .ps-table {
+    display: block;
+    border: 0;
+    background: transparent;
+  }
   .ps-table thead { display: none; }
-  .ps-table td { display: block; padding: 6px 16px; }
-  .ps-table td:first-child { padding-top: 12px; }
-  .ps-table td:last-child  { padding-bottom: 12px; }
-  .ps-table tr { border-bottom: 1px solid var(--border); display: block; }
+  .ps-table tbody { display: block; }
+  .ps-table tr {
+    display: block;
+    margin: 0 0 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+  .ps-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--surface-2);
+    white-space: normal;
+  }
+  .ps-table td:first-child {
+    display: block;
+    padding: 12px;
+    background: var(--blue-50);
+  }
+  .ps-table td:last-child {
+    display: block;
+    padding: 10px;
+    border-bottom: 0;
+    background: var(--surface-2);
+  }
+  .ps-table td::before {
+    flex: 0 0 auto;
+    margin-inline-end: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .ps-table td:first-child::before,
+  .ps-table td.ps-empty::before { display: none; }
+  .ps-table td:nth-child(2)::before { content: "Shift"; }
+  .ps-table td:nth-child(3)::before { content: "Role"; }
+  .ps-table td:nth-child(4)::before { content: "Cost"; }
+  .ps-row--potential td:nth-child(2)::before { content: "Eligible Shifts"; }
+  .ps-row--potential td:nth-child(3)::before { content: "Cost"; }
+  .ps-table td:last-child::before {
+    display: block;
+    margin: 0 0 8px;
+    content: "Actions";
+  }
+  body.rtl .ps-table td:nth-child(2)::before { content: "משמרת"; }
+  body.rtl .ps-table td:nth-child(3)::before { content: "תפקיד"; }
+  body.rtl .ps-table td:nth-child(4)::before { content: "עלות"; }
+  body.rtl .ps-row--potential td:nth-child(2)::before { content: "משמרות מתאימות"; }
+  body.rtl .ps-row--potential td:nth-child(3)::before { content: "עלות"; }
+  body.rtl .ps-table td:last-child::before { content: "פעולות"; }
+  .ps-actions-cell {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+  .ps-action-btn,
+  .ps-send-btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .ps-shift-checklist { gap: 8px; width: 100%; }
+  .ps-shift-check {
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .ps-empty {
+    display: block !important;
+    padding: 24px 12px !important;
+    text-align: center;
+    background: var(--card) !important;
+  }
 }
 
 /* ── Job Offers (Employee) ──────────────────────────────────────────────────── */
@@ -4846,6 +5050,86 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .ed-worker-badge--pending  { background: #fef3c7; color: #92400e; }
 .ed-worker-badge--hold     { background: #e0e7ff; color: #3730a3; }
 .ed-worker-badge--rejected { background: #fee2e2; color: #991b1b; }
+
+@media (max-width: 640px) {
+  .ed-worker-section,
+  .ed-finance-section {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ed-worker-table {
+    min-width: 560px;
+  }
+
+  .ed-worker-section .ed-worker-table {
+    min-width: 0;
+    display: block;
+    border: 0;
+    background: transparent;
+  }
+
+  .ed-worker-section .ed-worker-table thead,
+  .ed-worker-section .ed-worker-table tbody {
+    display: block;
+  }
+
+  .ed-worker-section .ed-worker-table thead {
+    display: none;
+  }
+
+  .ed-worker-section .ed-worker-table tr {
+    display: block;
+    margin: 0 0 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+
+  .ed-worker-section .ed-worker-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--surface-2);
+    white-space: normal;
+    text-align: end;
+  }
+
+  .ed-worker-section .ed-worker-table td:first-child {
+    display: block;
+    background: var(--blue-50);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    text-align: start;
+  }
+
+  .ed-worker-section .ed-worker-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .ed-worker-section .ed-worker-table td::before {
+    flex: 0 0 auto;
+    margin-inline-end: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .ed-worker-section .ed-worker-table td:first-child::before { display: none; }
+  .ed-worker-section .ed-worker-table td:nth-child(2)::before { content: "Role"; }
+  .ed-worker-section .ed-worker-table td:nth-child(3)::before { content: "Shift"; }
+  .ed-worker-section .ed-worker-table td:nth-child(4)::before { content: "Status"; }
+  body.rtl .ed-worker-section .ed-worker-table td:nth-child(2)::before { content: "תפקיד"; }
+  body.rtl .ed-worker-section .ed-worker-table td:nth-child(3)::before { content: "משמרת"; }
+  body.rtl .ed-worker-section .ed-worker-table td:nth-child(4)::before { content: "סטטוס"; }
+}
 
 /* ── Brief acknowledgment count ──────────────────────────────────────────── */
 .ed-brief-ack {
@@ -6186,6 +6470,78 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .btn-header-action svg { width: 15px; height: 15px; }
 .btn-header-action:hover { background: var(--hover); }
 
+.shift-chat-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.shift-chat-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  width: min(360px, calc(100vw - 32px));
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .14);
+  z-index: 260;
+}
+
+.shift-chat-menu[hidden] { display: none; }
+
+.shift-chat-menu-item,
+.shift-chat-menu-state {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+}
+
+.shift-chat-menu-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  cursor: pointer;
+}
+
+.shift-chat-menu-item:hover,
+.shift-chat-menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+.shift-chat-menu-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shift-chat-menu-time,
+.shift-chat-menu-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shift-chat-menu-count {
+  align-self: center;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.shift-chat-menu-state {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .btn-header-action--danger {
   color: var(--red, #DC2626);
   border-color: var(--red-light, #FEE2E2);
@@ -6323,4 +6679,649 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .edit-section {
     padding: 12px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE UX — ADDITIONS
+   Augments existing responsive CSS. Goal: genuinely usable on phones.
+   Breakpoints: ≤767px tablet/phone, ≤640px phone, ≤480px small phone
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Prevent iOS Safari auto-zoom on focused inputs ─────────────────────── */
+@media (max-width: 767px) {
+  input:not([type=checkbox]):not([type=radio]),
+  select,
+  textarea { font-size: 16px; }
+}
+
+/* ── Use dynamic viewport on all screens ────────────────────────────────── */
+body { min-height: 100dvh; }
+
+/* ── Navbar: compress further on very small phones ──────────────────────── */
+@media (max-width: 420px) {
+  .navbar-brand span { display: none; }       /* hide "Teamgle" text, keep SVG logo */
+  .btn-language-toggle { min-width: 56px; padding: 5px 8px; font-size: 12px; }
+  .btn-logout { padding: 5px 8px; font-size: 12px; }
+}
+
+/* ── Touch targets: minimum 44 px for icon/action buttons ───────────────── */
+@media (max-width: 767px) {
+  .btn-icon-sm        { width: 44px; height: 44px; }
+  .ps-action-btn      { width: 44px; height: 44px; }
+  .ps-action-btn svg  { width: 17px; height: 17px; }
+  .ps-send-btn        { padding: 10px 14px; font-size: 13px; min-height: 44px; }
+  .ed-pr-review-btn   { min-height: 44px; }
+  .ed-pr-save-btn     { padding: 10px 14px; font-size: 13px; min-height: 44px; }
+  .pd-filter-pill     { min-height: 40px; padding: 7px 12px; }
+}
+
+/* ── Event-detail & project-detail tabs: compact on mobile ──────────────── */
+@media (max-width: 640px) {
+  #section-project-detail .pd-tab,
+  #section-event-detail   .pd-tab {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 13px;
+    min-height: 44px;
+  }
+  /* Ensure tab bar scrolls without a visible scrollbar */
+  .pd-tabs {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%);
+  }
+  .pd-tabs::-webkit-scrollbar { display: none; }
+
+  #section-project-detail .pd-tabs,
+  #section-event-detail .pd-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    overflow: visible;
+    mask-image: none;
+    border-bottom-width: 1px;
+    padding-bottom: 6px;
+  }
+
+  #section-project-detail .pd-tab,
+  #section-event-detail .pd-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0;
+    border: 1px solid transparent;
+    border-bottom: 2px solid transparent;
+    border-radius: 8px;
+    padding: 8px 6px;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  #section-project-detail .pd-tab.active,
+  #section-event-detail .pd-tab.active {
+    background: var(--blue-light);
+    border-color: var(--blue-light);
+    border-bottom-color: var(--blue);
+  }
+}
+
+/* ── Event detail page header: compact on mobile ────────────────────────── */
+@media (max-width: 640px) {
+  #section-event-detail .cp-title    { font-size: 17px; }
+  #section-event-detail .cp-subtitle { font-size: 13px; }
+  .cp-title--breadcrumb              { gap: 0; flex-wrap: wrap; }
+
+  #section-event-detail .cp-header {
+    align-items: stretch;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  #section-event-detail .cp-header-left {
+    width: 100%;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  #section-event-detail .cp-header-left > div {
+    min-width: 0;
+    flex: 1;
+  }
+
+  #section-event-detail .cp-title,
+  #section-event-detail .cp-subtitle {
+    overflow-wrap: anywhere;
+  }
+
+  #section-event-detail .cp-header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #section-event-detail .btn-header-action,
+  #section-event-detail .shift-chat-menu-wrap,
+  #section-event-detail .shift-chat-menu-wrap .btn-header-action {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #section-event-detail .btn-header-action {
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  #section-event-detail .shift-chat-menu {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    width: min(100%, calc(100vw - 56px));
+  }
+}
+
+/* ── Events section: search bar full-width on mobile ────────────────────── */
+@media (max-width: 640px) {
+  .events-header-actions { flex-wrap: wrap; }
+  .events-search         { width: 100%; max-width: 100%; }
+}
+
+/* ── Invoice section filter bar: stack on small phone ───────────────────── */
+@media (max-width: 480px) {
+  .inv-filter-bar { flex-direction: column; }
+  .inv-filter-bar .search-input,
+  .inv-filter-bar .emp-filter-select { width: 100%; flex: none; }
+}
+
+/* ── Core admin tables → action-first mobile cards ──────────────────────── */
+@media (max-width: 640px) {
+  #section-employees .table-wrap,
+  #section-customers .table-wrap {
+    overflow: visible;
+  }
+
+  #section-employees .table-wrap table,
+  #section-employees .table-wrap tbody,
+  #section-customers .table-wrap table,
+  #section-customers .table-wrap tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  #section-employees .table-wrap thead,
+  #section-customers .table-wrap thead {
+    display: none;
+  }
+
+  #section-employees .table-wrap tbody tr,
+  #section-customers .table-wrap tbody tr {
+    display: block;
+    margin: 0 0 12px;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .06);
+  }
+
+  #section-employees .table-wrap tbody td,
+  #section-customers .table-wrap tbody td {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 42px;
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--surface-2);
+    box-shadow: none;
+    background: transparent;
+    white-space: normal;
+    text-align: end;
+  }
+
+  #section-employees .table-wrap tbody td:first-child,
+  #section-customers .table-wrap tbody td:first-child {
+    display: block;
+    background: var(--blue-50);
+    border-bottom: 1px solid var(--border);
+    font-size: 15px;
+    text-align: start;
+  }
+
+  #section-employees .table-wrap tbody td::before,
+  #section-customers .table-wrap tbody td::before {
+    flex: 0 0 auto;
+    margin-inline-end: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  #section-employees .table-wrap tbody td:first-child::before,
+  #section-customers .table-wrap tbody td:first-child::before {
+    display: none;
+  }
+
+  #section-employees .table-wrap tbody td:nth-child(2)::before { content: "Email"; }
+  #section-employees .table-wrap tbody td:nth-child(3)::before { content: "Phone"; }
+  #section-employees .table-wrap tbody td:nth-child(4)::before { content: "Cost"; }
+  #section-employees .table-wrap tbody td:nth-child(5)::before { content: "Roles"; }
+  #section-employees .table-wrap tbody td:nth-child(6)::before { content: "Status"; }
+
+  #section-customers .table-wrap tbody td:nth-child(2)::before { content: "Phone"; }
+  #section-customers .table-wrap tbody td:nth-child(3)::before { content: "Email"; }
+  #section-customers .table-wrap tbody td:nth-child(4)::before { content: "City"; }
+  #section-customers .table-wrap tbody td:nth-child(5)::before { content: "Business #"; }
+  #section-customers .table-wrap tbody td:nth-child(6)::before { content: "Added"; }
+
+  body.rtl #section-employees .table-wrap tbody td:nth-child(2)::before { content: "אימייל"; }
+  body.rtl #section-employees .table-wrap tbody td:nth-child(3)::before { content: "טלפון"; }
+  body.rtl #section-employees .table-wrap tbody td:nth-child(4)::before { content: "עלות"; }
+  body.rtl #section-employees .table-wrap tbody td:nth-child(5)::before { content: "תפקידים"; }
+  body.rtl #section-employees .table-wrap tbody td:nth-child(6)::before { content: "סטטוס"; }
+
+  body.rtl #section-customers .table-wrap tbody td:nth-child(2)::before { content: "טלפון"; }
+  body.rtl #section-customers .table-wrap tbody td:nth-child(3)::before { content: "אימייל"; }
+  body.rtl #section-customers .table-wrap tbody td:nth-child(4)::before { content: "עיר"; }
+  body.rtl #section-customers .table-wrap tbody td:nth-child(5)::before { content: "מספר עסק"; }
+  body.rtl #section-customers .table-wrap tbody td:nth-child(6)::before { content: "נוסף"; }
+
+  #section-employees .table-wrap tbody td:nth-child(7),
+  #section-customers .table-wrap tbody td:nth-child(7) {
+    display: block;
+    padding: 10px;
+    border-bottom: 0;
+    background: var(--surface-2);
+  }
+
+  #section-employees .table-wrap tbody td:nth-child(7)::before,
+  #section-customers .table-wrap tbody td:nth-child(7)::before {
+    display: block;
+    margin: 0 0 8px;
+    content: "Actions";
+  }
+
+  body.rtl #section-employees .table-wrap tbody td:nth-child(7)::before,
+  body.rtl #section-customers .table-wrap tbody td:nth-child(7)::before {
+    content: "פעולות";
+  }
+
+  #section-employees .actions-cell,
+  #section-customers .actions-cell {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  #section-employees .btn-action,
+  #section-customers .btn-action,
+  #section-employees .btn-chevron,
+  #section-customers .btn-chevron {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  #section-employees .btn-chevron.expanded,
+  #section-customers .btn-chevron.expanded {
+    transform: none;
+  }
+
+  #section-employees .btn-chevron::after,
+  #section-customers .btn-chevron::after {
+    content: " Details";
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  body.rtl #section-employees .btn-chevron::after,
+  body.rtl #section-customers .btn-chevron::after {
+    content: " פרטים";
+  }
+
+  #section-employees .table-wrap tbody tr.expanded-row,
+  #section-customers .table-wrap tbody tr.expanded-row {
+    margin-top: -6px;
+  }
+
+  #section-employees .table-wrap tbody tr.expanded-row td,
+  #section-customers .table-wrap tbody tr.expanded-row td,
+  #section-employees .table-wrap tbody td.empty-state,
+  #section-customers .table-wrap tbody td.empty-state {
+    display: block;
+    padding: 24px 14px;
+    text-align: center;
+    background: var(--card);
+  }
+
+  #section-employees .table-wrap tbody tr.expanded-row td::before,
+  #section-customers .table-wrap tbody tr.expanded-row td::before,
+  #section-employees .table-wrap tbody td.empty-state::before,
+  #section-customers .table-wrap tbody td.empty-state::before {
+    display: none;
+  }
+
+  .contacts-table-wrap {
+    overflow: visible;
+  }
+
+  .contacts-table,
+  .contacts-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .contacts-table thead {
+    display: none;
+  }
+
+  .contacts-table tbody tr {
+    display: block;
+    margin: 0 0 10px;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .contacts-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--surface-2);
+    white-space: normal;
+    text-align: end;
+  }
+
+  .contacts-table tbody td:first-child {
+    display: block;
+    background: var(--blue-50);
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    text-align: start;
+  }
+
+  .contacts-table tbody td::before {
+    flex: 0 0 auto;
+    margin-inline-end: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .contacts-table tbody td:first-child::before { display: none; }
+  .contacts-table tbody td:nth-child(2)::before { content: "Job"; }
+  .contacts-table tbody td:nth-child(3)::before { content: "Phone"; }
+  .contacts-table tbody td:nth-child(4)::before { content: "Email"; }
+  .contacts-table tbody td:nth-child(5)::before { content: "Primary"; }
+
+  body.rtl .contacts-table tbody td:nth-child(2)::before { content: "תפקיד"; }
+  body.rtl .contacts-table tbody td:nth-child(3)::before { content: "טלפון"; }
+  body.rtl .contacts-table tbody td:nth-child(4)::before { content: "אימייל"; }
+  body.rtl .contacts-table tbody td:nth-child(5)::before { content: "ראשי"; }
+
+  .contacts-table tbody td:nth-child(6) {
+    display: block;
+    padding: 10px;
+    border-bottom: 0;
+    background: var(--surface-2);
+  }
+
+  .contacts-table tbody td:nth-child(6)::before {
+    display: block;
+    margin: 0 0 8px;
+    content: "Actions";
+  }
+
+  body.rtl .contacts-table tbody td:nth-child(6)::before {
+    content: "פעולות";
+  }
+
+  .contacts-table .actions-cell {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .contacts-table .btn-action {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* ── Finance summary cards: 2-up on phone, 1-up on tiny phone ───────────── */
+@media (max-width: 640px) {
+  .ed-finance-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .ed-finance-card  { padding: 14px 16px; }
+  .ed-finance-card-value { font-size: 18px; }
+}
+@media (max-width: 380px) {
+  .ed-finance-cards { grid-template-columns: 1fr; }
+}
+
+/* ── Expense form grid: single column on small phone ────────────────────── */
+@media (max-width: 640px) {
+  .ed-expense-summary {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 8px 10px;
+    padding: 12px;
+  }
+
+  .ed-expense-type-badge {
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .ed-expense-desc {
+    grid-column: 1 / -1;
+    order: 3;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.45;
+  }
+
+  .ed-expense-date {
+    grid-column: 1;
+    order: 4;
+  }
+
+  .ed-expense-amount {
+    justify-self: end;
+    min-width: 0;
+    text-align: end;
+  }
+
+  .ed-expense-delete {
+    grid-column: 2;
+    grid-row: 3 / span 2;
+    justify-self: end;
+    align-self: end;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ed-expense-form {
+    padding: 12px;
+  }
+
+  .ed-expense-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ed-expense-totals {
+    justify-content: space-between;
+    padding: 12px;
+  }
+}
+
+/* ── Payroll panel: stack fields to one column on phone ─────────────────── */
+@media (max-width: 640px) {
+  .ed-pr-status-badges {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .ed-badge-group {
+    justify-content: space-between;
+  }
+
+  .ed-pr-fields-row                     { flex-direction: column; }
+  .ed-pr-field                          { width: 100%; }
+  .ed-pr-panel-section                  { padding: 14px; }
+  .ed-pr-input,
+  .ed-pr-select,
+  .ed-pr-input--sm                      { width: 100%; max-width: 100%; }
+  .ed-pr-approve-btn,
+  .ed-pr-save-btn                       { width: 100%; min-height: 44px; }
+  .ed-pr-ot-note                        { line-height: 1.45; }
+}
+
+/* ── Staffing section header: wrap-friendly for "Send to All" button ─────── */
+@media (max-width: 640px) {
+  .ps-section-hdr       { flex-wrap: wrap; gap: 8px; min-height: 52px; }
+  .ps-section-hdr-right { flex-wrap: wrap; gap: 8px; }
+  .ps-btn-send-all      { font-size: 12px; padding: 7px 12px; }
+  .ps-btn-send-all svg  { width: 12px; height: 12px; }
+  /* Staffing table block rows: add visual cost label */
+  .ps-table .ps-cost::before {
+    content: attr(data-cost-label);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-inline-end: 6px;
+  }
+}
+
+/* ── Payment Request table → card layout on mobile ──────────────────────── */
+@media (max-width: 640px) {
+  /* Flatten the table into block elements */
+  #section-invoices .table-wrap table,
+  #section-invoices .table-wrap tbody { display: block; }
+  #section-invoices .table-wrap thead { display: none; }
+
+  /* Each <tr> becomes a card */
+  #section-invoices .table-wrap tbody tr {
+    display: block;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+
+  /* Default cell: label-value row */
+  #section-invoices .table-wrap tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    border-bottom: 1px solid var(--surface-2);
+    white-space: normal;
+    min-height: 38px;
+    gap: 8px;
+  }
+
+  /* Col 1 — Request # : card title row */
+  #section-invoices .table-wrap tbody td:nth-child(1) {
+    background: var(--blue-50);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 14px;
+    border-bottom: 1.5px solid var(--border);
+    justify-content: flex-start;
+  }
+
+  /* Col 3 — Event context: hide on mobile */
+  #section-invoices .table-wrap tbody td:nth-child(3) { display: none; }
+
+  /* Col 5 — Due Date: hide (less critical than Request Date) */
+  #section-invoices .table-wrap tbody td:nth-child(5) { display: none; }
+
+  /* Labels on remaining data cells */
+  #section-invoices .table-wrap tbody td:nth-child(2)::before { content: "Customer"; }
+  #section-invoices .table-wrap tbody td:nth-child(4)::before { content: "Date"; }
+  #section-invoices .table-wrap tbody td:nth-child(6)::before { content: "Amount"; }
+  #section-invoices .table-wrap tbody td:nth-child(7)::before { content: "Paid"; }
+  #section-invoices .table-wrap tbody td:nth-child(8)::before { content: "Status"; }
+
+  /* Label style shared */
+  #section-invoices .table-wrap tbody td:nth-child(2)::before,
+  #section-invoices .table-wrap tbody td:nth-child(4)::before,
+  #section-invoices .table-wrap tbody td:nth-child(6)::before,
+  #section-invoices .table-wrap tbody td:nth-child(7)::before,
+  #section-invoices .table-wrap tbody td:nth-child(8)::before {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    flex-shrink: 0;
+    margin-inline-end: 8px;
+  }
+
+  /* Col 9 — Actions: footer row, centred icons */
+  #section-invoices .table-wrap tbody td.inv-actions {
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: none;
+    background: var(--surface-2);
+  }
+
+  /* Empty-state row: reset card styling */
+  #section-invoices .table-wrap tbody td.empty-state {
+    display: block;
+    padding: 32px 16px;
+    text-align: center;
+    border: none;
+    background: none;
+  }
+  #section-invoices .table-wrap tbody td.empty-state::before { display: none; }
+}
+
+/* ── RTL labels for payment request card view ────────────────────────────── */
+@media (max-width: 640px) {
+  body.rtl #section-invoices .table-wrap tbody td:nth-child(2)::before { content: "לקוח"; }
+  body.rtl #section-invoices .table-wrap tbody td:nth-child(4)::before { content: "תאריך"; }
+  body.rtl #section-invoices .table-wrap tbody td:nth-child(6)::before { content: "סכום"; }
+  body.rtl #section-invoices .table-wrap tbody td:nth-child(7)::before { content: "שולם"; }
+  body.rtl #section-invoices .table-wrap tbody td:nth-child(8)::before { content: "סטטוס"; }
+}
+
+/* ── Worker table inside event-detail (Finance/Workers tab) ─────────────── */
+@media (max-width: 640px) {
+  .ed-worker-table          { font-size: 12px; }
+  .ed-worker-table th,
+  .ed-worker-table td       { padding: 8px 10px; }
+}
+
+/* ── Employee dashboard: bigger chat / open-shift buttons on phone ───────── */
+@media (max-width: 480px) {
+  .ms-chat-btn      { min-height: 40px; }
+  .ms-open-shift-btn{ min-height: 40px; padding: 10px 18px; }
 }

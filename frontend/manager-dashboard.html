@@ -565,6 +565,13 @@
             <i data-lucide="messages-square"></i>
             Chat
           </button>
+          <div class="shift-chat-menu-wrap">
+            <button class="btn-header-action" id="btn-shift-chat" type="button" title="Open shift chat" aria-haspopup="menu" aria-expanded="false">
+              <i data-lucide="message-square-more"></i>
+              Shift Chat
+            </button>
+            <div class="shift-chat-menu" id="shift-chat-menu" hidden></div>
+          </div>
           <button class="btn-header-action" id="btn-edit-event" type="button" title="Edit event">
             <i data-lucide="pencil"></i>
             Edit
@@ -1348,7 +1355,7 @@
           <div class="form-row">
             <div class="field">
               <label for="inv-number">Request # <span class="req">*</span></label>
-              <input type="text" id="inv-number" placeholder="e.g. INV-2026-001" />
+              <input type="text" id="inv-number" placeholder="e.g. REQ-2026-001" />
             </div>
             <div class="field">
               <label for="inv-status">Status</label>
@@ -1581,6 +1588,12 @@
                 <option value="other">Other</option>
               </select>
             </div>
+          </div>
+          <div class="field">
+            <label for="event-edit-customer">Customer</label>
+            <select id="event-edit-customer">
+              <option value="">— None —</option>
+            </select>
           </div>
         </div>
 

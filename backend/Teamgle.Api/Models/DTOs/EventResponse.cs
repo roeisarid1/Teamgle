@@ -12,5 +12,7 @@ public class EventResponse
     public decimal? PlannedBudget { get; set; }
     public decimal? ExpectedRevenue { get; set; }
     public int? AttendeesCount { get; set; }
-    public string? ProjectId { get; set; }
+    public string? ProjectId    { get; set; }
+    public string? CustomerId   { get; set; }
+    public string? CustomerName { get; set; }
 }

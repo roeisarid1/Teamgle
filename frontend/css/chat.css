@@ -109,6 +109,13 @@
 
 .chat-search-input::placeholder { color: var(--text-muted); }
 
+body.rtl .chat-search-input,
+body.rtl .user-picker-search {
+  padding-left: 14px;
+  padding-right: 36px;
+  background-position: right 12px center;
+}
+
 /* ── Conversation list ───────────────────────────────────────────────────── */
 .conversation-list {
   flex: 1;

@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initI18n, _t } from "./i18n.js";
 
 // ── Backend base URL ───────────────────────────────────────────────────────
 // Change this to your deployed backend URL when in production.
@@ -34,6 +35,8 @@ const forgotEmail   = document.getElementById("forgot-email");
 const forgotError   = document.getElementById("forgot-error");
 const forgotSuccess = document.getElementById("forgot-success");
 const forgotBtn     = document.getElementById("forgot-btn");
+
+initI18n();
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 tabLogin.addEventListener("click", () => switchTab("login"));
@@ -91,12 +94,12 @@ forgotBtn.addEventListener("click", async () => {
   const email = forgotEmail.value.trim().toLowerCase();
 
   if (!email) {
-    showError(forgotError, "Please enter your email address.");
+    showError(forgotError, _t("Please enter your email address.", "אנא הזן כתובת אימייל."));
     return;
   }
 
   if (!isValidEmail(email)) {
-    showError(forgotError, "Please enter a valid email address.");
+    showError(forgotError, _t("Please enter a valid email address.", "אנא הזן כתובת אימייל תקינה."));
     return;
   }
 
@@ -113,7 +116,7 @@ forgotBtn.addEventListener("click", async () => {
   // Always show the same success message (security: prevents user enumeration)
   showSuccess(
     forgotSuccess,
-    "If this email is registered, you will receive a password reset link shortly. Check your inbox."
+    _t("If this email is registered, you will receive a password reset link shortly. Check your inbox.", "אם האימייל רשום, תקבל בקרוב קישור לאיפוס סיסמה. בדוק את תיבת הדואר.")
   );
   forgotEmail.value = "";
 });
@@ -122,7 +125,7 @@ forgotBtn.addEventListener("click", async () => {
 function setLoading(btn, loading) {
   btn.disabled = loading;
   btn.dataset.originalText = btn.dataset.originalText || btn.textContent;
-  btn.textContent = loading ? "Please wait…" : btn.dataset.originalText;
+  btn.textContent = loading ? _t("Please wait…", "אנא המתן…") : btn.dataset.originalText;
 }
 
 function showError(el, message) {
@@ -143,7 +146,7 @@ loginBtn.addEventListener("click", async () => {
   const password = loginPassword.value;
 
   if (!email || !password) {
-    showError(loginError, "Please enter your email and password.");
+    showError(loginError, _t("Please enter your email and password.", "אנא הזן אימייל וסיסמה."));
     return;
   }
 
@@ -197,22 +200,22 @@ regBtn.addEventListener("click", async () => {
 
   // Client-side validation
   if (!email || !password || !confirm) {
-    showError(regError, "All fields are required.");
+    showError(regError, _t("All fields are required.", "כל השדות חובה."));
     return;
   }
 
   if (!isValidEmail(email)) {
-    showError(regError, "Please enter a valid email address.");
+    showError(regError, _t("Please enter a valid email address.", "אנא הזן כתובת אימייל תקינה."));
     return;
   }
 
   if (password.length < 8) {
-    showError(regError, "Password must be at least 8 characters.");
+    showError(regError, _t("Password must be at least 8 characters.", "הסיסמה חייבת להיות באורך 8 תווים לפחות."));
     return;
   }
 
   if (password !== confirm) {
-    showError(regError, "Passwords do not match.");
+    showError(regError, _t("Passwords do not match.", "הסיסמאות אינן תואמות."));
     return;
   }
 
@@ -251,7 +254,7 @@ regBtn.addEventListener("click", async () => {
     }
 
     // Step 4: Done
-    showSuccess(regSuccess, "Registration complete! You can now log in.");
+    showSuccess(regSuccess, _t("Registration complete! You can now log in.", "הרישום הושלם! אפשר להתחבר עכשיו."));
     regEmail.value = "";
     regPassword.value = "";
     regConfirm.value = "";
@@ -273,14 +276,14 @@ function isValidEmail(email) {
 
 function friendlyError(message) {
   if (message.includes("auth/user-not-found") || message.includes("auth/wrong-password") || message.includes("auth/invalid-credential"))
-    return "Invalid email or password.";
+    return _t("Invalid email or password.", "אימייל או סיסמה שגויים.");
   if (message.includes("auth/email-already-in-use"))
-    return "This email is already registered. Please log in instead.";
+    return _t("This email is already registered. Please log in instead.", "האימייל הזה כבר רשום. התחבר במקום זאת.");
   if (message.includes("auth/weak-password"))
-    return "Password is too weak. Use at least 8 characters.";
+    return _t("Password is too weak. Use at least 8 characters.", "הסיסמה חלשה מדי. השתמש ב-8 תווים לפחות.");
   if (message.includes("auth/too-many-requests"))
-    return "Too many attempts. Please wait a moment and try again.";
+    return _t("Too many attempts. Please wait a moment and try again.", "יותר מדי ניסיונות. המתן רגע ונסה שוב.");
   if (message.includes("auth/network-request-failed"))
-    return "Network error. Please check your connection.";
-  return message;
+    return _t("Network error. Please check your connection.", "שגיאת רשת. בדוק את החיבור שלך.");
+  return _t(message, message);
 }
