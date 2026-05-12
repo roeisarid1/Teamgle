@@ -22,4 +22,5 @@ public class AssignedWorkerItem
     public DateTime? ShiftEnd          { get; set; }
     public int       RequiredQuantity  { get; set; }
     public int       ActiveAssignments { get; set; }
+    public decimal?  CostPerHour       { get; set; }
 }

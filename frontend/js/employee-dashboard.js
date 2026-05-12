@@ -3,7 +3,8 @@
 import { auth }                        from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { writeUserProfile }            from "./chat-service.js";
-import { initChat, destroyChat }       from "./chat-ui.js";
+import { initChat, destroyChat, openEventChat, openShiftChat } from "./chat-ui.js";
+import { initI18n, applyTranslations, _t } from "./i18n.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -22,6 +23,17 @@ const chatSection      = document.getElementById("section-chats");
 const shiftsBadge      = document.getElementById("shifts-badge");
 
 const MOBILE_BREAKPOINT = 768;
+initI18n();
+
+window.addEventListener("teamgle:languagechange", () => {
+  applyTranslations();
+  if (_msActiveTab) renderActiveTab();
+  if (pageContent?.classList.contains("chat-mode")) {
+    destroyChat();
+    _chatInitialized = false;
+    _initChatSection();
+  }
+});
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function setSidebarOpen(open) {
@@ -125,6 +137,35 @@ function _initChatSection() {
   _chatInitialized = true;
   const container = document.getElementById("section-chats");
   initChat(container, _profile, _currentFirebaseUid);
+}
+
+async function _openEmployeeEventChat(item) {
+  if (!item?.eventId) return;
+  _initChatSection();
+  showSection("chats");
+  await openEventChat({
+    eventId: item.eventId,
+    title: item.eventName || "Event Chat",
+    subtitle: "Event chat",
+    participantUids: [_currentFirebaseUid],
+  });
+}
+
+async function _openEmployeeShiftChat(item) {
+  if (!item?.shiftId) return;
+  _initChatSection();
+  showSection("chats");
+  const role = item.roleName || "Shift";
+  const time = item.shiftStart || item.shiftStartTime
+    ? `${fmtTime(item.shiftStart || item.shiftStartTime)} – ${fmtTime(item.shiftEnd || item.shiftEndTime)}`
+    : "";
+  await openShiftChat({
+    shiftId: item.shiftId,
+    eventId: item.eventId || null,
+    title: time ? `${role} · ${time}` : role,
+    subtitle: item.eventName || "Shift chat",
+    participantUids: [_currentFirebaseUid],
+  });
 }
 
 // ── My Shifts state ───────────────────────────────────────────────────────────
@@ -285,7 +326,7 @@ function renderOffersTab() {
 
   if (_msOffers === null) { panel.innerHTML = renderSkeletons(2); lucide.createIcons(); return; }
   if (_msOffers.length === 0) {
-    panel.innerHTML = emptyState("inbox", "No job offers right now.", "Check back later.");
+    panel.innerHTML = emptyState("inbox", _t("No job offers right now.", "אין הצעות עבודה כרגע."), _t("Check back later.", "בדוק שוב מאוחר יותר."));
     lucide.createIcons(); return;
   }
 
@@ -301,8 +342,8 @@ function renderOffersTab() {
     async function respond(accept) {
       btnAccept.disabled  = true;
       btnDecline.disabled = true;
-      btnAccept.textContent  = accept ? "Saving…" : btnAccept.textContent;
-      btnDecline.textContent = !accept ? "Saving…" : btnDecline.textContent;
+      btnAccept.textContent  = accept ? _t("Saving…", "שומר…") : btnAccept.textContent;
+      btnDecline.textContent = !accept ? _t("Saving…", "שומר…") : btnDecline.textContent;
       try {
         const token = await getToken();
         const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(shiftId)}/respond`, {
@@ -329,8 +370,8 @@ function renderOffersTab() {
       } catch {
         btnAccept.disabled  = false;
         btnDecline.disabled = false;
-        btnAccept.textContent  = "I'm In ✓";
-        btnDecline.textContent = "Can't Make It ✗";
+        btnAccept.textContent  = _t("I'm In ✓", "אני פנוי ✓");
+        btnDecline.textContent = _t("Can't Make It ✗", "לא יכול להגיע ✗");
       }
     }
 
@@ -345,10 +386,10 @@ function renderOfferCard(o) {
   const isOpenOffer = status === "manager_offer_sent";
   const statusBadge =
     status === "employee_request"
-      ? `<span class="offer-response-badge offer-response-badge--pending">Interested · pending manager approval</span>`
+      ? `<span class="offer-response-badge offer-response-badge--pending">${_t("Interested · pending manager approval", "מעוניין · ממתין לאישור מנהל")}</span>`
       : status === "employee_request_canceled"
-        ? `<span class="offer-response-badge offer-response-badge--declined">Declined</span>`
-        : `<span class="offer-response-badge offer-response-badge--open">Response needed</span>`;
+        ? `<span class="offer-response-badge offer-response-badge--declined">${_t("Declined", "דחיתי")}</span>`
+        : `<span class="offer-response-badge offer-response-badge--open">${_t("Response needed", "נדרשת תגובה")}</span>`;
   const payLine = o.payRatePerHour > 0
     ? `<div class="offer-pay">₪${Number(o.payRatePerHour).toFixed(2)}<span>/hr</span></div>` : "";
   const loc = o.eventLocation
@@ -357,13 +398,13 @@ function renderOfferCard(o) {
     ? `<blockquote class="offer-notes">${escHtml(o.notes)}</blockquote>` : "";
 
   return `
-    <div class="offer-card" data-shift-id="${escHtml(o.shiftId)}">
+    <div class="offer-card" data-shift-id="${escHtml(o.shiftId)}" data-event-id="${escHtml(o.eventId ?? "")}">
       <div class="offer-card-header">
-        <div class="offer-project-name">${escHtml(o.projectName)}</div>
+        <div class="offer-project-name">${escHtml(o.eventName)}</div>
         ${o.eventType ? `<span class="offer-event-type-badge">${capitalize(o.eventType)}</span>` : ""}
       </div>
       ${statusBadge}
-      <h3 class="offer-event-name">${escHtml(o.eventName)}</h3>
+      <h3 class="offer-event-name">${escHtml(o.roleName)}</h3>
       ${dateStr ? `<div class="offer-meta-item offer-date"><i data-lucide="calendar" class="offer-icon"></i><span>${escHtml(dateStr)}</span></div>` : ""}
       <div class="offer-meta-row">
         ${loc}
@@ -374,11 +415,11 @@ function renderOfferCard(o) {
       </div>
       ${payLine}
       ${notes}
-      <div class="offer-by">Offered by: <strong>${escHtml(o.managerName)}</strong></div>
+      <div class="offer-by">${_t("Offered by:", "הוצע על ידי:")} <strong>${escHtml(o.managerName)}</strong></div>
       ${isOpenOffer
         ? `<div class="offer-actions">
-            <button class="offer-btn offer-btn--accept">I'm In ✓</button>
-            <button class="offer-btn offer-btn--decline">Can't Make It ✗</button>
+            <button class="offer-btn offer-btn--accept">${_t("I'm In ✓", "אני פנוי ✓")}</button>
+            <button class="offer-btn offer-btn--decline">${_t("Can't Make It ✗", "לא יכול להגיע ✗")}</button>
           </div>`
         : ""}
     </div>`;
@@ -404,7 +445,7 @@ async function renderUpcomingTab() {
   });
 
   if (upcoming.length === 0) {
-    panel.innerHTML = emptyState("calendar", "No upcoming shifts.", "Your confirmed upcoming shifts will appear here.");
+    panel.innerHTML = emptyState("calendar", _t("No upcoming shifts.", "אין משמרות קרובות."), _t("Your confirmed upcoming shifts will appear here.", "המשמרות המאושרות הקרובות שלך יופיעו כאן."));
     lucide.createIcons(); return;
   }
 
@@ -429,7 +470,7 @@ async function renderNeedsActionTab() {
   const list = (_msApplications ?? []).filter(_isNeedsAction);
 
   if (list.length === 0) {
-    panel.innerHTML = emptyState("check-circle", "All done!", "No shifts are waiting for your input.");
+    panel.innerHTML = emptyState("check-circle", _t("All done!", "הכל בסדר!"), _t("No shifts are waiting for your input.", "אין משמרות הממתינות לפעולה שלך."));
     lucide.createIcons(); return;
   }
 
@@ -474,7 +515,7 @@ async function renderHistoryTab() {
   );
 
   if (past.length === 0) {
-    panel.innerHTML = emptyState("archive", "No history yet.", "Past shifts will appear here — you can fill in your hours manually.");
+    panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here — you can fill in your hours manually.", "משמרות שעברו יופיעו כאן — ניתן למלא שעות ידנית."));
     lucide.createIcons(); return;
   }
 
@@ -508,13 +549,13 @@ function renderShiftCard(shift, opts = {}) {
     ? `${fmtTime(shift.shiftStart)} – ${fmtTime(shift.shiftEnd)}` : "";
 
   const flags = [];
-  if (missingHours)          flags.push(`<span class="ms-action-flag ms-action-flag--hours">Hours not reported</span>`);
-  if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${unackedBriefs.length} brief${unackedBriefs.length > 1 ? "s" : ""} pending</span>`);
+  if (missingHours)          flags.push(`<span class="ms-action-flag ms-action-flag--hours">${_t("Hours not reported", "שעות לא דווחו")}</span>`);
+  if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${_t(`${unackedBriefs.length} brief${unackedBriefs.length > 1 ? "s" : ""} pending`, `${unackedBriefs.length} תדריכ${unackedBriefs.length > 1 ? "ים" : ""} ממתינ${unackedBriefs.length > 1 ? "ים" : ""} לאישור`)}</span>`);
   const flagsHtml = flags.length ? `<div class="ms-action-flags">${flags.join("")}</div>` : "";
 
   // Status badge for header
   const statusBadge = shift.status === "manager_approved"
-    ? `<span class="ms-approved-badge">✓ Approved</span>` : "";
+    ? `<span class="ms-approved-badge">✓ ${_t("Approved", "מאושר")}</span>` : "";
 
   // Detail sections
   const briefsSection     = _renderDetailBriefs(briefs);
@@ -529,7 +570,7 @@ function renderShiftCard(shift, opts = {}) {
       <div class="ms-card-header">
         <div class="ms-shift-info">
           <div class="ms-shift-meta">
-            <span class="ms-shift-project">${escHtml(shift.projectName)}</span>
+            <span class="ms-shift-project">${escHtml(shift.roleName)}</span>
             ${statusBadge}
           </div>
           <h3 class="ms-shift-event">${escHtml(shift.eventName)}</h3>
@@ -541,7 +582,17 @@ function renderShiftCard(shift, opts = {}) {
           </div>
           ${flagsHtml}
         </div>
-        <button class="ms-open-shift-btn" aria-expanded="false">Open Shift</button>
+        <div class="ms-card-actions">
+          <button class="ms-chat-btn" data-shift-chat="event" type="button" title="${_t("Event chat", "צ'אט אירוע")}">
+            <i data-lucide="messages-square" style="width:16px;height:16px"></i>
+            ${_t("Event", "אירוע")}
+          </button>
+          <button class="ms-chat-btn" data-shift-chat="shift" type="button" title="${_t("Shift chat", "צ'אט משמרת")}">
+            <i data-lucide="message-square" style="width:16px;height:16px"></i>
+            ${_t("Shift", "משמרת")}
+          </button>
+          <button class="ms-open-shift-btn" aria-expanded="false">${_t("Open Shift", "פתח משמרת")}</button>
+        </div>
       </div>
       <div class="ms-card-body" hidden>
         ${briefsSection}
@@ -553,7 +604,7 @@ function renderShiftCard(shift, opts = {}) {
 
 function _renderDetailBriefs(briefs) {
   const items = briefs.length === 0
-    ? `<p class="ms-detail-note">No briefings for this shift.</p>`
+    ? `<p class="ms-detail-note">${_t("No briefings for this shift.", "אין תדריכים למשמרת זו.")}</p>`
     : briefs.map(b => {
         const acked  = b.isAcknowledged;
         const ackedAt = b.acknowledgedAt ? fmtDate(b.acknowledgedAt) : "";
@@ -566,7 +617,7 @@ function _renderDetailBriefs(briefs) {
                 : `<span class="brief-unread-dot"></span>`}
             </div>
             <div class="ms-brief-item-content">${escHtml(b.content)}</div>
-            ${!acked ? `<button class="ms-brief-ack-btn">I have read and acknowledge</button>` : ""}
+            ${!acked ? `<button class="ms-brief-ack-btn">${_t("I have read and acknowledge", "קראתי ומאשר")}</button>` : ""}
           </div>`;
       }).join("");
 
@@ -574,7 +625,7 @@ function _renderDetailBriefs(briefs) {
     <div class="ms-detail-section">
       <div class="ms-detail-section-title">
         <i data-lucide="file-text" style="width:14px;height:14px"></i>
-        Briefings
+        ${_t("Briefings", "תדריכים")}
       </div>
       ${items}
     </div>`;
@@ -587,17 +638,17 @@ function _renderDetailAttendance(shift) {
   // ── Upcoming shift: quick clock buttons only, no manual inputs ──────────
   if (!isPast) {
     const arrivedNote = shift.actualStart
-      ? `<span class="ms-clock-recorded">Recorded: ${fmtTime(shift.actualStart)}</span>`
-      : `<span class="ms-clock-hint">Tap when you arrive</span>`;
+      ? `<span class="ms-clock-recorded">${_t("Recorded:", "נרשם:")} ${fmtTime(shift.actualStart)}</span>`
+      : `<span class="ms-clock-hint">${_t("Tap when you arrive", "הקש כשאתה מגיע")}</span>`;
     const leftNote = shift.actualEnd
-      ? `<span class="ms-clock-recorded">Recorded: ${fmtTime(shift.actualEnd)}</span>`
-      : `<span class="ms-clock-hint">Tap when you leave</span>`;
+      ? `<span class="ms-clock-recorded">${_t("Recorded:", "נרשם:")} ${fmtTime(shift.actualEnd)}</span>`
+      : `<span class="ms-clock-hint">${_t("Tap when you leave", "הקש כשאתה עוזב")}</span>`;
 
     return `
       <div class="ms-detail-section ms-time-report">
         <div class="ms-detail-section-title">
           <i data-lucide="clock" style="width:14px;height:14px"></i>
-          Attendance
+          ${_t("Attendance", "נוכחות")}
         </div>
         <div class="ms-time-quick-btns">
           <div class="ms-clock-btn-wrap">
@@ -605,7 +656,7 @@ function _renderDetailAttendance(shift) {
                     ${shift.actualStart || isApproved ? " disabled" : ""}>
               <i data-lucide="log-in" style="width:22px;height:22px"></i>
             </button>
-            <span class="ms-clock-btn-label">I Arrived</span>
+            <span class="ms-clock-btn-label">${_t("I Arrived", "הגעתי")}</span>
             ${arrivedNote}
           </div>
           <div class="ms-clock-btn-wrap">
@@ -613,7 +664,7 @@ function _renderDetailAttendance(shift) {
                     ${shift.actualEnd || isApproved ? " disabled" : ""}>
               <i data-lucide="log-out" style="width:22px;height:22px"></i>
             </button>
-            <span class="ms-clock-btn-label">I Left</span>
+            <span class="ms-clock-btn-label">${_t("I Left", "עזבתי")}</span>
             ${leftNote}
           </div>
         </div>
@@ -626,24 +677,24 @@ function _renderDetailAttendance(shift) {
     <div class="ms-detail-section ms-time-report">
       <div class="ms-detail-section-title">
         <i data-lucide="clock" style="width:14px;height:14px"></i>
-        Attendance & Hours Reporting
+        ${_t("Attendance & Hours Reporting", "נוכחות ודיווח שעות")}
       </div>
       <div class="ms-time-report-fields">
         <div class="ms-time-field">
-          <label class="ms-time-label">Actual Arrival</label>
+          <label class="ms-time-label">${_t("Actual Arrival", "כניסה בפועל")}</label>
           <input type="datetime-local" class="ms-time-input" name="actualStart"
                  value="${escHtml(toDatetimeLocal(shift.actualStart))}"${isApproved ? " readonly" : ""}>
         </div>
         <div class="ms-time-field">
-          <label class="ms-time-label">Actual Departure</label>
+          <label class="ms-time-label">${_t("Actual Departure", "יציאה בפועל")}</label>
           <input type="datetime-local" class="ms-time-input" name="actualEnd"
                  value="${escHtml(toDatetimeLocal(shift.actualEnd))}"${isApproved ? " readonly" : ""}>
         </div>
       </div>
       ${isApproved
-        ? `<p class="ms-detail-note ms-detail-note--approved">✓ Hours approved by manager — contact manager to request changes.</p>`
+        ? `<p class="ms-detail-note ms-detail-note--approved">✓ ${_t("Hours approved by manager — contact manager to request changes.", "השעות אושרו על ידי המנהל — צור קשר עם המנהל לבקשת שינויים.")}</p>`
         : `<div class="ms-time-actions">
-             <button class="ms-time-save-btn">Save Hours</button>
+             <button class="ms-time-save-btn">${_t("Save Hours", "שמור שעות")}</button>
              <span class="ms-time-save-status" style="display:none"></span>
            </div>`}
     </div>`;
@@ -652,10 +703,10 @@ function _renderDetailAttendance(shift) {
 function _renderDetailStatus(shift) {
   const status   = _shiftStatus(shift);
   const steps    = [
-    { key: "not-reported", label: "Not Reported" },
-    { key: "submitted",    label: "Submitted"    },
-    { key: "approved",     label: "Approved"     },
-    { key: "paid",         label: "Paid"         },
+    { key: "not-reported", label: _t("Not Reported", "לא דווח") },
+    { key: "submitted",    label: _t("Submitted",    "הוגש")    },
+    { key: "approved",     label: _t("Approved",     "אושר")    },
+    { key: "paid",         label: _t("Paid",         "שולם")    },
   ];
   const currentIdx = steps.findIndex(s => s.key === status);
 
@@ -669,7 +720,7 @@ function _renderDetailStatus(shift) {
     <div class="ms-detail-section">
       <div class="ms-detail-section-title">
         <i data-lucide="activity" style="width:14px;height:14px"></i>
-        Status
+        ${_t("Status", "סטטוס")}
       </div>
       <div class="ms-status-track">${stepsHtml}</div>
     </div>`;
@@ -679,6 +730,18 @@ function _renderDetailStatus(shift) {
 //  WIRE SHIFT CARD INTERACTIONS
 // ────────────────────────────────────────────────────────────────────────────
 function wireShiftCards(panel) {
+  panel.querySelectorAll("[data-shift-chat]").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const card = btn.closest(".ms-shift-card");
+      const shiftId = card?.dataset.shiftId;
+      const item = (_msApplications ?? []).find(s => s.shiftId === shiftId);
+      if (!item) return;
+      if (btn.dataset.shiftChat === "event") await _openEmployeeEventChat(item);
+      else await _openEmployeeShiftChat(item);
+    });
+  });
+
   // "Open Shift" / "Close Shift" toggle
   panel.querySelectorAll(".ms-open-shift-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -687,7 +750,7 @@ function wireShiftCards(panel) {
       if (!body) return;
       const opening = body.hidden;
       body.hidden = !opening;
-      btn.textContent      = opening ? "Close Shift" : "Open Shift";
+      btn.textContent      = opening ? _t("Close Shift", "סגור משמרת") : _t("Open Shift", "פתח משמרת");
       btn.setAttribute("aria-expanded", String(opening));
       if (opening) lucide.createIcons({ el: body });
     });
@@ -720,7 +783,7 @@ function wireShiftCards(panel) {
       const statusEl = section.querySelector(".ms-time-save-status");
 
       btn.disabled = true;
-      if (statusEl) { statusEl.textContent = "Saving…"; statusEl.style.display = ""; }
+      if (statusEl) { statusEl.textContent = _t("Saving…", "שומר…"); statusEl.style.display = ""; }
 
       try {
         const token = await getToken();
@@ -741,7 +804,7 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        if (statusEl) { statusEl.textContent = "Saved ✓"; statusEl.style.display = ""; }
+        if (statusEl) { statusEl.textContent = _t("Saved ✓", "נשמר ✓"); statusEl.style.display = ""; }
         setTimeout(async () => {
           if (statusEl) statusEl.style.display = "none";
           await _refreshShiftsData();
@@ -749,7 +812,7 @@ function wireShiftCards(panel) {
 
       } catch {
         btn.disabled = false;
-        if (statusEl) { statusEl.textContent = "Failed — try again"; }
+        if (statusEl) { statusEl.textContent = _t("Failed — try again", "נכשל — נסה שוב"); }
         setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 3000);
       }
     });
@@ -763,7 +826,7 @@ function wireShiftCards(panel) {
       if (!briefId) return;
 
       btn.disabled    = true;
-      btn.textContent = "Saving…";
+      btn.textContent = _t("Saving…", "שומר…");
       try {
         const token = await getToken();
         const res = await fetch(
@@ -772,13 +835,13 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        btn.textContent = "✓ Acknowledged";
+        btn.textContent = _t("✓ Acknowledged", "✓ אישרתי");
         // Brief acked — refresh full data after short delay
         setTimeout(() => _refreshShiftsData(), 800);
 
       } catch {
         btn.disabled    = false;
-        btn.textContent = "I acknowledge this brief";
+        btn.textContent = _t("I acknowledge this brief", "קראתי ואישרתי את התדריך");
       }
     });
   });
@@ -796,7 +859,7 @@ function wireShiftCards(panel) {
       const statusEl = section.querySelector(".ms-time-save-status");
 
       btn.disabled    = true;
-      btn.textContent = "Saving…";
+      btn.textContent = _t("Saving…", "שומר…");
 
       try {
         const token = await getToken();
@@ -813,14 +876,14 @@ function wireShiftCards(panel) {
         );
         if (!res.ok) throw new Error();
 
-        if (statusEl) { statusEl.textContent = "Saved ✓"; statusEl.style.display = ""; }
-        btn.textContent = "Save Hours";
+        if (statusEl) { statusEl.textContent = _t("Saved ✓", "נשמר ✓"); statusEl.style.display = ""; }
+        btn.textContent = _t("Save Hours", "שמור שעות");
         btn.disabled    = false;
         setTimeout(() => _refreshShiftsData(), 1200);
 
       } catch {
-        if (statusEl) { statusEl.textContent = "Failed — try again"; statusEl.style.display = ""; }
-        btn.textContent = "Save Hours";
+        if (statusEl) { statusEl.textContent = _t("Failed — try again", "נכשל — נסה שוב"); statusEl.style.display = ""; }
+        btn.textContent = _t("Save Hours", "שמור שעות");
         btn.disabled    = false;
       }
     });
@@ -860,7 +923,7 @@ onAuthStateChanged(auth, async user => {
 
   _profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
   if (!_profile || _profile.role !== "Employee") {
-    alert("Access denied. Employee accounts only.");
+    alert(_t("Access denied. Employee accounts only.", "גישה נדחתה. חשבונות עובדים בלבד."));
     await signOut(auth);
     window.location.href = "/frontend/auth.html";
     return;
@@ -879,7 +942,7 @@ onAuthStateChanged(auth, async user => {
       lastName:  _profile.lastName,
       email:     _profile.email || "",
       companyId: _profile.companyId,
-      role:      profile.role,
+      role:      _profile.role,
     });
   } catch (e) { console.warn("Chat profile write failed:", e); }
 

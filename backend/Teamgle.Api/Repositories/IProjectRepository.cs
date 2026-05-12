@@ -88,4 +88,11 @@ public interface IProjectRepository
 
     // ── Auto-Assign ────────────────────────────────────────────────────────
     Task<AutoAssignResult> AutoAssignShiftAsync(string shiftId, string managerFbUid);
+
+    // ── Event-first (standalone events) ───────────────────────────────────
+    Task<IEnumerable<EventListItemResponse>> GetEventsByManagerAsync(string firebaseUid);
+    Task<ScheduleEventItem?> GetEventScheduleByIdAsync(string eventId, string firebaseUid);
+    Task<string> CreateStandaloneEventAsync(string companyId, string managerId, CreateEventStandaloneRequest request);
+    Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersByEventAsync(string eventId, string firebaseUid);
+    Task SendOfferByEventAsync(string eventId, string employeeFbUid, List<string> shiftIds, string firebaseUid);
 }

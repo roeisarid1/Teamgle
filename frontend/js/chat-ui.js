@@ -7,12 +7,14 @@ import {
   writeUserProfile,
   getCompanyUsers,
   getOrCreateConversation,
+  getOrCreateScopedConversation,
   subscribeToConversations,
   subscribeToMessages,
   sendMessage,
   markConversationRead,
   unsubscribeAll
 } from "./chat-service.js";
+import { _t } from "./i18n.js";
 
 // ── Module state ──────────────────────────────────────────────────────────────
 let _user                     = null;   // { uid, firstName, lastName, email, companyId, role }
@@ -83,6 +85,31 @@ export async function openChatWith(otherUid) {
   _startConversationWith(otherUid);
 }
 
+/**
+ * Open an event-wide group chat.
+ * @param {{ eventId: string, title: string, subtitle?: string, participantUids?: string[] }} options
+ */
+export async function openEventChat(options) {
+  await _openScopedChat("event", options.eventId, {
+    title: options.title || "Event Chat",
+    subtitle: options.subtitle || "Event conversation",
+    eventId: options.eventId,
+  }, options.participantUids ?? []);
+}
+
+/**
+ * Open a shift-specific group chat.
+ * @param {{ shiftId: string, eventId?: string, title: string, subtitle?: string, participantUids?: string[] }} options
+ */
+export async function openShiftChat(options) {
+  await _openScopedChat("shift", options.shiftId, {
+    title: options.title || "Shift Chat",
+    subtitle: options.subtitle || "Shift conversation",
+    eventId: options.eventId || null,
+    shiftId: options.shiftId,
+  }, options.participantUids ?? []);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTML BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,22 +121,22 @@ function buildChatHTML() {
       <!-- LEFT PANEL: conversation list -->
       <aside class="chat-sidebar" id="chat-sidebar">
         <div class="chat-sidebar-header">
-          <h2>Messages</h2>
-          <button class="btn-new-chat" id="btn-new-chat">＋ New Chat</button>
+          <h2>${_t("Messages", "הודעות")}</h2>
+          <button class="btn-new-chat" id="btn-new-chat">＋ ${_t("New Chat", "שיחה חדשה")}</button>
         </div>
         <div class="chat-search-wrap">
           <input
             type="search"
             class="chat-search-input"
             id="chat-search"
-            placeholder="Search conversations…"
+            placeholder="${_t("Search conversations…", "חיפוש שיחות…")}"
             autocomplete="off"
           />
         </div>
         <div class="conversation-list" id="conversation-list">
           <div class="chat-loading">
             <div class="chat-spinner"></div>
-            Loading…
+            ${_t("Loading…", "טוען…")}
           </div>
         </div>
       </aside>
@@ -118,9 +145,9 @@ function buildChatHTML() {
       <div class="chat-main" id="chat-main">
         <div class="chat-no-selection" id="chat-no-selection">
           <div class="chat-no-selection-icon">${ICON_CHAT}</div>
-          <h3>Your Messages</h3>
-          <p>Select a conversation from the list, or start a new one.</p>
-          <button class="btn-start-chat" id="btn-start-chat-main">＋ New Conversation</button>
+          <h3>${_t("Your Messages", "ההודעות שלך")}</h3>
+          <p>${_t("Select a conversation from the list, or start a new one.", "בחר שיחה מהרשימה, או פתח שיחה חדשה.")}</p>
+          <button class="btn-start-chat" id="btn-start-chat-main">＋ ${_t("New Conversation", "שיחה חדשה")}</button>
         </div>
         <div class="chat-active-view" id="chat-active-view" style="display:none">
           <!-- Header -->
@@ -138,7 +165,7 @@ function buildChatHTML() {
           <div class="chat-messages" id="chat-messages">
             <div class="msgs-loading">
               <div class="chat-spinner"></div>
-              Loading messages…
+              ${_t("Loading messages…", "טוען הודעות…")}
             </div>
           </div>
           <!-- Input -->
@@ -147,7 +174,7 @@ function buildChatHTML() {
               <textarea
                 class="chat-textarea"
                 id="chat-textarea"
-                placeholder="Type a message…"
+                placeholder="${_t("Type a message…", "הקלד הודעה…")}"
                 rows="1"
                 maxlength="2000"
               ></textarea>
@@ -165,7 +192,7 @@ function buildChatHTML() {
     <div class="user-picker-overlay" id="user-picker-overlay" role="dialog" aria-modal="true">
       <div class="user-picker-modal">
         <div class="user-picker-header">
-          <h3>New Conversation</h3>
+          <h3>${_t("New Conversation", "שיחה חדשה")}</h3>
           <button class="btn-picker-close" id="btn-picker-close" aria-label="Close">×</button>
         </div>
         <div class="user-picker-search-wrap">
@@ -173,14 +200,14 @@ function buildChatHTML() {
             type="search"
             class="user-picker-search"
             id="picker-search"
-            placeholder="Search people…"
+            placeholder="${_t("Search people…", "חיפוש אנשים…")}"
             autocomplete="off"
           />
         </div>
         <div class="user-picker-list" id="picker-list">
           <div class="chat-loading">
             <div class="chat-spinner"></div>
-            Loading…
+            ${_t("Loading…", "טוען…")}
           </div>
         </div>
       </div>
@@ -244,16 +271,19 @@ function _renderConversationList(convs) {
   const list = _q("#conversation-list");
   const searchVal = (_q("#chat-search")?.value ?? "").trim().toLowerCase();
   const filtered = searchVal
-    ? convs.filter(c => _getOtherParticipantInfo(c).name.toLowerCase().includes(searchVal))
+    ? convs.filter(c => {
+        const display = _getConversationDisplay(c);
+        return `${display.name} ${display.participantNames ?? ""}`.toLowerCase().includes(searchVal);
+      })
     : convs;
 
   if (!filtered.length) {
     list.innerHTML = `
       <div class="chat-empty-state">
         <div class="chat-empty-icon">💬</div>
-        <p class="chat-empty-title">${searchVal ? "No results" : "No conversations yet"}</p>
-        <p class="chat-empty-hint">${searchVal ? "Try a different name." : "Start a chat with a colleague."}</p>
-        ${!searchVal ? `<button class="btn-start-chat" id="btn-empty-new">＋ New Conversation</button>` : ""}
+        <p class="chat-empty-title">${searchVal ? _t("No results", "אין תוצאות") : _t("No conversations yet", "אין שיחות עדיין")}</p>
+        <p class="chat-empty-hint">${searchVal ? _t("Try a different name.", "נסה שם אחר.") : _t("Start a chat with a colleague.", "פתח שיחה עם עמית.")}</p>
+        ${!searchVal ? `<button class="btn-start-chat" id="btn-empty-new">＋ ${_t("New Conversation", "שיחה חדשה")}</button>` : ""}
       </div>`;
     _q("#btn-empty-new")?.addEventListener("click", _openUserPicker);
     return;
@@ -271,10 +301,10 @@ function _renderConversationList(convs) {
 }
 
 function _buildConvItem(conv) {
-  const { name, role } = _getOtherParticipantInfo(conv);
+  const { name, role, isGroup } = _getConversationDisplay(conv);
   const initials  = _initials(name);
   const unread    = conv.unreadCounts?.[_user.uid] ?? 0;
-  const lastMsg   = conv.lastMessage ? _escHtml(conv.lastMessage) : "<em>No messages yet</em>";
+  const lastMsg   = conv.lastMessage ? _escHtml(conv.lastMessage) : `<em>${_t("No messages yet", "אין הודעות עדיין")}</em>`;
   const timeLabel = conv.lastMessageAt ? _formatTime(conv.lastMessageAt) : "";
   const isActive  = conv.id === _activeConvId;
   const isManager = role === "Manager";
@@ -286,7 +316,7 @@ function _buildConvItem(conv) {
       role="button"
       tabindex="0"
     >
-      <div class="conv-avatar ${isManager ? "manager-avatar" : ""}">${initials}</div>
+      <div class="conv-avatar ${isManager ? "manager-avatar" : ""} ${isGroup ? "group-avatar" : ""}">${initials}</div>
       <div class="conv-info">
         <div class="conv-name">${_escHtml(name)}</div>
         <div class="conv-last-msg">${lastMsg}</div>
@@ -334,7 +364,7 @@ function _openConversation(convId) {
   _q("#chat-messages").innerHTML = `
     <div class="msgs-loading">
       <div class="chat-spinner"></div>
-      Loading messages…
+      ${_t("Loading messages…", "טוען הודעות…")}
     </div>`;
 
   // _renderMessages handles scroll internally via _messagesFirstRender + wasAtBottom
@@ -351,12 +381,14 @@ function _openConversation(convId) {
 }
 
 function _setConvHeader(conv) {
-  const { name, role } = _getOtherParticipantInfo(conv);
+  const { name, role, isGroup, participantNames } = _getConversationDisplay(conv);
   const isManager = role === "Manager";
-  _q("#chat-header-avatar").className = `chat-header-avatar ${isManager ? "manager-avatar" : ""}`;
+  _q("#chat-header-avatar").className = `chat-header-avatar ${isManager ? "manager-avatar" : ""} ${isGroup ? "group-avatar" : ""}`;
   _q("#chat-header-avatar").textContent = _initials(name);
   _q("#chat-header-name").textContent = name;
-  _q("#chat-header-role").textContent = role || "";
+  const roleEl = _q("#chat-header-role");
+  roleEl.textContent = role || "";
+  roleEl.title = isGroup && participantNames ? participantNames : "";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -380,7 +412,7 @@ function _renderMessages(msgs) {
     el.innerHTML = `
       <div class="msgs-empty">
         <div class="msgs-empty-icon">👋</div>
-        <p>No messages yet.<br>Say hello!</p>
+        <p>${_t("No messages yet.", "אין הודעות עדיין.")}<br>${_t("Say hello!", "שלח שלום!")}</p>
       </div>`;
     return;
   }
@@ -490,7 +522,7 @@ async function _openUserPicker() {
     _renderPickerList(_companyUsers);
   } catch (err) {
     console.error("Failed to load company users:", err);
-    _q("#picker-list").innerHTML = `<div class="user-picker-empty">Failed to load users. Please try again.</div>`;
+    _q("#picker-list").innerHTML = `<div class="user-picker-empty">${_t("Failed to load users. Please try again.", "טעינת משתמשים נכשלה. נסה שוב.")}</div>`;
   }
 
   // Focus search input
@@ -514,7 +546,7 @@ function _renderPickerList(users) {
   const list = _q("#picker-list");
 
   if (!users.length) {
-    list.innerHTML = `<div class="user-picker-empty">No people found.</div>`;
+    list.innerHTML = `<div class="user-picker-empty">${_t("No people found.", "לא נמצאו אנשים.")}</div>`;
     return;
   }
 
@@ -596,7 +628,7 @@ async function _startConversationWith(otherUid) {
       _q("#chat-messages").innerHTML = `
         <div class="msgs-empty">
           <div class="msgs-empty-icon">👋</div>
-          <p>No messages yet.<br>Say hello!</p>
+          <p>${_t("No messages yet.", "אין הודעות עדיין.")}<br>${_t("Say hello!", "שלח שלום!")}</p>
         </div>`;
 
       // _renderMessages handles scroll via _messagesFirstRender
@@ -610,6 +642,98 @@ async function _startConversationWith(otherUid) {
   } catch (err) {
     console.error("Failed to create conversation:", err);
   }
+}
+
+async function _openScopedChat(type, scopeId, scope, participantUids) {
+  if (!_user || !scopeId) return;
+
+  if (_companyUsers.length === 0) {
+    try {
+      _companyUsers = await getCompanyUsers(_user.companyId, _user.uid);
+    } catch (err) {
+      console.error("[Chat] Failed to load company users for scoped chat:", err);
+      _companyUsers = [];
+    }
+  }
+
+  const managerUids = _companyUsers
+    .filter(u => u.role === "Manager")
+    .map(u => u.uid);
+  const participants = [
+    _user.uid,
+    ...managerUids,
+    ...(participantUids ?? [])
+  ].filter(Boolean);
+
+  const participantInfo = {
+    [_user.uid]: {
+      name:  _user.displayName,
+      email: _user.email,
+      role:  _user.role
+    }
+  };
+  _companyUsers.forEach(u => {
+    if (participants.includes(u.uid)) {
+      participantInfo[u.uid] = {
+        name:  u.displayName,
+        email: u.email,
+        role:  u.role
+      };
+    }
+  });
+
+  try {
+    const convId = await getOrCreateScopedConversation(
+      type,
+      scopeId,
+      _user.companyId,
+      participants,
+      participantInfo,
+      scope,
+    );
+    _openConversationOptimistic(convId, {
+      id: convId,
+      companyId: _user.companyId,
+      type,
+      scope,
+      participants,
+      participantInfo,
+      unreadCounts: { [_user.uid]: 0 },
+    });
+  } catch (err) {
+    console.error("Failed to create scoped conversation:", err);
+  }
+}
+
+function _openConversationOptimistic(convId, conv) {
+  const existing = _conversations.find(c => c.id === convId);
+  if (existing) {
+    _openConversation(convId);
+    return;
+  }
+
+  _activeConvId              = convId;
+  _messagesFirstRender       = true;
+  _activeConvParticipantInfo = conv.participantInfo ?? null;
+
+  _q("#chat-no-selection").style.display = "none";
+  _q("#chat-active-view").style.display  = "";
+  _q("#chat-sidebar").classList.add("hidden-mobile");
+  _q("#chat-main").classList.add("visible-mobile");
+  _setConvHeader(conv);
+
+  _q("#chat-messages").innerHTML = `
+    <div class="msgs-empty">
+      <div class="msgs-empty-icon">👋</div>
+      <p>${_t("No messages yet.", "אין הודעות עדיין.")}<br>${_t("Say hello!", "שלח שלום!")}</p>
+    </div>`;
+
+  subscribeToMessages(convId, _renderMessages);
+
+  const ta = _q("#chat-textarea");
+  ta.value       = "";
+  ta.style.height = "";
+  _q("#btn-send").disabled = true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -654,6 +778,28 @@ function _getOtherParticipantInfo(conv) {
   };
 }
 
+function _getConversationDisplay(conv) {
+  if (conv.type === "event" || conv.type === "shift") {
+    const title = conv.scope?.title ?? (conv.type === "event" ? _t("Event Chat", "צ'אט אירוע") : _t("Shift Chat", "צ'אט משמרת"));
+    const count = conv.participants?.length ?? 0;
+    const participantNames = (conv.participants ?? [])
+      .map(uid => conv.participantInfo?.[uid]?.name)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b))
+      .join(", ");
+    const participantPreview = participantNames
+      ? _t(`${count} participant${count === 1 ? "" : "s"}: ${participantNames}`, `${count} משתתפ${count === 1 ? "" : "ים"}: ${participantNames}`)
+      : _t(`${count} participant${count === 1 ? "" : "s"}`, `${count} משתתפ${count === 1 ? "" : "ים"}`);
+    return {
+      name: title,
+      role: participantPreview,
+      isGroup: true,
+      participantNames
+    };
+  }
+  return { ..._getOtherParticipantInfo(conv), isGroup: false };
+}
+
 function _isManagerUid(uid) {
   // _activeConvParticipantInfo is set whenever a conversation is opened,
   // including the optimistic path — so it's always current.
@@ -666,8 +812,8 @@ function _formatTime(timestamp) {
   const now  = new Date();
   const diff = now - date;
 
-  if (diff < 60 * 1000) return "now";
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 60 * 1000) return _t("now", "עכשיו");
+  if (diff < 60 * 60 * 1000) return _t(`${Math.floor(diff / 60000)}m ago`, `לפני ${Math.floor(diff / 60000)} דק'`);
 
   const sameDay =
     date.getDate()     === now.getDate() &&
@@ -685,13 +831,13 @@ function _formatTime(timestamp) {
     date.getMonth()    === yesterday.getMonth() &&
     date.getFullYear() === yesterday.getFullYear();
 
-  if (sameYesterday) return "Yesterday";
+  if (sameYesterday) return _t("Yesterday", "אתמול");
 
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function _formatDate(timestamp) {
-  if (!timestamp) return "Unknown date";
+  if (!timestamp) return _t("Unknown date", "תאריך לא ידוע");
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
   const now  = new Date();
 
@@ -699,7 +845,7 @@ function _formatDate(timestamp) {
     date.getDate()     === now.getDate() &&
     date.getMonth()    === now.getMonth() &&
     date.getFullYear() === now.getFullYear();
-  if (sameDay) return "Today";
+  if (sameDay) return _t("Today", "היום");
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -707,7 +853,7 @@ function _formatDate(timestamp) {
     date.getDate()     === yesterday.getDate() &&
     date.getMonth()    === yesterday.getMonth() &&
     date.getFullYear() === yesterday.getFullYear();
-  if (sameYesterday) return "Yesterday";
+  if (sameYesterday) return _t("Yesterday", "אתמול");
 
   return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }

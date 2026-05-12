@@ -11,4 +11,5 @@ public class UpdateEventRequest
     public decimal? PlannedBudget { get; set; }
     public decimal? ExpectedRevenue { get; set; }
     public int? AttendeesCount { get; set; }
+    public string? CustomerId { get; set; }
 }

@@ -109,6 +109,13 @@
 
 .chat-search-input::placeholder { color: var(--text-muted); }
 
+body.rtl .chat-search-input,
+body.rtl .user-picker-search {
+  padding-left: 14px;
+  padding-right: 36px;
+  background-position: right 12px center;
+}
+
 /* ── Conversation list ───────────────────────────────────────────────────── */
 .conversation-list {
   flex: 1;
@@ -181,6 +188,13 @@
 .conv-avatar.manager-avatar {
   background: rgba(111,191,115,.15);
   color: #2a7d2e;
+}
+
+.conv-avatar.group-avatar,
+.chat-header-avatar.group-avatar {
+  background: rgba(79,110,247,.12);
+  color: var(--blue);
+  border-radius: 12px;
 }
 
 /* ── Conversation text info ──────────────────────────────────────────────── */

@@ -11,7 +11,8 @@ import {
   deleteObject,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { writeUserProfile } from "./chat-service.js";
-import { initChat, destroyChat, openChatWith } from "./chat-ui.js";
+import { initChat, destroyChat, openChatWith, openEventChat, openShiftChat } from "./chat-ui.js";
+import { initI18n, applyTranslations, getCurrentLanguage, _t } from "./i18n.js";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -36,6 +37,21 @@ const sidebar = document.querySelector(".sidebar");
 const sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
 const MOBILE_BREAKPOINT = 768;
+initI18n();
+
+window.addEventListener("teamgle:languagechange", () => {
+  applyTranslations();
+  const activeSection = document.querySelector(".page-section:not([style*='display:none'])")?.dataset.section;
+  if (activeSection === "events") renderProjectsKanban(_applyProjectFilters(_allProjects ?? []));
+  if (activeSection === "event-detail" && currentEventId) activateEventTab(
+    document.querySelector("#event-detail-tabs .pd-tab.active")?.dataset.etab ?? "staffing",
+  );
+  if (activeSection === "chats") {
+    destroyChat();
+    chatInitialized = false;
+    _initChatSection();
+  }
+});
 
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
@@ -94,6 +110,7 @@ let allCustomers = [];
 let chatInitialized = false;
 let _staffingPollInterval = null;
 let _staffingClickController = null;
+const _eventChatWorkers = new Map();
 
 // Add mode
 let profileFile = null; // File | null — new file chosen for profile
@@ -123,7 +140,7 @@ onAuthStateChanged(auth, async (user) => {
   profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
 
   if (!profile || profile.role !== "Manager") {
-    alert("Access denied. Manager accounts only.");
+    alert(_t("Access denied. Manager accounts only.", "גישה נדחתה. חשבונות מנהלים בלבד."));
     await signOut(auth);
     window.location.href = "/frontend/auth.html";
     return;
@@ -149,14 +166,14 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   await Promise.all([loadRoles(), loadEmployees()]);
-  activateSection("projects");
+  activateSection("events");
 });
 
 // ── Token helper (auto-refresh) ────────────────────────────────────────────
-async function getToken() {
+async function getToken(forceRefresh = false) {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated.");
-  return await user.getIdToken(false);
+  return await user.getIdToken(forceRefresh);
 }
 
 // ── Load roles ─────────────────────────────────────────────────────────────
@@ -245,7 +262,7 @@ document.getElementById("customer-search")?.addEventListener("input", () => {
 
 // ── Load employees ─────────────────────────────────────────────────────────
 async function loadEmployees() {
-  employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading…</td></tr>`;
+  employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_t("Loading…", "טוען…")}</td></tr>`;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/employees`, {
@@ -255,13 +272,13 @@ async function loadEmployees() {
     allEmployees = await res.json();
     renderEmployees(filterEmployees(allEmployees));
   } catch {
-    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">Failed to load employees.</td></tr>`;
+    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">${_t("Failed to load employees.", "טעינת עובדים נכשלה.")}</td></tr>`;
   }
 }
 
 function renderEmployees(employees) {
   if (!employees.length) {
-    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">No employees yet. Click "+ Add Employee" to get started.</td></tr>`;
+    employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_t('No employees yet. Click "+ Add Employee" to get started.', 'אין עובדים עדיין. לחץ על "+ הוסף עובד" להתחלה.')}</td></tr>`;
     return;
   }
 
@@ -599,8 +616,8 @@ async function openEditModal(employeeId) {
   clearForm();
   editingEmployeeId = employeeId;
 
-  document.getElementById("modal-title").textContent = "Edit Employee";
-  btnSave.innerHTML = `${_ICON.check} Save Changes`;
+  document.getElementById("modal-title").textContent = _t("Edit Employee", "ערוך עובד");
+  btnSave.innerHTML = `${_ICON.check} ${_t("Save Changes", "שמור שינויים")}`;
   delete btnSave.dataset.origHtml;
   empEmail.disabled = true;
   empEmail.style.opacity = "0.6";
@@ -609,7 +626,7 @@ async function openEditModal(employeeId) {
 
   // Show loading state while fetching
   btnSave.disabled = true;
-  btnSave.textContent = "Loading…";
+  btnSave.textContent = _t("Loading…", "טוען…");
 
   try {
     // 1. Load SQL data
@@ -774,8 +791,8 @@ function clearForm() {
 
   // Reset edit mode
   editingEmployeeId = null;
-  document.getElementById("modal-title").textContent = "Add New Employee";
-  btnSave.innerHTML = `${_ICON.check} Save Employee`;
+  document.getElementById("modal-title").textContent = _t("Add New Employee", "הוסף עובד חדש");
+  btnSave.innerHTML = `${_ICON.check} ${_t("Save Employee", "שמור עובד")}`;
   delete btnSave.dataset.origHtml;
   btnSave.disabled = false;
   empEmail.disabled = false;
@@ -798,19 +815,19 @@ btnSave.addEventListener("click", async () => {
 
   // Client-side validation
   if (!firstName || !lastName) {
-    showError("First and last name are required.");
+    showError(_t("First and last name are required.", "שם פרטי ושם משפחה הם שדות חובה."));
     return;
   }
   if (!editingEmployeeId && (!email || !isValidEmail(email))) {
-    showError("A valid email address is required.");
+    showError(_t("A valid email address is required.", "נדרשת כתובת אימייל תקינה."));
     return;
   }
   if (isNaN(costPerHour) || costPerHour < 0) {
-    showError("Cost per hour must be a valid positive number.");
+    showError(_t("Cost per hour must be a valid positive number.", "עלות לשעה חייבת להיות מספר חיובי תקין."));
     return;
   }
   if (!roleIds.length) {
-    showError("Please select at least one role.");
+    showError(_t("Please select at least one role.", "יש לבחור לפחות תפקיד אחד."));
     return;
   }
 
@@ -819,7 +836,7 @@ btnSave.addEventListener("click", async () => {
   );
   if (incompleteDocs.length > 0) {
     showError(
-      "Please select a title and a file for every document row, or remove incomplete rows.",
+      _t("Please select a title and a file for every document row, or remove incomplete rows.", "יש לבחור כותרת וקובץ לכל שורת מסמך, או להסיר שורות לא שלמות."),
     );
     return;
   }
@@ -1138,7 +1155,7 @@ async function submitNewRole(input, row) {
 
   const btn = document.getElementById("btn-confirm-role");
   btn.disabled = true;
-  btn.textContent = "Saving…";
+  btn.textContent = _t("Saving…", "שומר…");
 
   try {
     const token = await getToken();
@@ -1436,7 +1453,7 @@ function setLoading(btn, loading) {
   btn.disabled = loading;
   if (loading) {
     if (!btn.dataset.origHtml) btn.dataset.origHtml = btn.innerHTML;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
   } else {
     if (btn.dataset.origHtml) {
       btn.innerHTML = btn.dataset.origHtml;
@@ -1489,11 +1506,11 @@ function activateSection(name) {
     .classList.toggle("chat-mode", name === "chats");
 
   if (name === "customers") loadCustomers();
-  if (name === "projects") {
+  if (name === "events") {
     _initProjectFilters();
     loadProjects();
   }
-  if (name === "create-project") loadProjectCustomerDropdown();
+  if (name === "create-event") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
   if (name === "invoices") loadInvoices();
 }
@@ -1522,8 +1539,8 @@ function _applyProjectFilters() {
 
   if (_filterDateFrom || _filterDateTo) {
     projects = projects.filter((p) => {
-      const start = p.startDate ? new Date(p.startDate) : null;
-      const end = p.endDate ? new Date(p.endDate) : null;
+      const start = p.startTime ? new Date(p.startTime) : null;
+      const end = p.endTime ? new Date(p.endTime) : null;
       if (_filterDateFrom && end && end < _filterDateFrom) return false;
       if (_filterDateTo && start && start > _filterDateTo) return false;
       return true;
@@ -1534,6 +1551,11 @@ function _applyProjectFilters() {
     projects = projects.filter((p) =>
       _filterStatuses.has(p.displayStatus),
     );
+  }
+
+  const q = document.getElementById("search-projects")?.value.trim().toLowerCase();
+  if (q) {
+    projects = projects.filter((p) => (p.name || "").toLowerCase().includes(q));
   }
 
   _renderProjectKanban(projects);
@@ -1628,7 +1650,6 @@ async function loadProjects() {
     today: document.getElementById("kanban-today"),
     upcoming: document.getElementById("kanban-upcoming"),
     completed: document.getElementById("kanban-completed"),
-    draft: document.getElementById("kanban-draft"),
   };
 
   Object.values(cols).forEach((col) => {
@@ -1637,10 +1658,10 @@ async function loadProjects() {
 
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/projects`, {
+    const res = await fetch(`${API_BASE}/events`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error("Failed to load projects.");
+    if (!res.ok) throw new Error("Failed to load events.");
     _allProjects = await res.json();
     _applyProjectFilters();
   } catch {
@@ -1655,18 +1676,12 @@ function _renderProjectKanban(projects) {
     today: document.getElementById("kanban-today"),
     upcoming: document.getElementById("kanban-upcoming"),
     completed: document.getElementById("kanban-completed"),
-    draft: document.getElementById("kanban-draft"),
   };
 
-  const buckets = { today: [], upcoming: [], completed: [], draft: [] };
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const buckets = { today: [], upcoming: [], completed: [] };
 
   for (const p of projects) {
     switch (p.displayStatus) {
-      case "draft":
-        buckets.draft.push(p);
-        break;
       case "canceled":
         buckets.completed.push(p);
         break;
@@ -1686,18 +1701,18 @@ function _renderProjectKanban(projects) {
     const items = buckets[key];
     col.innerHTML = items.length
       ? items.map((p) => renderProjectCard(p)).join("")
-      : `<div class="empty-col">No projects</div>`;
+      : `<div class="empty-col">No events</div>`;
   }
 }
 
 
 function renderProjectCard(project) {
   const statusMap = {
-    draft: { label: "Draft", cls: "badge-pending" },
-    planning: { label: "Planning", cls: "badge-info" },
-    active: { label: "Active", cls: "badge-active" },
-    completed: { label: "Completed", cls: "badge-success" },
-    canceled: { label: "Canceled", cls: "badge-error" },
+    draft:     { label: _t("Draft",     "טיוטה"),    cls: "badge-pending"  },
+    planning:  { label: _t("Planning",  "תכנון"),    cls: "badge-info"     },
+    active:    { label: _t("Active",    "פעיל"),     cls: "badge-active"   },
+    completed: { label: _t("Completed", "הושלם"),   cls: "badge-success"  },
+    canceled:  { label: _t("Canceled",  "בוטל"),    cls: "badge-error"    },
   };
   const badge = statusMap[project.displayStatus] ?? {
     label: project.displayStatus,
@@ -1720,17 +1735,21 @@ function renderProjectCard(project) {
       : 0;
   const customer = project.customerName
     ? escapeHtml(project.customerName)
-    : "No customer";
+    : _t("No customer", "ללא לקוח");
 
   return `
-    <div class="event-card" data-proj-id="${escapeHtml(project.projId)}">
+    <div class="event-card"
+         data-event-id="${escapeHtml(project.eventId)}"
+         role="button"
+         tabindex="0"
+         aria-label="${escapeHtml(_t("Open event", "פתח אירוע"))}: ${escapeHtml(project.name)}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
         <span class="event-status-badge ${badge.cls}">${badge.label}</span>
       </div>
       <div class="event-title">${escapeHtml(project.name)}</div>
       <div class="event-meta">
         <span class="material-symbols-outlined" style="font-size:13px">calendar_month</span>
-        ${fmt(project.startDate)} – ${fmt(project.endDate)}
+        ${fmt(project.startTime)} – ${fmt(project.endTime)}
       </div>
       <div class="event-meta">
         <span class="material-symbols-outlined" style="font-size:13px">business</span>
@@ -1748,23 +1767,33 @@ function renderProjectCard(project) {
 }
 
 document.getElementById("search-projects")?.addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  const filtered = q
-    ? _allProjects.filter((p) => (p.name || "").toLowerCase().includes(q))
-    : _allProjects;
-  _renderProjectKanban(filtered);
+  _applyProjectFilters();
 });
 
 document.getElementById("btn-create-project").addEventListener("click", () => {
-  activateSection("create-project");
-  initCreateProjectForm();
+  activateSection("create-event");
+  initCreateEventForm();
 });
 
-// ── Double-click on kanban card → open project detail ───────────────────────
-document.querySelector(".events-kanban").addEventListener("dblclick", (e) => {
-  const card = e.target.closest(".event-card[data-proj-id]");
+function _openEventCard(card) {
   if (!card) return;
-  openProjectDetail(card.dataset.projId);
+  const evData = (_allProjects ?? []).find((p) => p.eventId === card.dataset.eventId);
+  openEventDetail(card.dataset.eventId, evData ?? null);
+}
+
+// ── Click/tap on kanban card → open event detail ───────────────────────────
+document.querySelector(".events-kanban").addEventListener("click", (e) => {
+  const card = e.target.closest(".event-card[data-event-id]");
+  if (!card) return;
+  _openEventCard(card);
+});
+
+document.querySelector(".events-kanban").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest(".event-card[data-event-id]");
+  if (!card) return;
+  e.preventDefault();
+  _openEventCard(card);
 });
 
 // ── PROJECT DETAIL SECTION ─────────────────────────────────────────────────
@@ -1785,16 +1814,16 @@ document
   });
 
 // Tab switching inside project detail
-document.querySelectorAll(".pd-tab").forEach((tab) => {
+document.querySelectorAll("#section-project-detail .pd-tab[data-tab]").forEach((tab) => {
   tab.addEventListener("click", () => activateProjectTab(tab.dataset.tab));
 });
 
 function activateProjectTab(name) {
   _stopStaffingPoll();
-  document.querySelectorAll(".pd-tab").forEach((t) => {
+  document.querySelectorAll("#section-project-detail .pd-tab[data-tab]").forEach((t) => {
     t.classList.toggle("active", t.dataset.tab === name);
   });
-  document.querySelectorAll(".pd-panel").forEach((p) => {
+  document.querySelectorAll("#section-project-detail .pd-panel[data-tab-panel]").forEach((p) => {
     p.style.display = p.dataset.tabPanel === name ? "" : "none";
   });
   if (name === "dashboard") renderDashboardTab();
@@ -1872,21 +1901,21 @@ function renderDashboardTab() {
   }
 
   const statusMeta = {
-    planning: { label: "Planning", cls: "ev-status--planning" },
-    active: { label: "Active", cls: "ev-status--active" },
-    completed: { label: "Completed", cls: "ev-status--completed" },
-    canceled: { label: "Canceled", cls: "ev-status--canceled" },
+    planning:  { label: _t("Planning",  "תכנון"),   cls: "ev-status--planning"  },
+    active:    { label: _t("Active",    "פעיל"),    cls: "ev-status--active"    },
+    completed: { label: _t("Completed", "הושלם"),  cls: "ev-status--completed" },
+    canceled:  { label: _t("Canceled",  "בוטל"),   cls: "ev-status--canceled"  },
   };
   const typeMeta = {
-    conference: { icon: "groups", label: "Conference" },
-    exhibition: { icon: "store", label: "Exhibition" },
-    concert: { icon: "music_note", label: "Concert" },
-    gala: { icon: "celebration", label: "Gala" },
-    corporate: { icon: "business", label: "Corporate" },
-    wedding: { icon: "favorite", label: "Wedding" },
-    workshop: { icon: "construction", label: "Workshop" },
-    seminar: { icon: "school", label: "Seminar" },
-    other: { icon: "event", label: "Event" },
+    conference: { icon: "groups",       label: _t("Conference", "כנס")       },
+    exhibition: { icon: "store",        label: _t("Exhibition", "תערוכה")    },
+    concert:    { icon: "music_note",   label: _t("Concert",    "קונצרט")    },
+    gala:       { icon: "celebration",  label: _t("Gala",       "גאלה")      },
+    corporate:  { icon: "business",     label: _t("Corporate",  "ארגוני")    },
+    wedding:    { icon: "favorite",     label: _t("Wedding",    "חתונה")     },
+    workshop:   { icon: "construction", label: _t("Workshop",   "סדנה")      },
+    seminar:    { icon: "school",       label: _t("Seminar",    "סמינר")     },
+    other:      { icon: "event",        label: _t("Event",      "אירוע")     },
   };
 
   const fmtDate = (iso) => {
@@ -1918,8 +1947,8 @@ function renderDashboardTab() {
       const durationLabel =
         duration != null
           ? duration === 0
-            ? "Same day"
-            : `${duration} day${duration !== 1 ? "s" : ""}`
+            ? _t("Same day", "אותו יום")
+            : _t(`${duration} day${duration !== 1 ? "s" : ""}`, `${duration} יום${duration !== 1 ? "ים" : ""}`)
           : "";
 
       return `
@@ -1933,7 +1962,7 @@ function renderDashboardTab() {
             </div>
             <span class="ev-status-badge ${sm.cls}">${sm.label}</span>
           </div>
-          <h3 class="ev-card-title">${escapeHtml(ev.name || "Untitled Event")}</h3>
+          <h3 class="ev-card-title">${escapeHtml(ev.name || _t("Untitled Event", "אירוע ללא שם"))}</h3>
           <div class="ev-card-meta">
             ${
               ev.location
@@ -1987,7 +2016,7 @@ async function loadProjectSchedule(projId) {
     );
     if (!res.ok) throw new Error("Failed to load schedule.");
     const schedule = await res.json();
-    renderGantt(schedule);
+    renderGantt(schedule, container);
   } catch {
     container.innerHTML = `
       <div class="pd-placeholder" style="color:var(--red)">
@@ -1997,8 +2026,35 @@ async function loadProjectSchedule(projId) {
   }
 }
 
-function renderGantt(schedule) {
-  const container = document.getElementById("gantt-container");
+async function loadEventSchedule(eventId) {
+  const container = document.getElementById("ed-gantt-container");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="pd-placeholder">
+      <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">hourglass_top</span>
+      Loading schedule…
+    </div>`;
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/schedule`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error("Failed to load schedule.");
+    const eventSchedule = await res.json();
+    _eventScheduleCache.set(eventId, eventSchedule);
+    renderGantt({ events: [eventSchedule] }, container);
+  } catch {
+    container.innerHTML = `
+      <div class="pd-placeholder" style="color:var(--red)">
+        <span class="material-symbols-outlined" style="font-size:40px;margin-bottom:8px">error</span>
+        Failed to load schedule.
+      </div>`;
+  }
+}
+
+function renderGantt(schedule, container) {
+  if (!container) container = document.getElementById("gantt-container");
 
   if (!schedule.events || schedule.events.length === 0) {
     container.innerHTML = `
@@ -2147,6 +2203,37 @@ function renderGantt(schedule) {
               })
               .join("");
 
+      const mobileRowsHtml =
+        ev.shifts.length === 0
+          ? `<div class="gantt-mobile-empty">${_t("No shifts defined for this event", "לא הוגדרו משמרות לאירוע הזה")}</div>`
+          : ev.shifts
+              .map((shift) => {
+                const time = `${fmtTime(shift.startTime)}${shift.endTime ? `-${fmtTime(shift.endTime)}` : ""}`;
+                return `
+            <div class="gantt-mobile-shift">
+              <div class="gantt-mobile-main">
+                <span class="gantt-mobile-role">${escapeHtml(shift.roleName)}</span>
+                <span class="gantt-mobile-time">${escapeHtml(time || "—")}</span>
+              </div>
+              <span class="gantt-mobile-count">${escapeHtml(String(shift.staffedCount ?? 0))}/${escapeHtml(String(shift.requiredQuantity ?? 0))}</span>
+              <div class="gantt-mobile-actions">
+                <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="${_t("Edit shift", "ערוך משמרת")}"
+                        data-shift-id="${escapeHtml(shift.shiftId)}"
+                        data-role-id="${escapeHtml(shift.roleId)}"
+                        data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
+                        data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
+                        data-qty="${shift.requiredQuantity}">
+                  <i data-lucide="pencil" style="width:14px;height:14px"></i>
+                </button>
+                <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="${_t("Delete shift", "מחק משמרת")}"
+                        data-shift-id="${escapeHtml(shift.shiftId)}">
+                  <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+                </button>
+              </div>
+            </div>`;
+              })
+              .join("");
+
       return `
       <div class="gantt-event-section">
         <div class="gantt-event-header">
@@ -2160,10 +2247,15 @@ function renderGantt(schedule) {
           </div>
           ${rowsHtml}
         </div>
+        <div class="gantt-mobile-list">
+          ${mobileRowsHtml}
+        </div>
         <div class="gantt-footer">
           <button class="btn-add-shift-gantt" type="button"
                   data-event-id="${escapeHtml(ev.eventId)}"
-                  data-event-date="${ev.startTime ? new Date(ev.startTime).toISOString().slice(0, 10) : ""}">+ Add Shift</button>
+                  data-event-date="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).date : ""}"
+                  data-event-start-time="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).time : ""}"
+                  data-event-end-time="${ev.endTime ? _splitIsoToLocalParts(ev.endTime).time : ""}">${_t("+ Add Shift", "+ הוסף משמרת")}</button>
         </div>
       </div>`;
     })
@@ -2552,7 +2644,7 @@ function addNewTaskRow() {
       row.remove();
       applyTaskFilters();
     } catch {
-      newSaveBtn.textContent = "Save";
+      newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
     }
   });
@@ -2579,11 +2671,11 @@ function addNewTaskRow() {
 async function renderProjectFinanceTab() {
   const root = document.getElementById("pd-finance-root");
   if (!root) return;
-  root.innerHTML = '<div class="pd-loading">Loading project finances…</div>';
+  root.innerHTML = `<div class="pd-loading">${_t("Loading project finances…", "טוען כספי פרויקט…")}</div>`;
 
   const events = currentProjectDetail?.events ?? [];
   if (events.length === 0) {
-    root.innerHTML = '<div class="pd-empty-state">No events in this project yet.</div>';
+    root.innerHTML = `<div class="pd-empty-state">${_t("No events in this project yet.", "אין עדיין אירועים בפרויקט הזה.")}</div>`;
     return;
   }
 
@@ -2653,20 +2745,20 @@ async function renderProjectFinanceTab() {
 
     root.innerHTML = `
       <div class="ed-finance-cards">
-        ${totalPlanned  > 0 ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">Total Planned Budget</div><div class="ed-finance-card-value">${fmt(totalPlanned)}</div></div>` : ""}
-        ${totalRevenue  > 0 ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">Total Expected Revenue</div><div class="ed-finance-card-value">${fmt(totalRevenue)}</div></div>` : ""}
-        <div class="ed-finance-card"><div class="ed-finance-card-label">Total Labor Cost</div><div class="ed-finance-card-value">${fmt(totalLabor)}</div></div>
-        <div class="ed-finance-card"><div class="ed-finance-card-label">Total Expenses</div><div class="ed-finance-card-value">${fmt(totalExpenses)}</div></div>
-        <div class="ed-finance-card ed-finance-card--total"><div class="ed-finance-card-label">Grand Total Cost</div><div class="ed-finance-card-value">${fmt(grandTotal)}</div></div>
-        ${totalRevenue > 0 ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">Profit / Loss</div><div class="ed-finance-card-value">${profitTotal >= 0 ? "+" : ""}${fmt(profitTotal)}</div></div>` : ""}
+        ${totalPlanned  > 0 ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">${_t("Total Planned Budget", "סה\"כ תקציב מתוכנן")}</div><div class="ed-finance-card-value">${fmt(totalPlanned)}</div></div>` : ""}
+        ${totalRevenue  > 0 ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">${_t("Total Expected Revenue", "סה\"כ הכנסה צפויה")}</div><div class="ed-finance-card-value">${fmt(totalRevenue)}</div></div>` : ""}
+        <div class="ed-finance-card"><div class="ed-finance-card-label">${_t("Total Labor Cost", "עלות עבודה כוללת")}</div><div class="ed-finance-card-value">${fmt(totalLabor)}</div></div>
+        <div class="ed-finance-card"><div class="ed-finance-card-label">${_t("Total Expenses", "סה\"כ הוצאות")}</div><div class="ed-finance-card-value">${fmt(totalExpenses)}</div></div>
+        <div class="ed-finance-card ed-finance-card--total"><div class="ed-finance-card-label">${_t("Grand Total Cost", "עלות כוללת")}</div><div class="ed-finance-card-value">${fmt(grandTotal)}</div></div>
+        ${totalRevenue > 0 ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">${_t("Profit / Loss", "רווח / הפסד")}</div><div class="ed-finance-card-value">${profitTotal >= 0 ? "+" : ""}${fmt(profitTotal)}</div></div>` : ""}
       </div>
       <div class="ed-finance-section">
-        <h4 class="ed-finance-section-title">Breakdown by Event</h4>
+        <h4 class="ed-finance-section-title">${_t("Breakdown by Event", "פירוט לפי אירוע")}</h4>
         <table class="ed-worker-table">
-          <thead><tr><th>Event</th><th>Budget</th><th>Revenue</th><th>Labor</th><th>Expenses</th><th>Total Cost</th><th>P/L</th></tr></thead>
+          <thead><tr><th>${_t("Event", "אירוע")}</th><th>${_t("Budget", "תקציב")}</th><th>${_t("Revenue", "הכנסה")}</th><th>${_t("Labor", "עבודה")}</th><th>${_t("Expenses", "הוצאות")}</th><th>${_t("Total Cost", "עלות כוללת")}</th><th>${_t("P/L", "רווח/הפסד")}</th></tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr>
-            <td><strong>Total</strong></td>
+            <td><strong>${_t("Total", "סה\"כ")}</strong></td>
             <td>${totalPlanned  > 0 ? fmt(totalPlanned)  : "—"}</td>
             <td>${totalRevenue  > 0 ? fmt(totalRevenue)  : "—"}</td>
             <td>${fmt(totalLabor)}</td>
@@ -2690,7 +2782,7 @@ async function renderProjectFinanceTab() {
       });
     });
   } catch {
-    root.innerHTML = '<div class="pd-loading">Failed to load finance data.</div>';
+    root.innerHTML = `<div class="pd-loading">${_t("Failed to load finance data.", "טעינת נתוני כספים נכשלה.")}</div>`;
   }
 }
 
@@ -2939,7 +3031,7 @@ function wireBriefDeleteBtn(row, deleteBtn, brief) {
 }
 
 function briefEmptyStateHtml() {
-  return '<div class="pd-empty-state">No briefs yet. Start by adding your first brief.</div>';
+  return `<div class="pd-empty-state">${_t("No briefs yet. Start by adding your first brief.", "אין תדריכים עדיין. התחל בהוספת התדריך הראשון.")}</div>`;
 }
 
 function formatBriefDate(isoString) {
@@ -3033,7 +3125,7 @@ function addNewBriefRow() {
       const realRow = buildBriefRow(created);
       list.appendChild(realRow);
     } catch {
-      newSaveBtn.textContent = "Save";
+      newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
     }
   });
@@ -3101,7 +3193,7 @@ function renderCustomers(customers) {
   inlineViewContainer = null;
   const tbody = document.getElementById("customer-tbody");
   if (!customers.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No customers yet. Click "+ Add Customer" to get started.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_t('No customers yet. Click "+ Add Customer" to get started.', 'אין לקוחות עדיין. לחץ על "+ הוסף לקוח" להתחלה.')}</td></tr>`;
     return;
   }
   tbody.innerHTML = customers
@@ -3236,9 +3328,9 @@ function clearCustomerForm() {
     .forEach((s) => s.classList.add("collapsed"));
   editingCustomerId = null;
   document.getElementById("customer-form-title").textContent =
-    "Add New Customer";
+    _t("Add New Customer", "הוסף לקוח חדש");
   const btn = document.getElementById("btn-save-customer");
-  btn.innerHTML = `${_ICON.check} Save Customer`;
+  btn.innerHTML = `${_ICON.check} ${_t("Save Customer", "שמור לקוח")}`;
   btn.disabled = false;
 }
 
@@ -3260,9 +3352,9 @@ async function openCustomerFormModal(customerId) {
   if (customerId) {
     editingCustomerId = customerId;
     document.getElementById("customer-form-title").textContent =
-      "Edit Customer";
+      _t("Edit Customer", "ערוך לקוח");
     const btn = document.getElementById("btn-save-customer");
-    btn.textContent = "Loading…";
+    btn.textContent = _t("Loading…", "טוען…");
     btn.disabled = true;
     try {
       const token = await getToken();
@@ -3324,7 +3416,7 @@ document
     successEl.style.display = "none";
 
     if (!name) {
-      errorEl.textContent = "Company name is required.";
+      errorEl.textContent = _t("Company name is required.", "שם חברה הוא שדה חובה.");
       errorEl.style.display = "block";
       return;
     }
@@ -3334,7 +3426,7 @@ document
     );
     if (incompleteCustDocs.length > 0) {
       errorEl.textContent =
-        "Please select a title and a file for every document row, or remove incomplete rows.";
+        _t("Please select a title and a file for every document row, or remove incomplete rows.", "יש לבחור כותרת וקובץ לכל שורת מסמך, או להסיר שורות לא שלמות.");
       errorEl.style.display = "block";
       return;
     }
@@ -3353,7 +3445,7 @@ document
 
     const btn = document.getElementById("btn-save-customer");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     try {
       const token = await getToken();
@@ -3830,9 +3922,9 @@ async function openContactFormModal(customerId, contactId) {
   document.getElementById("btn-save-contact").dataset.customerId = customerId;
 
   if (contactId) {
-    document.getElementById("contact-form-title").textContent = "Edit Contact";
+    document.getElementById("contact-form-title").textContent = _t("Edit Contact", "ערוך איש קשר");
     const btn = document.getElementById("btn-save-contact");
-    btn.textContent = "Loading…";
+    btn.textContent = _t("Loading…", "טוען…");
     btn.disabled = true;
     try {
       const token = await getToken();
@@ -3904,7 +3996,7 @@ document
 
     const btn = document.getElementById("btn-save-contact");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     try {
       const token = await getToken();
@@ -4061,87 +4153,61 @@ document
   });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ── CREATE PROJECT FORM ────────────────────────────────────────────────────
+// ── CREATE EVENT FORM ──────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 
-let projectEventCounter = 0; // monotonic counter for unique event block IDs
+let projectEventCounter = 0; // monotonic counter for unique shift block IDs
 let cachedRoles = []; // roles loaded once per session
-let _projEndDateTouched = false; // true once the user manually changes End Date
 
-// ── Project date DOM refs (static elements) ───────────────────────────────
-const _projStartInput = document.getElementById("proj-start-date");
-const _projEndInput = document.getElementById("proj-end-date");
-
-// ── Revalidate every event-date field against the current project range ────
 function revalidateEventDates() {
-  const startDate = _projStartInput.value;
-  const endDate = _projEndInput.value;
-
-  // Project-level: mark End Date red if it precedes Start Date
-  const projEndFieldEl = document.getElementById("field-proj-end");
-  const projDatesInvalid = !!(startDate && endDate && endDate < startDate);
-  projEndFieldEl?.classList.toggle("has-range-error", projDatesInvalid);
-
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
-    const dateInput = document.getElementById(`event-start-date-${idx}`);
-    const fieldEl = block.querySelector(`[data-field="event-start-date-${idx}"]`);
-    if (!dateInput || !fieldEl) return;
-    const dateVal = dateInput.value;
-    // Out-of-range only when all three dates are present
-    const outOfRange = !!(
-      dateVal &&
-      startDate &&
-      endDate &&
-      (dateVal < startDate || dateVal > endDate)
-    );
-    fieldEl.classList.toggle("has-range-error", outOfRange);
-  });
+  // no-op: no project-level date range in standalone event form
 }
 
-// ── Project Start Date change ─────────────────────────────────────────────
-_projStartInput.addEventListener("change", () => {
-  const startVal = _projStartInput.value;
-  // Keep end-date's minimum in sync
-  _projEndInput.min = startVal;
-  // Auto-set End Date only if the user has never touched it
-  if (startVal && !_projEndDateTouched) {
-    _projEndInput.value = startVal;
-  }
-  // Auto-fill every untouched event date
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
-    const startDateInput = document.getElementById(`event-start-date-${idx}`);
-    const endDateInput = document.getElementById(`event-end-date-${idx}`);
-    if (startDateInput && !startDateInput.dataset.touched) {
-      startDateInput.value = startVal;
-      if (endDateInput && !endDateInput.dataset.touched) endDateInput.value = startVal;
-      // Refresh the header summary for this block
-      const nameVal =
-        document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-      const summaryEl = document.getElementById(`event-summary-${idx}`);
-      if (summaryEl) {
-        const parts = [];
-        if (nameVal) parts.push(nameVal);
-        if (startVal) parts.push(startVal);
-        summaryEl.textContent = parts.length ? ` · ${parts.join(" · ")}` : "";
-      }
-    }
-  });
-  revalidateEventDates();
-});
+function _splitDateTimeLocal(value) {
+  if (!value) return { date: "", time: "" };
+  const [date, time = ""] = value.split("T");
+  return { date, time: time.slice(0, 5) };
+}
 
-// ── Project End Date change ───────────────────────────────────────────────
-_projEndInput.addEventListener("change", () => {
-  _projEndDateTouched = true;
-  revalidateEventDates();
-});
+function _splitIsoToLocalParts(iso) {
+  if (!iso) return { date: "", time: "" };
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+function _prefillShiftRowFromStandaloneEvent(row, { force = false } = {}) {
+  const start = _splitDateTimeLocal(document.getElementById("ev-start-time")?.value || "");
+  const end   = _splitDateTimeLocal(document.getElementById("ev-end-time")?.value   || "");
+
+  const setIfEmpty = (selector, value) => {
+    const input = row.querySelector(selector);
+    if (input && value && (force || !input.value)) input.value = value;
+  };
+
+  setIfEmpty(".shift-start-date", start.date);
+  setIfEmpty(".shift-start-time", start.time);
+  setIfEmpty(".shift-end-date",   end.date || start.date);
+  setIfEmpty(".shift-end-time",   end.time);
+}
+
+function _prefillEmptyStandaloneShiftRows() {
+  document
+    .querySelectorAll("#section-create-event #events-container .shift-row")
+    .forEach((row) => _prefillShiftRowFromStandaloneEvent(row));
+}
+
+document.getElementById("ev-start-time")?.addEventListener("change", _prefillEmptyStandaloneShiftRows);
+document.getElementById("ev-end-time")?.addEventListener("change", _prefillEmptyStandaloneShiftRows);
 
 // ── Back button ────────────────────────────────────────────────────────────
 document
   .getElementById("btn-back-to-projects")
   .addEventListener("click", () => {
-    activateSection("projects");
+    activateSection("events");
   });
 
 // ── Save Draft ──────────────────────────────────────────────────────────────
@@ -4158,22 +4224,22 @@ document
     const name = document.getElementById("proj-name").value.trim();
     if (!name) {
       document.getElementById("field-proj-name").classList.add("has-error");
-      errBanner.textContent = "Project name is required.";
+      errBanner.textContent = "Event name is required.";
       errBanner.classList.add("visible");
       return;
     }
 
-    const startDate = document.getElementById("proj-start-date").value || null;
-    const endDate = document.getElementById("proj-end-date").value || null;
+    const startTime = document.getElementById("ev-start-time").value || null;
+    const endTime   = document.getElementById("ev-end-time").value   || null;
     const customerId = document.getElementById("proj-customer").value || null;
 
     const btn = document.getElementById("btn-save-draft");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/projects`, {
+      const token = await getToken(true);
+      const res = await fetch(`${API_BASE}/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -4181,20 +4247,22 @@ document
         },
         body: JSON.stringify({
           name,
-          startDate,
-          endDate,
+          startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
+          endTime:   endTime   ? new Date(endTime).toISOString()   : new Date().toISOString(),
           customerId,
           status: "draft",
-          events: [],
+          shifts: [],
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        errBanner.textContent = data.error || "Failed to save draft.";
+        errBanner.textContent = res.status === 401
+          ? "Your session expired. Please sign out and sign in again."
+          : (data.error || "Failed to save draft.");
         errBanner.classList.add("visible");
         return;
       }
-      activateSection("projects");
+      activateSection("events");
     } catch {
       errBanner.textContent = "Network error. Please check your connection.";
       errBanner.classList.add("visible");
@@ -4211,13 +4279,61 @@ document
     openCustomerFormModal(null);
   });
 
-// ── ＋ Add Event button ────────────────────────────────────────────────────
-document.getElementById("btn-add-event").addEventListener("click", () => {
-  appendEventBlock();
+// ── ＋ Add Shift button (standalone event form) ───────────────────────────
+document.getElementById("btn-add-event").addEventListener("click", async () => {
+  const roles = await ensureRolesLoaded();
+  appendStandaloneShiftRow(roles);
 });
 
+async function appendStandaloneShiftRow(roles) {
+  if (!roles) roles = await ensureRolesLoaded();
+  const container = document.getElementById("events-container");
+  if (!container) return;
+
+  const roleOptions = roles.length
+    ? roles.map((r) => `<option value="${r.rollId}">${escapeHtml(r.rollName)}</option>`).join("")
+    : `<option value="">No roles available</option>`;
+
+  const row = document.createElement("div");
+  row.className = "shift-row";
+  row.innerHTML = `
+    <div class="field">
+      <label>${_t("Role", "תפקיד")} *</label>
+      <select>
+        <option value="">${_t("— Select role —", "— בחר תפקיד —")}</option>
+        ${roleOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>${_t("Qty", "כמות")} *</label>
+      <input type="number" placeholder="1" min="1" value="1" />
+    </div>
+    <div class="field datetime-field">
+      <label>${_t("Start", "התחלה")} *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-start-date" />
+        <input type="time" class="dt-time shift-start-time" step="300" />
+      </div>
+    </div>
+    <div class="field datetime-field">
+      <label>End *</label>
+      <div class="datetime-group">
+        <input type="date" class="dt-date shift-end-date" />
+        <input type="time" class="dt-time shift-end-time" step="300" />
+      </div>
+    </div>
+    <button class="btn-remove-shift" type="button" title="Remove shift">
+      <i data-lucide="x"></i>
+    </button>
+  `;
+  row.querySelector(".btn-remove-shift").addEventListener("click", () => row.remove());
+  container.appendChild(row);
+  _prefillShiftRowFromStandaloneEvent(row);
+  if (window.lucide) lucide.createIcons();
+}
+
 // ── Collapse All / Expand All events ──────────────────────────────────────
-document.getElementById("btn-collapse-events").addEventListener("click", () => {
+document.getElementById("btn-collapse-events")?.addEventListener("click", () => {
   const blocks = document.querySelectorAll(".event-block");
   const anyExpanded = [...blocks].some(
     (b) => !b.classList.contains("collapsed"),
@@ -4226,29 +4342,27 @@ document.getElementById("btn-collapse-events").addEventListener("click", () => {
   updateCollapseAllBtn();
 });
 
-// ── Initialise the form (called when navigating to create-project) ─────────
-function initCreateProjectForm() {
-  // Clear project-level fields
+// ── Initialise the form (called when navigating to create-event) ───────────
+function initCreateEventForm() {
   document.getElementById("proj-name").value = "";
-  _projStartInput.value = "";
-  _projStartInput.max = "";
-  _projEndInput.value = "";
-  _projEndInput.min = "";
-  _projEndDateTouched = false;
+  document.getElementById("ev-start-time").value = "";
+  document.getElementById("ev-end-time").value = "";
+  document.getElementById("ev-location").value = "";
+  document.getElementById("ev-type").value = "";
+  document.getElementById("ev-attendees").value = "";
+  document.getElementById("ev-budget").value = "";
+  document.getElementById("ev-revenue").value = "";
   document.getElementById("proj-customer").value = "";
-  ["field-proj-name", "field-proj-start", "field-proj-end"].forEach((id) =>
+  ["field-proj-name", "field-ev-start", "field-ev-end"].forEach((id) =>
     document.getElementById(id)?.classList.remove("has-error"),
   );
 
-  // Clear error banner
   const errBanner = document.getElementById("create-project-error");
   errBanner.textContent = "";
   errBanner.classList.remove("visible");
 
-  // Clear events container and render first event block
   projectEventCounter = 0;
   document.getElementById("events-container").innerHTML = "";
-  appendEventBlock();
 }
 
 // ── Load customers into the project customer dropdown ──────────────────────
@@ -4309,7 +4423,7 @@ _origSaveCustBtn.addEventListener("click", async () => {
   // After a short delay (enough for the existing handler's setTimeout to fire),
   // refresh the dropdown if the create-project section is visible.
   setTimeout(async () => {
-    const cpSection = document.getElementById("section-create-project");
+    const cpSection = document.getElementById("section-create-event");
     if (cpSection && cpSection.style.display !== "none") {
       // Find the newest customer (last in list) and auto-select it
       try {
@@ -4458,17 +4572,17 @@ async function appendEventBlock() {
       <!-- Shifts sub-section -->
       <div class="shifts-subsection">
         <div class="shifts-subheader">
-          <span class="shifts-subheader-label"><i data-lucide="users"></i> Shifts</span>
+          <span class="shifts-subheader-label"><i data-lucide="users"></i> ${_t("Shifts", "משמרות")}</span>
           <button class="btn-add-shift btn-with-icon" type="button" data-add-shift="${idx}">
             <i data-lucide="plus"></i>
-            Add Shift
+            ${_t("Add Shift", "הוסף משמרת")}
           </button>
         </div>
         <div class="shifts-col-headers">
-          <span>Role</span>
-          <span>Qty</span>
-          <span>Start (date &amp; time)</span>
-          <span>End (date &amp; time)</span>
+          <span>${_t("Role", "תפקיד")}</span>
+          <span>${_t("Qty", "כמות")}</span>
+          <span>${_t("Start (date & time)", "התחלה (תאריך ושעה)")}</span>
+          <span>${_t("End (date & time)", "סיום (תאריך ושעה)")}</span>
           <span></span>
         </div>
         <div class="shifts-list" id="shifts-list-${idx}">
@@ -4537,15 +4651,7 @@ async function appendEventBlock() {
     revalidateEventDates();
   });
 
-  // Default event start/end dates to project start date (if already chosen)
-  const projStartVal = _projStartInput.value;
-  if (projStartVal) {
-    document.getElementById(`event-start-date-${idx}`).value = projStartVal;
-    document.getElementById(`event-end-date-${idx}`).value = projStartVal;
-    updateSummary();
-  }
-
-  // Revalidate so new block is checked immediately against current project range
+  // Revalidate so new block is checked immediately
   revalidateEventDates();
 
   // Render first shift row immediately
@@ -4589,31 +4695,31 @@ function appendShiftRow(eventIdx, roles) {
   row.className = "shift-row";
   row.innerHTML = `
     <div class="field">
-      <label>Role *</label>
+      <label>${_t("Role", "תפקיד")} *</label>
       <select>
-        <option value="">— Select role —</option>
+        <option value="">${_t("— Select role —", "— בחר תפקיד —")}</option>
         ${roleOptions}
       </select>
     </div>
     <div class="field">
-      <label>Qty *</label>
+      <label>${_t("Qty", "כמות")} *</label>
       <input type="number" placeholder="1" min="1" value="1" />
     </div>
     <div class="field datetime-field">
-      <label>Start *</label>
+      <label>${_t("Start", "התחלה")} *</label>
       <div class="datetime-group">
         <input type="date" class="dt-date shift-start-date" />
         <input type="time" class="dt-time shift-start-time" step="300" />
       </div>
     </div>
     <div class="field datetime-field">
-      <label>End *</label>
+      <label>${_t("End", "סיום")} *</label>
       <div class="datetime-group">
         <input type="date" class="dt-date shift-end-date" />
         <input type="time" class="dt-time shift-end-time" step="300" />
       </div>
     </div>
-    <button class="btn-remove-shift" type="button" title="Remove shift" aria-label="Remove shift">
+    <button class="btn-remove-shift" type="button" title="${_t("Remove shift", "הסר משמרת")}" aria-label="${_t("Remove shift", "הסר משמרת")}">
       <i data-lucide="x"></i>
     </button>
   `;
@@ -4623,46 +4729,20 @@ function appendShiftRow(eventIdx, roles) {
     .addEventListener("click", () => row.remove());
 
   list.appendChild(row);
+  _prefillShiftRowFromStandaloneEvent(row);
   if (window.lucide) lucide.createIcons();
 }
 
 // ── Collect all form data into a CreateProjectRequest object ──────────────
-function collectProjectFormData() {
-  const events = [];
+function collectEventFormData() {
   let valid = true;
 
-  // Clear previous error highlights
   document
     .querySelectorAll(".field.has-error")
     .forEach((f) => f.classList.remove("has-error"));
   const errBanner = document.getElementById("create-project-error");
   errBanner.textContent = "";
   errBanner.classList.remove("visible");
-
-  // Project-level fields
-  const name = document.getElementById("proj-name").value.trim();
-  const startDate = document.getElementById("proj-start-date").value;
-  const endDate = document.getElementById("proj-end-date").value;
-  const customer = document.getElementById("proj-customer").value || null;
-
-  if (!name) {
-    document.getElementById("field-proj-name").classList.add("has-error");
-    valid = false;
-  }
-  if (!startDate) {
-    document.getElementById("field-proj-start").classList.add("has-error");
-    valid = false;
-  }
-  if (!endDate) {
-    document.getElementById("field-proj-end").classList.add("has-error");
-    valid = false;
-  }
-  if (startDate && endDate && endDate < startDate) {
-    document.getElementById("field-proj-end").classList.add("has-error");
-    errBanner.textContent = "End date cannot be before start date.";
-    errBanner.classList.add("visible");
-    valid = false;
-  }
 
   const showError = (msg) => {
     if (!errBanner.classList.contains("visible")) {
@@ -4672,109 +4752,64 @@ function collectProjectFormData() {
     valid = false;
   };
 
-  // Event blocks
-  document.querySelectorAll(".event-block").forEach((block) => {
-    const idx = block.dataset.eventIdx;
+  const name = document.getElementById("proj-name").value.trim();
+  const startTimeVal = document.getElementById("ev-start-time").value;
+  const endTimeVal   = document.getElementById("ev-end-time").value;
+  const location     = document.getElementById("ev-location").value.trim() || null;
+  const eventType    = document.getElementById("ev-type").value.trim() || null;
+  const attendees    = document.getElementById("ev-attendees").value;
+  const budget       = document.getElementById("ev-budget").value;
+  const revenue      = document.getElementById("ev-revenue").value;
+  const customerId   = document.getElementById("proj-customer").value || null;
 
-    const evtName =
-      document.getElementById(`event-name-${idx}`)?.value.trim() || "";
-    const evtStartDate = document.getElementById(`event-start-date-${idx}`)?.value || "";
-    const evtStartTime = document.getElementById(`event-start-time-${idx}`)?.value || "";
-    const evtEndDate = document.getElementById(`event-end-date-${idx}`)?.value || "";
-    const evtEndTime = document.getElementById(`event-end-time-${idx}`)?.value || "";
-    const location =
-      document.getElementById(`event-location-${idx}`)?.value.trim() || null;
-    const evtType = document.getElementById(`event-type-${idx}`)?.value || null;
-    const attendees = document.getElementById(`event-attendees-${idx}`)?.value;
-    const budget = document.getElementById(`event-budget-${idx}`)?.value;
-    const revenue = document.getElementById(`event-revenue-${idx}`)?.value;
+  if (!name) {
+    document.getElementById("field-proj-name").classList.add("has-error");
+    valid = false;
+  }
+  if (!startTimeVal) {
+    document.getElementById("field-ev-start")?.classList.add("has-error");
+    valid = false;
+  }
+  if (!endTimeVal) {
+    document.getElementById("field-ev-end")?.classList.add("has-error");
+    valid = false;
+  }
 
-    if (!evtName) {
-      block.querySelector(`[data-field="event-name-${idx}"]`)?.classList.add("has-error");
+  const startDT = startTimeVal ? new Date(startTimeVal) : null;
+  const endDT   = endTimeVal   ? new Date(endTimeVal)   : null;
+  if (startDT && endDT && endDT <= startDT) {
+    document.getElementById("field-ev-end")?.classList.add("has-error");
+    showError("End time cannot be before start time.");
+  }
+
+  // Collect shifts from shift rows
+  const shifts = [];
+  document.querySelectorAll(".shift-row").forEach((row) => {
+    const rollId = row.querySelector("select")?.value || "";
+    const qty = parseInt(row.querySelector('input[type="number"]')?.value, 10) || 1;
+    const shtStartDate = row.querySelector(".shift-start-date")?.value || "";
+    const shtStartTime = row.querySelector(".shift-start-time")?.value || "";
+    const shtEndDate   = row.querySelector(".shift-end-date")?.value   || "";
+    const shtEndTime   = row.querySelector(".shift-end-time")?.value   || "";
+
+    if (!rollId || !shtStartDate || !shtStartTime || !shtEndDate || !shtEndTime) {
+      row.querySelector(".field")?.classList.add("has-error");
       valid = false;
     }
-    if (!evtStartDate || !evtStartTime) {
-      block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
-      valid = false;
-    }
-    if (!evtEndDate || !evtEndTime) {
-      block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-      valid = false;
-    }
 
-    // Combine date + time into Date objects for range checks
-    const evtStartDT = evtStartDate && evtStartTime ? new Date(`${evtStartDate}T${evtStartTime}`) : null;
-    const evtEndDT   = evtEndDate   && evtEndTime   ? new Date(`${evtEndDate}T${evtEndTime}`)     : null;
+    const shtStartDT = shtStartDate && shtStartTime ? new Date(`${shtStartDate}T${shtStartTime}`) : null;
+    const shtEndDT   = shtEndDate   && shtEndTime   ? new Date(`${shtEndDate}T${shtEndTime}`)     : null;
 
-    if (evtStartDT && evtEndDT) {
-      if (evtEndDT <= evtStartDT) {
-        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: end must be after start.`);
-      }
-      if (startDate && evtStartDate < startDate) {
-        block.querySelector(`[data-field="event-start-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: start is before the project start date.`);
-      }
-      if (endDate && evtEndDate > endDate) {
-        block.querySelector(`[data-field="event-end-date-${idx}"]`)?.classList.add("has-error");
-        showError(`Event ${idx}: end is after the project end date.`);
-      }
+    if (shtStartDT && shtEndDT && shtEndDT <= shtStartDT) {
+      row.querySelector(".field")?.classList.add("has-error");
+      showError("A shift's end time must be after its start time.");
     }
 
-    const startDateTime = evtStartDT ? evtStartDT.toISOString() : null;
-    const endDateTime   = evtEndDT   ? evtEndDT.toISOString()   : null;
-
-    // Collect shifts
-    const shifts = [];
-    block.querySelectorAll(".shift-row").forEach((row) => {
-      const rollId = row.querySelector("select")?.value || "";
-      const qty = parseInt(row.querySelector('input[type="number"]')?.value, 10) || 1;
-      const shtStartDate = row.querySelector(".shift-start-date")?.value || "";
-      const shtStartTime = row.querySelector(".shift-start-time")?.value || "";
-      const shtEndDate = row.querySelector(".shift-end-date")?.value || "";
-      const shtEndTime = row.querySelector(".shift-end-time")?.value || "";
-
-      if (!rollId || !shtStartDate || !shtStartTime || !shtEndDate || !shtEndTime) {
-        row.querySelector(".field")?.classList.add("has-error");
-        valid = false;
-      }
-
-      const shtStartDT = shtStartDate && shtStartTime ? new Date(`${shtStartDate}T${shtStartTime}`) : null;
-      const shtEndDT   = shtEndDate   && shtEndTime   ? new Date(`${shtEndDate}T${shtEndTime}`)     : null;
-
-      if (shtStartDT && shtEndDT) {
-        if (shtEndDT <= shtStartDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: end must be after start.`);
-        }
-        if (evtStartDT && shtStartDT < evtStartDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: starts before the event.`);
-        }
-        if (evtEndDT && shtEndDT > evtEndDT) {
-          row.querySelector(".field")?.classList.add("has-error");
-          showError(`A shift in event ${idx}: ends after the event.`);
-        }
-      }
-
-      shifts.push({
-        rollId,
-        requiredQuantity: qty,
-        startTime: shtStartDT ? shtStartDT.toISOString() : null,
-        endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
-      });
-    });
-
-    events.push({
-      name: evtName,
-      startTime: startDateTime,
-      endTime: endDateTime,
-      location: location || null,
-      attendeesCount: attendees ? parseInt(attendees, 10) : null,
-      eventType: evtType || null,
-      plannedBudget: budget ? parseFloat(budget) : null,
-      expectedRevenue: revenue ? parseFloat(revenue) : null,
-      shifts,
+    shifts.push({
+      rollId,
+      requiredQuantity: qty,
+      startTime: shtStartDT ? shtStartDT.toISOString() : null,
+      endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
     });
   });
 
@@ -4787,52 +4822,60 @@ function collectProjectFormData() {
   }
 
   return {
-    name: name,
-    startDate: startDate,
-    endDate: endDate,
-    customerId: customer,
-    events,
+    name,
+    startTime:      startDT ? startDT.toISOString() : null,
+    endTime:        endDT   ? endDT.toISOString()   : null,
+    location,
+    eventType,
+    attendeesCount: attendees ? parseInt(attendees, 10) : null,
+    plannedBudget:  budget    ? parseFloat(budget)      : null,
+    expectedRevenue: revenue  ? parseFloat(revenue)     : null,
+    customerId,
+    status: "planning",
+    shifts,
   };
 }
 
-// ── Submit project ──────────────────────────────────────────────────────────
+// ── Submit event ────────────────────────────────────────────────────────────
 document
   .getElementById("btn-submit-project")
   .addEventListener("click", async () => {
-    const body = collectProjectFormData();
-    if (!body) return; // validation failed — errors already shown
+    const body = collectEventFormData();
+    if (!body) return;
 
     const btn = document.getElementById("btn-submit-project");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     const errBanner = document.getElementById("create-project-error");
     errBanner.classList.remove("visible");
 
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/projects`, {
+      const token = await getToken(true);
+      const res = await fetch(`${API_BASE}/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ ...body, status: "planning" }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
-        errBanner.textContent = data.error || "Failed to create project.";
+        errBanner.textContent = res.status === 401
+          ? "Your session expired. Please sign out and sign in again."
+          : (data.error || "Failed to create event.");
         errBanner.classList.add("visible");
         return;
       }
-      // Success — return to projects board
-      activateSection("projects");
+      activateSection("events");
     } catch {
       errBanner.textContent = "Network error. Please check your connection.";
       errBanner.classList.add("visible");
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `${_ICON.folder} Create Project`;
+      btn.innerHTML = `<i data-lucide="calendar-plus"></i> Create Event`;
+      if (window.lucide) lucide.createIcons();
     }
   });
 
@@ -4852,8 +4895,8 @@ function escapeHtml(str) {
 let editingShiftId = null;
 let deletingShiftId = null;
 
-// ── Event delegation on gantt container ────────────────────────────────────
-document.getElementById("gantt-container").addEventListener("click", (e) => {
+// ── Event delegation on gantt containers ───────────────────────────────────
+function _handleGanttActionClick(e) {
   const editBtn = e.target.closest(".gantt-bar-btn-edit");
   const deleteBtn = e.target.closest(".gantt-bar-btn-delete");
   const addShiftBtn = e.target.closest(".btn-add-shift-gantt");
@@ -4863,8 +4906,13 @@ document.getElementById("gantt-container").addEventListener("click", (e) => {
     openShiftAddModal(
       addShiftBtn.dataset.eventId,
       addShiftBtn.dataset.eventDate,
+      addShiftBtn.dataset.eventStartTime,
+      addShiftBtn.dataset.eventEndTime,
     );
-});
+}
+
+document.getElementById("gantt-container")?.addEventListener("click", _handleGanttActionClick);
+document.getElementById("ed-gantt-container")?.addEventListener("click", _handleGanttActionClick);
 
 // ── Edit Modal ─────────────────────────────────────────────────────────────
 
@@ -4966,7 +5014,7 @@ document
 
     const btn = document.getElementById("btn-save-shift");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     try {
       const token = await getToken();
@@ -4995,7 +5043,9 @@ document
       }
 
       closeShiftEditModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) _eventScheduleCache.delete(currentEventId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
@@ -5056,7 +5106,9 @@ document
       }
 
       closeShiftDeleteModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) _eventScheduleCache.delete(currentEventId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       alert("Network error. Please try again.");
     } finally {
@@ -5070,7 +5122,7 @@ document
 let addingShiftEventId = null;
 let addingShiftEventDate = null;
 
-async function openShiftAddModal(eventId, eventDate) {
+async function openShiftAddModal(eventId, eventDate, eventStartTime = "", eventEndTime = "") {
   addingShiftEventId = eventId;
   addingShiftEventDate = eventDate;
 
@@ -5078,8 +5130,8 @@ async function openShiftAddModal(eventId, eventDate) {
   errEl.style.display = "none";
   errEl.textContent = "";
 
-  document.getElementById("shift-add-start").value = "";
-  document.getElementById("shift-add-end").value = "";
+  document.getElementById("shift-add-start").value = eventStartTime || "";
+  document.getElementById("shift-add-end").value = eventEndTime || "";
   document.getElementById("shift-add-qty").value = 1;
 
   document.getElementById("shift-add-overlay").classList.add("open");
@@ -5170,7 +5222,7 @@ document
 
     const btn = document.getElementById("btn-save-shift-add");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = _t("Saving…", "שומר…");
 
     try {
       const token = await getToken();
@@ -5198,14 +5250,18 @@ document
         return;
       }
 
+      const changedEventId = addingShiftEventId;
       closeShiftAddModal();
-      if (currentProjectId) loadProjectSchedule(currentProjectId);
+      if (currentEventId) _eventScheduleCache.delete(currentEventId);
+      else _eventScheduleCache.delete(changedEventId);
+      if (currentEventId) loadEventSchedule(currentEventId);
+      else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
       errEl.textContent = "Network error. Please try again.";
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `${_ICON.plus} Add Shift`;
+      btn.innerHTML = `${_ICON.plus} ${_t("Add Shift", "הוסף משמרת")}`;
     }
   });
 
@@ -5273,8 +5329,7 @@ function renderStaffingTab() {
   // Fetch potential workers for each real event in background
   const events = currentProjectDetail?.events ?? [];
   events.forEach((ev) => {
-    if (currentProjectId)
-      loadAndRenderPotentialWorkers(currentProjectId, ev.eventId);
+    loadAndRenderPotentialWorkers(ev.eventId);
     loadAndRenderEventWorkers(ev.eventId);
   });
 }
@@ -5306,11 +5361,11 @@ function _buildStaffingHTML() {
       </div>
       <div class="ps-strip" id="ps-strip-${ev.eventId}"><span class="ps-strip-loading">Loading shifts…</span></div>
       ${_buildPotentialSection(ev.eventId)}
-      ${_buildStaffingSection(ev.eventId, "awaiting", "Awaiting Response", "clock", "pending", [], "awaiting")}
-      ${_buildStaffingSection(ev.eventId, "applicants", "Shift Applicants", "inbox", "pending", [], "applicant")}
-      ${_buildStaffingSection(ev.eventId, "approved", "Approved Workers", "check-circle", "approved", [], "approved")}
-      ${_buildStaffingSection(ev.eventId, "hold", "Hold / Standby", "pause-circle", "hold", [], "hold")}
-      ${_buildStaffingSection(ev.eventId, "rejected", "Rejected Workers", "x-circle", "rejected", [], "rejected")}
+      ${_buildStaffingSection(ev.eventId, "awaiting",   _t("Awaiting Response", "ממתינים לתגובה"),     "clock",        "pending",  [], "awaiting")}
+      ${_buildStaffingSection(ev.eventId, "applicants", _t("Shift Applicants",  "מועמדים למשמרת"),      "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(ev.eventId, "approved",   _t("Approved Workers",  "עובדים מאושרים"),      "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(ev.eventId, "hold",       _t("Hold / Standby",    "בהמתנה"),              "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(ev.eventId, "rejected",   _t("Rejected Workers",  "נדחו"),                "x-circle",     "rejected", [], "rejected")}
     </div>`;
     })
     .join("");
@@ -5371,7 +5426,7 @@ function _buildStaffingSection(
 ) {
   const rows =
     workers.length === 0
-      ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+      ? `<tr><td colspan="5" class="ps-empty">${_t("No workers in this category yet.", "אין עובדים בקטגוריה זו עדיין.")}</td></tr>`
       : workers.map((w) => _buildWorkerRow(w, sectionType)).join("");
 
   // The Auto-Assign button only appears on the "applicants" section
@@ -5432,9 +5487,14 @@ function _buildWorkerRow(worker, sectionType) {
     if (sectionType !== "rejected")
       btns += `<button class="ps-action-btn ps-action-btn--reject" data-action="reject" title="Reject"><i data-lucide="x"></i></button>`;
     if (sectionType === "rejected")
-      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="Move to Potential"><i data-lucide="users"></i> Return to Pool</button>`;
+      btns += `<button class="ps-send-btn ps-send-btn--return" data-action="return-to-pool" title="${_t("Move to Potential", "העבר לעובדים פוטנציאליים")}"><i data-lucide="users"></i> ${_t("Return to Pool", "החזר למאגר")}</button>`;
   }
-  btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Message"><i data-lucide="message-circle"></i></button>`;
+  btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="message" title="Direct message"><i data-lucide="message-circle"></i></button>`;
+  if (worker.shiftId) {
+    btns += `<button class="ps-action-btn ps-action-btn--msg" data-action="shift-chat" title="Shift chat"><i data-lucide="messages-square"></i></button>`;
+  }
+  const costLabel = worker.costPerHour ? `₪${Number(worker.costPerHour).toFixed(0)}/hr` : "—";
+  const costDataLabel = escapeHtml(_t("Cost", "עלות"));
 
   return `
     <tr class="ps-row"
@@ -5450,7 +5510,7 @@ function _buildWorkerRow(worker, sectionType) {
       </div></td>
       <td><span class="ps-shift-badge">${escapeHtml(_fmtShiftLabel(worker))}</span></td>
       <td><span class="ps-role-chip">${escapeHtml(worker.roleName ?? "")}</span></td>
-      <td class="ps-cost">—</td>
+      <td class="ps-cost" data-cost-label="${costDataLabel}">${escapeHtml(costLabel)}</td>
       <td><div class="ps-actions-cell">${btns}</div></td>
     </tr>`;
 }
@@ -5467,7 +5527,7 @@ function _renderEventWorkerSection(eventId, key, workers, sectionType) {
 
   const rows =
     workers.length === 0
-      ? `<tr><td colspan="5" class="ps-empty">No workers in this category yet.</td></tr>`
+      ? `<tr><td colspan="5" class="ps-empty">${_t("No workers in this category yet.", "אין עובדים בקטגוריה זו עדיין.")}</td></tr>`
       : workers.map((w) => _buildWorkerRow(w, sectionType)).join("");
 
   tbody.innerHTML = rows;
@@ -5520,6 +5580,7 @@ async function loadAndRenderEventWorkers(eventId) {
       ...(data.hold       ?? []),
       ...(data.rejected   ?? []),
     ];
+    _eventChatWorkers.set(eventId, allWorkers);
     _renderShiftSummaryStrip(eventId, allWorkers);
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
@@ -5582,6 +5643,201 @@ function _renderOverlapWarnings(eventId, approved) {
     </div>`;
   sectionEl.insertAdjacentElement("beforebegin", banner);
   if (window.lucide) lucide.createIcons();
+}
+
+function _uniqueWorkerUids(workers) {
+  return [
+    ...new Set(
+      (workers ?? [])
+        .filter((w) => w.status === "manager_approved")
+        .map((w) => w.fbUid)
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function _formatChatShiftTitle(worker) {
+  const role = worker?.roleName || "Shift";
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+  const start = fmt(worker?.shiftStart);
+  const end = fmt(worker?.shiftEnd);
+  const time = start ? (end ? `${start}-${end}` : start) : "";
+  return time ? `${role} · ${time}` : role;
+}
+
+async function _openCurrentEventChat() {
+  if (!currentEventId) return;
+  _initChatSection();
+  activateSection("chats");
+
+  const ev = _getCurrentEventData();
+  const workers = _eventChatWorkers.get(currentEventId) ?? [];
+  await openEventChat({
+    eventId: currentEventId,
+    title: ev?.name || "Event Chat",
+    subtitle: "Event chat",
+    participantUids: _uniqueWorkerUids(workers),
+  });
+}
+
+async function _openShiftChatFromWorker(eventId, shiftId, worker) {
+  if (!eventId || !shiftId) return;
+  _initChatSection();
+  activateSection("chats");
+
+  const workers = (_eventChatWorkers.get(eventId) ?? []).filter(
+    (w) => w.shiftId === shiftId,
+  );
+  const ev = _getCurrentEventData();
+  await openShiftChat({
+    shiftId,
+    eventId,
+    title: _formatChatShiftTitle(worker),
+    subtitle: ev?.name || "Shift chat",
+    participantUids: _uniqueWorkerUids(workers),
+  });
+}
+
+function _closeShiftChatMenu() {
+  const menu = document.getElementById("shift-chat-menu");
+  const btn = document.getElementById("btn-shift-chat");
+  if (menu) menu.hidden = true;
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+async function _toggleShiftChatMenu() {
+  const menu = document.getElementById("shift-chat-menu");
+  const btn = document.getElementById("btn-shift-chat");
+  if (!menu || !btn || !currentEventId) return;
+
+  if (!menu.hidden) {
+    _closeShiftChatMenu();
+    return;
+  }
+
+  btn.setAttribute("aria-expanded", "true");
+  menu.hidden = false;
+  menu.innerHTML = `<div class="shift-chat-menu-state">${_t("Loading shifts…", "טוען משמרות…")}</div>`;
+
+  try {
+    const shifts = await _getCurrentEventShiftsForChat();
+    menu.innerHTML = _buildShiftChatMenuHTML(shifts);
+    if (window.lucide) lucide.createIcons();
+  } catch (err) {
+    console.error("[Chat] Failed to build shift chat menu:", err);
+    menu.innerHTML = `<div class="shift-chat-menu-state">${_t("Failed to load shifts.", "טעינת המשמרות נכשלה.")}</div>`;
+  }
+}
+
+async function _getCurrentEventShiftsForChat() {
+  if (!currentEventId) return [];
+  if (_eventScheduleCache.has(currentEventId)) {
+    return _eventScheduleCache.get(currentEventId)?.shifts ?? [];
+  }
+
+  const token = await getToken();
+  const res = await fetch(
+    `${API_BASE}/events/${encodeURIComponent(currentEventId)}/schedule`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error("Failed to load event schedule.");
+  const schedule = await res.json();
+  _eventScheduleCache.set(currentEventId, schedule);
+  return schedule?.shifts ?? [];
+}
+
+function _buildShiftChatMenuHTML(shifts) {
+  if (!shifts.length) {
+    return `<div class="shift-chat-menu-state">${_t("No shifts defined for this event.", "לא הוגדרו משמרות לאירוע הזה.")}</div>`;
+  }
+
+  const workers = _eventChatWorkers.get(currentEventId) ?? [];
+  return shifts
+    .map((shift) => {
+      const title = shift.roleName || _t("Shift", "משמרת");
+      const time = _formatShiftTimeRange(shift.startTime, shift.endTime);
+      const approvedCount = workers.filter(
+        (w) => w.shiftId === shift.shiftId && w.status === "manager_approved",
+      ).length;
+      const required = Number(shift.requiredQuantity ?? 0);
+      const count = required > 0 ? `${approvedCount}/${required}` : String(approvedCount);
+      return `
+        <button class="shift-chat-menu-item" type="button" data-shift-chat-id="${escapeHtml(shift.shiftId)}">
+          <span class="shift-chat-menu-title">${escapeHtml(title)}</span>
+          <span class="shift-chat-menu-time">${escapeHtml(time || _t("No time set", "לא הוגדר זמן"))}</span>
+          <span class="shift-chat-menu-count">${escapeHtml(count)}</span>
+        </button>`;
+    })
+    .join("");
+}
+
+function _formatShiftTimeRange(startIso, endIso) {
+  const fmt = (dt) =>
+    dt
+      ? new Date(dt).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      : "";
+  const start = fmt(startIso);
+  const end = fmt(endIso);
+  return start ? (end ? `${start}-${end}` : start) : "";
+}
+
+async function _fetchEventWorkersForChat(eventId) {
+  if (_eventChatWorkers.has(eventId)) return _eventChatWorkers.get(eventId) ?? [];
+
+  const token = await getToken();
+  const res = await fetch(
+    `${API_BASE}/events/${encodeURIComponent(eventId)}/workers`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  const workers = [
+    ...(data.awaiting ?? []),
+    ...(data.applicants ?? []),
+    ...(data.approved ?? []),
+    ...(data.hold ?? []),
+    ...(data.rejected ?? []),
+  ];
+  _eventChatWorkers.set(eventId, workers);
+  return workers;
+}
+
+async function _openShiftChatFromMenu(shiftId) {
+  if (!currentEventId || !shiftId) return;
+
+  const shifts = await _getCurrentEventShiftsForChat();
+  const shift = shifts.find((s) => s.shiftId === shiftId);
+  if (!shift) return;
+
+  _closeShiftChatMenu();
+  _initChatSection();
+  activateSection("chats");
+
+  const workers = await _fetchEventWorkersForChat(currentEventId);
+  const shiftWorkers = workers.filter((w) => w.shiftId === shiftId);
+  const ev = _getCurrentEventData();
+  const title = _formatShiftTimeRange(shift.startTime, shift.endTime)
+    ? `${shift.roleName || _t("Shift", "משמרת")} · ${_formatShiftTimeRange(shift.startTime, shift.endTime)}`
+    : (shift.roleName || _t("Shift", "משמרת"));
+
+  await openShiftChat({
+    shiftId,
+    eventId: currentEventId,
+    title,
+    subtitle: ev?.name || _t("Shift chat", "צ'אט משמרת"),
+    participantUids: _uniqueWorkerUids(shiftWorkers),
+  });
 }
 
 function _startStaffingPoll() {
@@ -5852,8 +6108,7 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
     if (!res.ok) throw new Error("Failed to remove assignment");
 
     await loadAndRenderEventWorkers(eventId);
-    if (currentProjectId)
-      await loadAndRenderPotentialWorkers(currentProjectId, eventId);
+    await loadAndRenderPotentialWorkers(eventId);
 
     // Auto-open the Potential Workers section so the returned worker is visible
     const potentialSection = document.getElementById(
@@ -5867,7 +6122,7 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
     // btn may be detached after partial re-render — re-query or restore if still attached
     if (btn.isConnected) {
       btn.disabled = false;
-      btn.innerHTML = `<i data-lucide="users"></i> Return to Pool`;
+    btn.innerHTML = `<i data-lucide="users"></i> ${_t("Return to Pool", "החזר למאגר")}`;
       if (window.lucide) lucide.createIcons();
     }
     alert("Failed to return worker to pool. Please try again.");
@@ -5881,13 +6136,13 @@ function _buildPotentialSection(eventId) {
       <div class="ps-section-hdr" data-ps-section="${eventId}-potential">
         <div class="ps-section-hdr-left">
           <i data-lucide="users" class="ps-section-icon"></i>
-          <span class="ps-section-title">Potential Workers</span>
+          <span class="ps-section-title">${_t("Potential Workers", "עובדים פוטנציאליים")}</span>
           <span class="ps-badge ps-badge--potential" id="ps-badge-${eventId}-potential">…</span>
         </div>
         <div class="ps-section-hdr-right">
           <button class="ps-btn-primary ps-btn-send-all" data-event-id="${eventId}" disabled>
             <i data-lucide="send"></i>
-            Send Request to All
+            ${_t("Send Request to All", "שלח בקשה לכולם")}
           </button>
           <span class="ps-chevron">▾</span>
         </div>
@@ -5895,10 +6150,10 @@ function _buildPotentialSection(eventId) {
       <div class="ps-section-body" id="ps-body-${eventId}-potential">
         <div class="ps-potential-filters" id="ps-potential-filters-${eventId}" style="display:none">
           <select class="ps-filter-select" id="ps-filter-role-${eventId}">
-            <option value="">All Roles</option>
+            <option value="">${_t("All Roles", "כל התפקידים")}</option>
           </select>
           <select class="ps-filter-select" id="ps-filter-shift-${eventId}">
-            <option value="">All Shifts</option>
+            <option value="">${_t("All Shifts", "כל המשמרות")}</option>
           </select>
         </div>
         <div class="ps-potential-loading">
@@ -5924,7 +6179,7 @@ function _replacePotentialContent(eventId, workers) {
   if (workers.length === 0) {
     body.innerHTML = `
       <table class="ps-table"><tbody>
-        <tr><td colspan="4" class="ps-empty">No eligible workers available for this event's shifts.</td></tr>
+        <tr><td colspan="4" class="ps-empty">${_t("No eligible workers available for this event's shifts.", "אין עובדים מתאימים זמינים למשמרות האירוע.")}</td></tr>
       </tbody></table>`;
     return;
   }
@@ -5944,7 +6199,7 @@ function _replacePotentialContent(eventId, workers) {
       `<option value="">All Roles</option>` +
       roles.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
     shiftSelect.innerHTML =
-      `<option value="">All Shifts</option>` +
+      `<option value="">${_t("All Shifts", "כל המשמרות")}</option>` +
       shifts
         .map((s) => {
           const fmt = (dt) =>
@@ -6013,7 +6268,7 @@ function _replacePotentialContent(eventId, workers) {
           </div>
         </div></td>
         <td><div class="ps-shift-checklist">${shiftChecks}</div></td>
-        <td class="ps-cost">${escapeHtml(costLabel)}</td>
+        <td class="ps-cost" data-cost-label="${escapeHtml(_t("Cost", "עלות"))}">${escapeHtml(costLabel)}</td>
         <td><div class="ps-actions-cell">
           <button class="ps-send-btn ps-btn--send-worker" data-action="send-request" title="Send shift request">
             <i data-lucide="send"></i> Send Request
@@ -6039,11 +6294,11 @@ function _replacePotentialContent(eventId, workers) {
   _applyStaffingFilters();
 }
 
-async function loadAndRenderPotentialWorkers(projectId, eventId) {
+async function loadAndRenderPotentialWorkers(eventId) {
   try {
     const token = await getToken();
     const res = await fetch(
-      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers`,
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/potential-workers`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error("Failed to load");
@@ -6071,7 +6326,7 @@ function _attachPotentialWorkerHandlers(eventId) {
       e.stopPropagation();
       const row = btn.closest(".ps-row--potential");
       const fbuid = row?.dataset.workerFbuid;
-      if (!fbuid || !currentProjectId) return;
+      if (!fbuid) return;
 
       const shiftIds = [
         ...row.querySelectorAll("input[data-shift-id]:checked"),
@@ -6082,7 +6337,6 @@ function _attachPotentialWorkerHandlers(eventId) {
       }
 
       await _sendOfferToWorker(
-        currentProjectId,
         eventId,
         fbuid,
         shiftIds,
@@ -6130,7 +6384,6 @@ function _attachPotentialWorkerHandlers(eventId) {
         if (!fbuid || shiftIds.length === 0) continue;
         const btn = row.querySelector(".ps-btn--send-worker");
         await _sendOfferToWorker(
-          currentProjectId,
           eventId,
           fbuid,
           shiftIds,
@@ -6148,7 +6401,6 @@ function _attachPotentialWorkerHandlers(eventId) {
 }
 
 async function _sendOfferToWorker(
-  projectId,
   eventId,
   fbuid,
   shiftIds,
@@ -6163,7 +6415,7 @@ async function _sendOfferToWorker(
   try {
     const token = await getToken();
     const res = await fetch(
-      `${API_BASE}/projects/${encodeURIComponent(projectId)}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
+      `${API_BASE}/events/${encodeURIComponent(eventId)}/potential-workers/${encodeURIComponent(fbuid)}/send-offer`,
       {
         method: "POST",
         headers: {
@@ -6311,11 +6563,22 @@ function _initStaffingHandlers() {
         const section = row.closest(".ps-section");
         const sectionId = section?.id ?? "";
         const match = sectionId.match(
-          /^ps-section-(.+)-(applicants|approved|hold|rejected)$/,
+          /^ps-section-(.+)-(awaiting|applicants|approved|hold|rejected)$/,
         );
         const eventId = match?.[1];
 
         if (!fbUid || !eventId || !shiftId) return;
+
+        if (action === "shift-chat") {
+          const worker =
+            (_eventChatWorkers.get(eventId) ?? []).find(
+              (w) => w.fbUid === fbUid && w.shiftId === shiftId,
+            ) ?? {
+              roleName: row.querySelector(".ps-role-chip")?.textContent ?? "Shift",
+            };
+          await _openShiftChatFromWorker(eventId, shiftId, worker);
+          return;
+        }
 
         if (action === "return-to-pool") {
           await _handleReturnToPool(eventId, fbUid, shiftId, btn);
@@ -6418,13 +6681,35 @@ let _edTasksData = null; // cached tasks for current event
 let _edBriefsData = null; // cached briefs for current event
 let _edExpandedRow = null; // currently expanded task/brief row
 let _edTaskFilterPriority = "all";
+const _eventScheduleCache = new Map();
 
 // ── Back button ────────────────────────────────────────────────────────────
 document
   .getElementById("btn-back-from-event-detail")
   .addEventListener("click", () => {
-    activateSection("project-detail");
+    activateSection("events");
   });
+document
+  .getElementById("btn-event-chat")
+  ?.addEventListener("click", () => _openCurrentEventChat());
+document
+  .getElementById("btn-shift-chat")
+  ?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    _toggleShiftChatMenu();
+  });
+document
+  .getElementById("shift-chat-menu")
+  ?.addEventListener("click", async (e) => {
+    const item = e.target.closest("[data-shift-chat-id]");
+    if (!item) return;
+    e.stopPropagation();
+    await _openShiftChatFromMenu(item.dataset.shiftChatId);
+  });
+document.addEventListener("click", (e) => {
+  const wrap = e.target.closest?.(".shift-chat-menu-wrap");
+  if (!wrap) _closeShiftChatMenu();
+});
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 document.getElementById("event-detail-tabs").addEventListener("click", (e) => {
@@ -6442,6 +6727,7 @@ function activateEventTab(name) {
   });
   if (name === "staffing") renderEdStaffingTab();
   if (name === "workers") renderEdWorkersTab();
+  if (name === "gantt" && currentEventId) loadEventSchedule(currentEventId);
   if (name === "tasks") renderEdTasksTab();
   if (name === "briefs") renderEdBriefsTab();
   if (name === "expenses") renderEdExpensesTab();
@@ -6449,9 +6735,19 @@ function activateEventTab(name) {
   if (name === "finance") renderEdFinanceTab();
 }
 
+let _currentEventData = null; // cached EventListItemResponse for the open event
+
+function _getCurrentEventData() {
+  return _currentEventData
+    ?? (currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId)
+    ?? null;
+}
+
 // ── Open event detail ──────────────────────────────────────────────────────
-async function openEventDetail(eventId) {
+async function openEventDetail(eventId, evData) {
   currentEventId = eventId;
+  _currentEventData = evData ?? null;
+  _closeShiftChatMenu();
   _edTasksData = null;
   _edBriefsData = null;
   _edExpandedRow = null;
@@ -6459,12 +6755,8 @@ async function openEventDetail(eventId) {
   _edPayrollData = null;
   _edTaskFilterPriority = "all";
 
-  // Update header from cached project data
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === eventId,
-  );
-  document.getElementById("event-detail-project-name").textContent =
-    currentProjectDetail?.name ?? "";
+  // Update header — evData comes from the kanban list, or fallback from project detail cache
+  const ev = evData ?? _getCurrentEventData();
   document.getElementById("event-detail-title").textContent =
     ev?.name ?? "Event";
   document.getElementById("event-detail-subtitle").textContent = ev
@@ -6526,9 +6818,7 @@ function renderEdStaffingTab() {
   const root = document.getElementById("ed-staffing-root");
   if (!root) return;
 
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === currentEventId,
-  );
+  const ev = _getCurrentEventData();
 
   root.innerHTML = `
     <div class="ps-header">
@@ -6545,19 +6835,18 @@ function renderEdStaffingTab() {
     </div>
     <div class="ps-event-block" data-event-id="${escapeHtml(currentEventId)}">
       ${_buildPotentialSection(currentEventId)}
-      ${_buildStaffingSection(currentEventId, "awaiting",   "Awaiting Response",  "clock",        "pending",  [], "awaiting")}
-      ${_buildStaffingSection(currentEventId, "applicants", "Shift Applicants",   "inbox",        "pending",  [], "applicant")}
-      ${_buildStaffingSection(currentEventId, "approved",   "Approved Workers",   "check-circle", "approved", [], "approved")}
-      ${_buildStaffingSection(currentEventId, "hold",       "Hold / Standby",     "pause-circle", "hold",     [], "hold")}
-      ${_buildStaffingSection(currentEventId, "rejected",   "Rejected Workers",   "x-circle",     "rejected", [], "rejected")}
+      ${_buildStaffingSection(currentEventId, "awaiting",   _t("Awaiting Response", "ממתינים לתגובה"),    "clock",        "pending",  [], "awaiting")}
+      ${_buildStaffingSection(currentEventId, "applicants", _t("Shift Applicants",  "מועמדים למשמרת"),     "inbox",        "pending",  [], "applicant")}
+      ${_buildStaffingSection(currentEventId, "approved",   _t("Approved Workers",  "עובדים מאושרים"),     "check-circle", "approved", [], "approved")}
+      ${_buildStaffingSection(currentEventId, "hold",       _t("Hold / Standby",    "בהמתנה"),             "pause-circle", "hold",     [], "hold")}
+      ${_buildStaffingSection(currentEventId, "rejected",   _t("Rejected Workers",  "נדחו"),               "x-circle",     "rejected", [], "rejected")}
     </div>`;
 
   if (window.lucide) lucide.createIcons();
   _initStaffingHandlers();
   _startStaffingPoll();
 
-  if (currentProjectId)
-    loadAndRenderPotentialWorkers(currentProjectId, currentEventId);
+  loadAndRenderPotentialWorkers(currentEventId);
   loadAndRenderEventWorkers(currentEventId);
 }
 
@@ -6584,22 +6873,22 @@ async function renderEdWorkersTab() {
 
 function _workerStatusLabel(status) {
   const map = {
-    manager_approved: "Approved",
-    manager_offer_sent: "Offer Sent",
-    employee_request: "Applied",
-    manager_hold: "On Hold",
-    manager_reject: "Rejected",
+    manager_approved:   _t("Approved",   "מאושר"),
+    manager_offer_sent: _t("Offer Sent", "הצעה נשלחה"),
+    employee_request:   _t("Applied",    "הגיש מועמדות"),
+    manager_hold:       _t("On Hold",    "בהמתנה"),
+    manager_reject:     _t("Rejected",   "נדחה"),
   };
   return map[status] ?? status;
 }
 
 function _buildEdWorkersHTML(data) {
   const sections = [
-    { key: "approved", label: "Approved", color: "approved" },
-    { key: "awaiting", label: "Awaiting Response", color: "pending" },
-    { key: "applicants", label: "Applicants", color: "pending" },
-    { key: "hold", label: "On Hold", color: "hold" },
-    { key: "rejected", label: "Rejected", color: "rejected" },
+    { key: "approved",   label: _t("Approved",          "עובדים מאושרים"), color: "approved" },
+    { key: "awaiting",   label: _t("Awaiting Response", "ממתינים לתגובה"), color: "pending"  },
+    { key: "applicants", label: _t("Applicants",        "מועמדים"),         color: "pending"  },
+    { key: "hold",       label: _t("On Hold",           "בהמתנה"),          color: "hold"     },
+    { key: "rejected",   label: _t("Rejected",          "נדחו"),            color: "rejected" },
   ];
 
   const fmtTime = (iso) => {
@@ -6952,7 +7241,7 @@ function _edAddNewTaskRow() {
       row.remove();
       _edApplyTaskFilters();
     } catch {
-      newSaveBtn.textContent = "Save";
+      newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
     }
   });
@@ -7311,7 +7600,7 @@ function _edAddNewBriefRow() {
       row.remove();
       list.appendChild(_edBuildBriefRow(created));
     } catch {
-      newSaveBtn.textContent = "Save";
+      newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
     }
   });
@@ -7342,6 +7631,19 @@ const EXPENSE_TYPES = [
   "other",
 ];
 
+function _labelExpenseType(type) {
+  const labels = {
+    venue: _t("venue", "מקום"),
+    catering: _t("catering", "קייטרינג"),
+    equipment: _t("equipment", "ציוד"),
+    transport: _t("transport", "הסעות"),
+    marketing: _t("marketing", "שיווק"),
+    staff: _t("staff", "צוות"),
+    other: _t("other", "אחר"),
+  };
+  return labels[type] || type;
+}
+
 async function renderEdExpensesTab() {
   const list = document.getElementById("ed-expense-list");
   if (!list) return;
@@ -7369,7 +7671,7 @@ async function renderEdExpensesTab() {
 function _edRenderExpenseList(list) {
   if (_edExpensesData.length === 0) {
     list.innerHTML =
-      '<div class="pd-empty-state">No expenses recorded yet.</div>';
+      `<div class="pd-empty-state">${_t("No expenses recorded yet.", "לא נרשמו הוצאות עדיין.")}</div>`;
     return;
   }
   list.innerHTML = "";
@@ -7384,7 +7686,7 @@ function _edBuildExpenseTotals() {
   );
   const div = document.createElement("div");
   div.className = "ed-expense-totals";
-  div.innerHTML = `<span class="ed-expense-total-label">Total</span>
+  div.innerHTML = `<span class="ed-expense-total-label">${_t("Total", "סה\"כ")}</span>
     <span class="ed-expense-total-value">₪${total.toLocaleString("en-IL", { minimumFractionDigits: 2 })}</span>`;
   return div;
 }
@@ -7407,40 +7709,40 @@ function _edBuildExpenseRow(exp) {
 
   row.innerHTML = `
     <div class="ed-expense-summary">
-      <span class="ed-expense-type-badge">${escapeHtml(exp.expenseType)}</span>
+      <span class="ed-expense-type-badge">${escapeHtml(_labelExpenseType(exp.expenseType))}</span>
       <span class="ed-expense-desc">${escapeHtml(exp.description || exp.vendorName || "—")}</span>
       <span class="ed-expense-date">${_fmtDate(exp.expenseDate)}</span>
       <span class="ed-expense-amount">₪${(exp.amount ?? 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}</span>
-      <button class="pd-row-delete-btn ed-expense-delete" title="Delete" aria-label="Delete expense">&#10005;</button>
+      <button class="pd-row-delete-btn ed-expense-delete" title="${_t("Delete", "מחק")}" aria-label="${_t("Delete expense", "מחק הוצאה")}">&#10005;</button>
     </div>
     <div class="ed-expense-form" style="display:none">
       <div class="ed-expense-form-grid">
         <div class="pd-select-field">
-          <label class="pd-field-label">Type</label>
+          <label class="pd-field-label">${_t("Type", "סוג")}</label>
           <select class="pd-form-select" name="expenseType">
-            ${EXPENSE_TYPES.map((t) => `<option value="${t}"${exp.expenseType === t ? " selected" : ""}>${t}</option>`).join("")}
+            ${EXPENSE_TYPES.map((t) => `<option value="${t}"${exp.expenseType === t ? " selected" : ""}>${escapeHtml(_labelExpenseType(t))}</option>`).join("")}
           </select>
         </div>
         <div class="pd-select-field">
-          <label class="pd-field-label">Amount (₪)</label>
+          <label class="pd-field-label">${_t("Amount (₪)", "סכום (₪)")}</label>
           <input type="number" class="pd-form-input" name="amount" value="${exp.amount ?? ""}" min="0" step="0.01" placeholder="0.00">
         </div>
         <div class="pd-select-field">
-          <label class="pd-field-label">Date</label>
+          <label class="pd-field-label">${_t("Date", "תאריך")}</label>
           <input type="date" class="pd-form-input" name="expenseDate" value="${dateVal}">
         </div>
         <div class="pd-select-field">
-          <label class="pd-field-label">Vendor</label>
-          <input type="text" class="pd-form-input" name="vendorName" value="${escapeHtml(exp.vendorName || "")}" placeholder="Vendor name…" maxlength="200">
+          <label class="pd-field-label">${_t("Vendor", "ספק")}</label>
+          <input type="text" class="pd-form-input" name="vendorName" value="${escapeHtml(exp.vendorName || "")}" placeholder="${_t("Vendor name…", "שם ספק…")}" maxlength="200">
         </div>
       </div>
-      <label class="pd-field-label">Description</label>
-      <input type="text" class="pd-form-input" name="description" value="${escapeHtml(exp.description || "")}" placeholder="Description…" maxlength="500">
-      <label class="pd-field-label">Notes</label>
+      <label class="pd-field-label">${_t("Description", "תיאור")}</label>
+      <input type="text" class="pd-form-input" name="description" value="${escapeHtml(exp.description || "")}" placeholder="${_t("Description…", "תיאור…")}" maxlength="500">
+      <label class="pd-field-label">${_t("Notes", "הערות")}</label>
       <textarea class="pd-form-textarea" name="notes" rows="2" maxlength="1000">${escapeHtml(exp.notes || "")}</textarea>
       <div class="pd-form-actions">
-        <button class="pd-form-save-btn" disabled>Save</button>
-        <button class="pd-form-cancel-btn">Cancel</button>
+        <button class="pd-form-save-btn" disabled>${_t("Save", "שמור")}</button>
+        <button class="pd-form-cancel-btn">${_t("Cancel", "ביטול")}</button>
       </div>
     </div>`;
 
@@ -7542,7 +7844,7 @@ function _edWireExpenseRow(row, exp) {
       Object.assign(exp, updated);
       // Refresh summary in-place
       row.querySelector(".ed-expense-type-badge").textContent =
-        updated.expenseType;
+        _labelExpenseType(updated.expenseType);
       row.querySelector(".ed-expense-desc").textContent =
         updated.description || updated.vendorName || "—";
       row.querySelector(".ed-expense-date").textContent = _fmtDate(
@@ -7557,7 +7859,7 @@ function _edWireExpenseRow(row, exp) {
       form.style.display = "none";
       row.classList.remove("pd-row--expanded");
     } catch {
-      saveBtn.textContent = "Save";
+      saveBtn.textContent = _t("Save", "שמור");
       saveBtn.disabled = false;
     }
   });
@@ -7570,9 +7872,9 @@ function _edWireExpenseRow(row, exp) {
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
     confirm.className = "pd-delete-confirm ed-expense-delete-confirm";
-    confirm.innerHTML = `<span>Delete this expense?</span>
-      <button class="btn-confirm-yes">Delete</button>
-      <button class="btn-confirm-no">Cancel</button>`;
+    confirm.innerHTML = `<span>${_t("Delete this expense?", "למחוק את ההוצאה הזו?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
     // Append to the row (not the summary flex container) to avoid overflow clipping
     summary.insertAdjacentElement("afterend", confirm);
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
@@ -7599,8 +7901,8 @@ function _edWireExpenseRow(row, exp) {
           _edRenderExpenseList(list);
         } catch {
           row.classList.remove("pd-row--deleting");
-          confirm.innerHTML = `<span style="color:#ef4444">Delete failed. Try again.</span>
-          <button class="btn-confirm-no">Dismiss</button>`;
+          confirm.innerHTML = `<span style="color:#ef4444">${_t("Delete failed. Try again.", "המחיקה נכשלה. נסה שוב.")}</span>
+          <button class="btn-confirm-no">${_t("Dismiss", "סגור")}</button>`;
           confirm
             .querySelector(".btn-confirm-no")
             .addEventListener("click", (ev) => {
@@ -7645,7 +7947,7 @@ function _edAddNewExpenseRow() {
     row.remove();
     if (_edExpensesData !== null && _edExpensesData.length === 0) {
       list.innerHTML =
-        '<div class="pd-empty-state">No expenses recorded yet.</div>';
+        `<div class="pd-empty-state">${_t("No expenses recorded yet.", "לא נרשמו הוצאות עדיין.")}</div>`;
     }
   });
 
@@ -7684,7 +7986,7 @@ function _edAddNewExpenseRow() {
       _edExpensesData.push(created);
       _edRenderExpenseList(list);
     } catch {
-      newSaveBtn.textContent = "Save";
+      newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
     }
   });
@@ -7752,7 +8054,7 @@ function _edBuildPayrollRowHTML(item, idx) {
   const hasReported = item.actualStart || item.actualEnd;
   const duration = _fmtDuration(item.actualStart, item.actualEnd);
   const payStatus = item.paymentStatus || "pending";
-  const _t = (iso) =>
+  const fmtTimeOnly = (iso) =>
     iso
       ? new Date(iso).toLocaleTimeString("en-US", {
           hour: "2-digit",
@@ -7764,49 +8066,49 @@ function _edBuildPayrollRowHTML(item, idx) {
   // Hours status badge
   let hoursLabel, hoursCls;
   if (hasApproved) {
-    hoursLabel = "Approved";
+    hoursLabel = _t("Approved", "מאושר");
     hoursCls = "ed-badge--approved";
   } else if (hasReported) {
-    hoursLabel = "Submitted";
+    hoursLabel = _t("Submitted", "הוגש");
     hoursCls = "ed-badge--pending";
   } else {
-    hoursLabel = "Not Reported";
+    hoursLabel = _t("Not Reported", "לא דווח");
     hoursCls = "ed-badge--unpaid";
   }
 
   // Payment status badge
   let payLabel, payCls;
   if (payStatus === "paid") {
-    payLabel = "Paid";
+    payLabel = _t("Paid", "שולם");
     payCls = "ed-badge--paid";
   } else if (payStatus === "approved") {
-    payLabel = "Approved";
+    payLabel = _t("Approved", "מאושר");
     payCls = "ed-badge--approved";
   } else {
-    payLabel = "Pending";
+    payLabel = _t("Pending", "ממתין");
     payCls = "ed-badge--unpaid";
   }
 
   const reportedHtml = hasReported
-    ? `<span class="ed-pr-time-summary">${_t(item.actualStart)} – ${_t(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
-    : `<span class="ed-pr-not-reported">Not reported</span>`;
+    ? `<span class="ed-pr-time-summary">${fmtTimeOnly(item.actualStart)} – ${fmtTimeOnly(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
+    : `<span class="ed-pr-not-reported">${_t("Not reported", "לא דווח")}</span>`;
 
   const sectionAContent = hasReported
     ? `<div class="ed-pr-fields-row">
         <div class="ed-pr-field">
-          <label class="ed-pr-field-label">Actual Arrival</label>
+          <label class="ed-pr-field-label">${_t("Actual Arrival", "הגעה בפועל")}</label>
           <span class="ed-pr-field-val">${item.actualStart ? new Date(item.actualStart).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
         </div>
         <div class="ed-pr-field">
-          <label class="ed-pr-field-label">Actual Departure</label>
+          <label class="ed-pr-field-label">${_t("Actual Departure", "עזיבה בפועל")}</label>
           <span class="ed-pr-field-val">${item.actualEnd ? new Date(item.actualEnd).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
         </div>
-        ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">Duration</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
+        ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">${_t("Duration", "משך")}</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
       </div>`
-    : `<p class="ed-pr-empty-state">Employee has not reported hours yet.</p>`;
+    : `<p class="ed-pr-empty-state">${_t("Employee has not reported hours yet.", "העובד עדיין לא דיווח שעות.")}</p>`;
 
   const approvedNote = hasApproved
-    ? `<p class="ed-pr-approved-note">Approved on ${new Date(item.approvedAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</p>`
+    ? `<p class="ed-pr-approved-note">${_t("Approved", "מאושר")} ${new Date(item.approvedAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</p>`
     : "";
 
   // Pre-fill pay rate from employee default if not yet set
@@ -7821,71 +8123,71 @@ function _edBuildPayrollRowHTML(item, idx) {
         </div>
         <div class="ed-pr-reported">${reportedHtml}</div>
         <div class="ed-pr-status-badges">
-          <div class="ed-badge-group"><span class="ed-badge-label">Hours:</span><span class="ed-badge ${hoursCls}">${hoursLabel}</span></div>
-          <div class="ed-badge-group"><span class="ed-badge-label">Pay:</span><span class="ed-badge ${payCls}">${payLabel}</span></div>
+          <div class="ed-badge-group"><span class="ed-badge-label">${_t("Hours", "שעות")}:</span><span class="ed-badge ${hoursCls}">${hoursLabel}</span></div>
+          <div class="ed-badge-group"><span class="ed-badge-label">${_t("Pay", "שכר")}:</span><span class="ed-badge ${payCls}">${payLabel}</span></div>
         </div>
-        <button class="ed-pr-review-btn">Review</button>
+        <button class="ed-pr-review-btn">${_t("Review", "סקור")}</button>
       </div>
       <div class="ed-pr-panel" hidden>
 
         <!-- Step 1: Reported by Employee -->
         <div class="ed-pr-panel-section">
-          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> Employee Report</div>
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> ${_t("Employee Report", "דיווח עובד")}</div>
           ${sectionAContent}
         </div>
 
         <!-- Step 2: Manager Approval -->
         <div class="ed-pr-panel-section">
-          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">2</span> Manager Approval</div>
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">2</span> ${_t("Manager Approval", "אישור מנהל")}</div>
           ${approvedNote}
           <div class="ed-pr-fields-row">
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Regular Hours</label>
+              <label class="ed-pr-field-label">${_t("Regular Hours", "שעות רגילות")}</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="approvedRegularHours"
                      value="${item.approvedRegularHours ?? ""}" min="0" step="0.5" placeholder="—">
             </div>
           </div>
-          <p class="ed-pr-ot-note">Overtime is calculated automatically (first 2h ×1.25, beyond ×1.50)</p>
-          <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">Approve Hours</button>
+          <p class="ed-pr-ot-note">${_t("Overtime is calculated automatically (first 2h ×1.25, beyond ×1.50)", "שעות נוספות מחושבות אוטומטית (שעתיים ראשונות ×1.25, מעבר לכך ×1.50)")}</p>
+          <button class="ed-pr-approve-btn" data-action="approve" data-idx="${idx}">${_t("Approve Hours", "אשר שעות")}</button>
         </div>
 
         <!-- Step 3: Payroll -->
         <div class="ed-pr-panel-section">
-          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">3</span> Payroll</div>
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">3</span> ${_t("Payroll", "שכר")}</div>
           <div class="ed-pr-fields-row">
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Rate/hr (₪)</label>
+              <label class="ed-pr-field-label">${_t("Rate/hr (₪)", "תעריף לשעה (₪)")}</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="payRatePerHour"
                      value="${payRateVal}" min="0" step="0.01" placeholder="—">
             </div>
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Travel Refund (₪)</label>
+              <label class="ed-pr-field-label">${_t("Travel Refund (₪)", "החזר נסיעות (₪)")}</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="travelRefund"
                      value="${item.travelRefund ?? ""}" min="0" step="0.01" placeholder="—">
             </div>
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Bonus (₪)</label>
+              <label class="ed-pr-field-label">${_t("Bonus (₪)", "בונוס (₪)")}</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="bonusAmount"
                      value="${item.bonusAmount ?? ""}" min="0" step="0.01" placeholder="—">
             </div>
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Penalty (₪)</label>
+              <label class="ed-pr-field-label">${_t("Penalty (₪)", "קנס (₪)")}</label>
               <input type="number" class="ed-pr-input ed-pr-input--sm" name="penaltyAmount"
                      value="${item.penaltyAmount ?? ""}" min="0" step="0.01" placeholder="—">
             </div>
             <div class="ed-pr-field">
-              <label class="ed-pr-field-label">Payment Status</label>
+              <label class="ed-pr-field-label">${_t("Payment Status", "סטטוס תשלום")}</label>
               <select class="ed-pr-input ed-pr-select" name="paymentStatus">
                 ${["pending", "approved", "paid"]
                   .map(
                     (s) =>
-                      `<option value="${s}"${payStatus === s ? " selected" : ""}>${capitalize(s)}</option>`,
+                      `<option value="${s}"${payStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`,
                   )
                   .join("")}
               </select>
             </div>
           </div>
-          <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">Save Payroll</button>
+          <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">${_t("Save Payroll", "שמור שכר")}</button>
         </div>
 
       </div>
@@ -7894,7 +8196,7 @@ function _edBuildPayrollRowHTML(item, idx) {
 
 function _edBuildPayrollHTML(items) {
   if (!items || items.length === 0) {
-    return '<div class="pd-empty-state">No approved workers for payroll.</div>';
+    return `<div class="pd-empty-state">${_t("No approved workers for payroll.", "אין עובדים מאושרים לשכר.")}</div>`;
   }
   const rows = items
     .map((item, idx) => _edBuildPayrollRowHTML(item, idx))
@@ -7916,8 +8218,8 @@ function _edWirePayrollSaveBtns() {
       const isOpen = !panel.hidden;
       panel.hidden = isOpen;
       e.target.closest(".ed-pr-review-btn").textContent = isOpen
-        ? "Review"
-        : "Close";
+        ? _t("Review", "סקור")
+        : _t("Close", "סגור");
       return;
     }
 
@@ -7933,7 +8235,7 @@ function _edWirePayrollSaveBtns() {
     const action = actionBtn.dataset.action;
 
     actionBtn.disabled = true;
-    actionBtn.textContent = "Saving…";
+    actionBtn.textContent = _t("Saving…", "שומר…");
 
     try {
       const token = await getToken();
@@ -7974,12 +8276,12 @@ function _edWirePayrollSaveBtns() {
         tempDiv.innerHTML = _edBuildPayrollRowHTML(updated, idx);
         const newRow = tempDiv.firstElementChild;
         newRow.querySelector(".ed-pr-panel").hidden = false;
-        newRow.querySelector(".ed-pr-review-btn").textContent = "Close";
+        newRow.querySelector(".ed-pr-review-btn").textContent = _t("Close", "סגור");
         row.replaceWith(newRow);
       }
     } catch {
       actionBtn.textContent =
-        action === "approve" ? "Approve Hours" : "Save Payroll";
+        action === "approve" ? _t("Approve Hours", "אשר שעות") : _t("Save Payroll", "שמור שכר");
       actionBtn.disabled = false;
     }
   };
@@ -8015,11 +8317,11 @@ async function renderEdFinanceTab() {
     lucide.createIcons();
 
     document.getElementById("ed-inv-create-btn")?.addEventListener("click", () => {
-      const ev = (currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId);
+      const ev = _getCurrentEventData();
       openInvoiceModal({
         prefillEventId:    currentEventId,
-        prefillProjectId:  ev?.projectId  || currentProjectDetail?.projId,
-        prefillCustomerId: currentProjectDetail?.customerId,
+        prefillProjectId:  ev?.projectId || null,
+        prefillCustomerId: ev?.customerId || null,
         prefillAmount:     ev?.expectedRevenue || "",
       });
     });
@@ -8034,9 +8336,7 @@ function _edBuildFinanceHTML(payroll, expenses) {
     `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
 
   // Pull planned budget / expected revenue from cached event data
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === currentEventId,
-  );
+  const ev = _getCurrentEventData();
   const plannedBudget    = ev?.plannedBudget    ?? null;
   const expectedRevenue  = ev?.expectedRevenue  ?? null;
 
@@ -8073,7 +8373,7 @@ function _edBuildFinanceHTML(payroll, expenses) {
       <td>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</td>
       <td>${escapeHtml(p.roleName)}</td>
       <td>${fmt(reg)}</td>
-      <td>${fmt(ot)} <span class='ed-fin-ot-note' title='First 2 OT hours ×1.25, beyond ×1.50 (Israeli law)'>⚖</span></td>
+      <td>${fmt(ot)} <span class='ed-fin-ot-note' title='${_t("First 2 OT hours ×1.25, beyond ×1.50 (Israeli law)", "שעתיים ראשונות ×1.25, מעבר לכך ×1.50")}'>⚖</span></td>
       <td>${fmt(travel + bonus - penalty)}</td>
       <td><strong>${fmt(total)}</strong></td>
     </tr>`;
@@ -8090,12 +8390,15 @@ function _edBuildFinanceHTML(payroll, expenses) {
   const expenseRows = Object.entries(byType)
     .map(
       ([type, amt]) =>
-        `<tr><td>${escapeHtml(type)}</td><td>${fmt(amt)}</td></tr>`,
+        `<tr><td>${escapeHtml(_labelExpenseType(type))}</td><td>${fmt(amt)}</td></tr>`,
     )
     .join("");
 
   if (financePayroll.length === 0 && Object.keys(byType).length === 0) {
-    return '<div class="pd-empty-state">No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.</div>';
+    return `<div class="pd-empty-state">${_t(
+      "No finance-ready records yet. Hours must be approved and payment status set to Approved or Paid.",
+      "אין עדיין נתונים מוכנים לכספים. יש לאשר שעות ולהגדיר סטטוס תשלום כמאושר או שולם.",
+    )}</div>`;
   }
 
   const grandTotal = totalLabor + totalExpenses;
@@ -8105,32 +8408,32 @@ function _edBuildFinanceHTML(payroll, expenses) {
 
   return `
     <div class="ed-finance-cards">
-      ${plannedBudget  !== null ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">Planned Budget</div><div class="ed-finance-card-value">${fmt(plannedBudget)}</div></div>` : ""}
-      ${expectedRevenue !== null ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">Expected Revenue</div><div class="ed-finance-card-value">${fmt(expectedRevenue)}</div></div>` : ""}
+      ${plannedBudget  !== null ? `<div class="ed-finance-card ed-finance-card--plan"><div class="ed-finance-card-label">${_t("Planned Budget", "תקציב מתוכנן")}</div><div class="ed-finance-card-value">${fmt(plannedBudget)}</div></div>` : ""}
+      ${expectedRevenue !== null ? `<div class="ed-finance-card ed-finance-card--rev"><div class="ed-finance-card-label">${_t("Expected Revenue", "הכנסה צפויה")}</div><div class="ed-finance-card-value">${fmt(expectedRevenue)}</div></div>` : ""}
       <div class="ed-finance-card">
-        <div class="ed-finance-card-label">Total Labor Cost</div>
+        <div class="ed-finance-card-label">${_t("Total Labor Cost", "עלות עבודה כוללת")}</div>
         <div class="ed-finance-card-value">${fmt(totalLabor)}</div>
       </div>
       <div class="ed-finance-card">
-        <div class="ed-finance-card-label">Total Expenses</div>
+        <div class="ed-finance-card-label">${_t("Total Expenses", "סה\"כ הוצאות")}</div>
         <div class="ed-finance-card-value">${fmt(totalExpenses)}</div>
       </div>
       <div class="ed-finance-card ed-finance-card--total">
-        <div class="ed-finance-card-label">Grand Total Cost</div>
+        <div class="ed-finance-card-label">${_t("Grand Total Cost", "עלות כוללת")}</div>
         <div class="ed-finance-card-value">${fmt(grandTotal)}</div>
       </div>
-      ${expectedRevenue !== null ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">Profit / Loss</div><div class="ed-finance-card-value">${profitLoss >= 0 ? "+" : ""}${fmt(profitLoss)}</div></div>` : ""}
+      ${expectedRevenue !== null ? `<div class="ed-finance-card ${profitCls}"><div class="ed-finance-card-label">${_t("Profit / Loss", "רווח / הפסד")}</div><div class="ed-finance-card-value">${profitLoss >= 0 ? "+" : ""}${fmt(profitLoss)}</div></div>` : ""}
     </div>
 
     ${
       payroll.length > 0
         ? `
     <div class="ed-finance-section">
-      <h4 class="ed-finance-section-title">Labor Breakdown</h4>
+      <h4 class="ed-finance-section-title">${_t("Labor Breakdown", "פירוט עבודה")}</h4>
       <table class="ed-worker-table">
-        <thead><tr><th>Employee</th><th>Role</th><th>Regular</th><th>Overtime</th><th>Extras</th><th>Total</th></tr></thead>
+        <thead><tr><th>${_t("Employee", "עובד")}</th><th>${_t("Role", "תפקיד")}</th><th>${_t("Regular", "רגילות")}</th><th>${_t("Overtime", "נוספות")}</th><th>${_t("Extras", "תוספות")}</th><th>${_t("Total", "סה\"כ")}</th></tr></thead>
         <tbody>${laborRows}</tbody>
-        <tfoot><tr><td colspan="5"><strong>Total Labor</strong></td><td><strong>${fmt(totalLabor)}</strong></td></tr></tfoot>
+        <tfoot><tr><td colspan="5"><strong>${_t("Total Labor", "סה\"כ עבודה")}</strong></td><td><strong>${fmt(totalLabor)}</strong></td></tr></tfoot>
       </table>
     </div>`
         : ""
@@ -8140,11 +8443,11 @@ function _edBuildFinanceHTML(payroll, expenses) {
       expenses.length > 0
         ? `
     <div class="ed-finance-section">
-      <h4 class="ed-finance-section-title">Expenses by Category</h4>
+      <h4 class="ed-finance-section-title">${_t("Expenses by Category", "הוצאות לפי קטגוריה")}</h4>
       <table class="ed-worker-table">
-        <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+        <thead><tr><th>${_t("Category", "קטגוריה")}</th><th>${_t("Amount", "סכום")}</th></tr></thead>
         <tbody>${expenseRows}</tbody>
-        <tfoot><tr><td><strong>Total Expenses</strong></td><td><strong>${fmt(totalExpenses)}</strong></td></tr></tfoot>
+        <tfoot><tr><td><strong>${_t("Total Expenses", "סה\"כ הוצאות")}</strong></td><td><strong>${fmt(totalExpenses)}</strong></td></tr></tfoot>
       </table>
     </div>`
         : ""
@@ -8168,8 +8471,26 @@ const _invStatusLabel = {
   paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
+function _invStatusText(status) {
+  const he = {
+    draft: "טיוטה",
+    sent: "נשלח",
+    partial: "חלקי",
+    paid: "שולם",
+    overdue: "באיחור",
+    cancelled: "בוטל",
+  };
+  return _t(_invStatusLabel[status] || status, he[status] || status);
+}
+
 function _invStatusBadge(status) {
-  return `<span class="inv-badge inv-badge--${status}">${_invStatusLabel[status] || status}</span>`;
+  return `<span class="inv-badge inv-badge--${status}">${_invStatusText(status)}</span>`;
+}
+
+function _suggestInvoiceNumber() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `REQ-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
 // ── Load & render invoices list ────────────────────────────────────────────
@@ -8185,7 +8506,7 @@ async function loadInvoices() {
     _renderInvoiceTable();
     _renderInvoiceSummaryCards();
   } catch {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Failed to load invoices.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_t("Failed to load payment requests.", "טעינת דרישות תשלום נכשלה.")}</td></tr>`;
   }
 }
 
@@ -8213,7 +8534,7 @@ function _filteredInvoices() {
   return _allInvoices.filter((inv) => {
     if (status && inv.paymentStatus !== status) return false;
     if (search) {
-      const hay = [inv.invoiceNumber, inv.customerCompanyName, inv.projectName, inv.eventName]
+      const hay = [inv.invoiceNumber, inv.customerCompanyName, inv.eventName]
         .filter(Boolean).join(" ").toLowerCase();
       if (!hay.includes(search)) return false;
     }
@@ -8226,11 +8547,11 @@ function _renderInvoiceTable() {
   if (!tbody) return;
   const list = _filteredInvoices();
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No invoices found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_t("No payment requests found.", "לא נמצאו דרישות תשלום.")}</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map((inv) => {
-    const context = [inv.projectName, inv.eventName].filter(Boolean).join(" / ") || "—";
+    const context = inv.eventName || "—";
     return `<tr>
       <td><strong>${escapeHtml(inv.invoiceNumber)}</strong></td>
       <td>${escapeHtml(inv.customerCompanyName || "—")}</td>
@@ -8241,10 +8562,10 @@ function _renderInvoiceTable() {
       <td>${_fmtMoney(inv.paidAmount)}</td>
       <td>${_invStatusBadge(inv.paymentStatus)}</td>
       <td class="inv-actions">
-        <button class="btn-icon-sm" title="Record Payment" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
-        <button class="btn-icon-sm" title="Edit" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
-        <button class="btn-icon-sm" title="Download PDF" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
-        <button class="btn-icon-sm btn-icon-danger" title="Cancel" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="x-circle"></i></button>
+        <button class="btn-icon-sm" title="${_t("Record Payment", "רישום תשלום")}" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
+        <button class="btn-icon-sm" title="${_t("Edit", "ערוך")}" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon-sm" title="${_t("Download PDF", "הורד PDF")}" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
+        <button class="btn-icon-sm btn-icon-danger" title="${_t("Cancel", "ביטול")}" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="x-circle"></i></button>
       </td>
     </tr>`;
   }).join("");
@@ -8268,7 +8589,8 @@ function _wireInvoiceTableActions() {
 async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
   try {
     const token = await getToken();
-    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    const lang = getCurrentLanguage();
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf?lang=${encodeURIComponent(lang)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error();
@@ -8276,16 +8598,17 @@ async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `invoice-${(invoiceNumber || invoiceId).replace(/\//g, "-")}.pdf`;
+    const safeNumber = (invoiceNumber || invoiceId).replace(/\//g, "-");
+    a.download = lang === "he" ? `דרישת-תשלום-${safeNumber}.pdf` : `payment-request-${safeNumber}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  } catch { alert("Failed to download PDF."); }
+  } catch { alert(_t("Failed to download PDF.", "הורדת ה-PDF נכשלה.")); }
 }
 
 async function _cancelInvoice(invoiceId) {
-  if (!confirm("Cancel this invoice? It will be marked as Cancelled.")) return;
+  if (!confirm(_t("Cancel this payment request? It will be marked as Cancelled.", "לבטל את דרישת התשלום? הסטטוס יעודכן למבוטל."))) return;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}`, {
@@ -8293,7 +8616,7 @@ async function _cancelInvoice(invoiceId) {
     });
     if (!res.ok && res.status !== 204) throw new Error();
     await loadInvoices();
-  } catch { alert("Failed to cancel invoice."); }
+  } catch { alert(_t("Failed to cancel payment request.", "ביטול דרישת התשלום נכשל.")); }
 }
 
 // ── Filters wiring ─────────────────────────────────────────────────────────
@@ -8309,8 +8632,10 @@ document.getElementById("btn-create-invoice")?.addEventListener("click", () => o
 async function openInvoiceModal(opts = {}) {
   _editingInvoiceId = opts.invoiceId || null;
   const overlay = document.getElementById("inv-modal-overlay");
-  document.getElementById("inv-modal-title").textContent   = _editingInvoiceId ? "Edit Invoice"   : "New Invoice";
-  document.getElementById("inv-modal-save-label").textContent = _editingInvoiceId ? "Update Invoice" : "Save Invoice";
+  document.getElementById("inv-modal-title").textContent =
+    _editingInvoiceId ? _t("Edit Payment Request", "ערוך דרישת תשלום") : _t("New Payment Request", "דרישת תשלום חדשה");
+  document.getElementById("inv-modal-save-label").textContent =
+    _editingInvoiceId ? _t("Update Request", "עדכן דרישה") : _t("Save Request", "שמור דרישה");
   const errEl = document.getElementById("inv-modal-error");
   if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
 
@@ -8323,8 +8648,7 @@ async function openInvoiceModal(opts = {}) {
     const inv = _allInvoices.find((i) => i.invoiceId === _editingInvoiceId);
     if (inv) {
       _setVal("inv-customer", inv.customerId);
-      await _invLoadProjectDropdown(inv.customerId, inv.projectId);
-      await _invLoadEventDropdown(inv.projectId, inv.eventId);
+      await _invLoadEventDropdownForCustomer(inv.customerId, inv.eventId);
       _setVal("inv-number",   inv.invoiceNumber);
       _setVal("inv-status",   inv.paymentStatus);
       _setVal("inv-date",     inv.invoiceDate ? inv.invoiceDate.slice(0, 10) : today);
@@ -8334,16 +8658,15 @@ async function openInvoiceModal(opts = {}) {
     }
   } else {
     _setVal("inv-customer",  opts.prefillCustomerId || "");
-    if (opts.prefillCustomerId) await _invLoadProjectDropdown(opts.prefillCustomerId, opts.prefillProjectId || null);
-    if (opts.prefillProjectId)  await _invLoadEventDropdown(opts.prefillProjectId, opts.prefillEventId || null);
     _setVal("inv-project",   opts.prefillProjectId  || "");
-    _setVal("inv-event",     opts.prefillEventId    || "");
-    _setVal("inv-number",    "");
+    _setVal("inv-number",    _suggestInvoiceNumber());
     _setVal("inv-status",    "draft");
     _setVal("inv-date",      today);
     _setVal("inv-due-date",  due30);
     _setVal("inv-amount",    opts.prefillAmount || "");
     _setVal("inv-notes",     "");
+    if (opts.prefillCustomerId) await _invLoadEventDropdownForCustomer(opts.prefillCustomerId, opts.prefillEventId || null);
+    else _setVal("inv-event", "");
   }
 
   overlay.style.display = "flex";
@@ -8359,7 +8682,7 @@ function _setVal(id, val) {
 async function _invLoadCustomerDropdown(selectedId) {
   const sel = document.getElementById("inv-customer");
   if (!sel) return;
-  sel.innerHTML = `<option value="">— select customer —</option>`;
+  sel.innerHTML = `<option value="">${_t("— select customer —", "— בחר לקוח —")}</option>`;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/customers`, { headers: { Authorization: `Bearer ${token}` } });
@@ -8372,14 +8695,49 @@ async function _invLoadCustomerDropdown(selectedId) {
       sel.appendChild(opt);
     });
   } catch { /* silent */ }
-  sel.onchange = async () => { await _invLoadProjectDropdown(sel.value, null); _setVal("inv-event", ""); };
-  if (selectedId) await _invLoadProjectDropdown(selectedId, null);
+  sel.onchange = async () => { await _invLoadEventDropdownForCustomer(sel.value, null); };
+  if (selectedId) await _invLoadEventDropdownForCustomer(selectedId, null);
+}
+
+async function _invLoadEventDropdownForCustomer(customerId, selectedEventId) {
+  const eventSel = document.getElementById("inv-event");
+  const projectSel = document.getElementById("inv-project");
+  if (projectSel) projectSel.innerHTML = `<option value="">— technical wrapper —</option>`;
+  if (!eventSel) return;
+  eventSel.innerHTML = `<option value="">${_t("— select event —", "— בחר אירוע —")}</option>`;
+  if (!customerId) return;
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/events`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const events = await res.json();
+    const matchingEvents = events
+      .filter((ev) => !ev.customerId || ev.customerId === customerId);
+    const autoSelectedEventId = selectedEventId || (matchingEvents.length === 1 ? matchingEvents[0].eventId : null);
+    matchingEvents.forEach((ev) => {
+        const opt = document.createElement("option");
+        opt.value = ev.eventId;
+        opt.textContent = ev.name;
+        opt.dataset.revenue = ev.expectedRevenue || "";
+        if (ev.eventId === autoSelectedEventId) opt.selected = true;
+        eventSel.appendChild(opt);
+      });
+    const selected = matchingEvents.find((ev) => ev.eventId === autoSelectedEventId);
+    const amountEl = document.getElementById("inv-amount");
+    if (selected?.expectedRevenue && amountEl && !amountEl.value) {
+      amountEl.value = selected.expectedRevenue;
+    }
+  } catch { /* silent */ }
+  eventSel.onchange = () => {
+    const chosen = eventSel.options[eventSel.selectedIndex];
+    if (chosen?.dataset?.revenue) _setVal("inv-amount", chosen.dataset.revenue);
+  };
 }
 
 async function _invLoadProjectDropdown(customerId, selectedProjectId) {
   const sel = document.getElementById("inv-project");
   if (!sel) return;
-  sel.innerHTML = `<option value="">— select project —</option>`;
+  sel.innerHTML = `<option value="">${_t("— select project —", "— בחר פרויקט —")}</option>`;
   if (!customerId) return;
   try {
     const token = await getToken();
@@ -8400,7 +8758,7 @@ async function _invLoadProjectDropdown(customerId, selectedProjectId) {
 async function _invLoadEventDropdown(projectId, selectedEventId) {
   const sel = document.getElementById("inv-event");
   if (!sel) return;
-  sel.innerHTML = `<option value="">— select event (optional) —</option>`;
+  sel.innerHTML = `<option value="">${_t("— select event (optional) —", "— בחר אירוע (אופציונלי) —")}</option>`;
   if (!projectId) return;
   try {
     const token = await getToken();
@@ -8446,11 +8804,11 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
   const amount     = parseFloat(document.getElementById("inv-amount")?.value);
   const notes      = document.getElementById("inv-notes")?.value?.trim() || null;
 
-  if (!customerId)               { _showInvError(errEl, "Please select a customer."); return; }
-  if (!number)                   { _showInvError(errEl, "Invoice number is required."); return; }
-  if (!date)                     { _showInvError(errEl, "Invoice date is required."); return; }
-  if (!dueDate)                  { _showInvError(errEl, "Due date is required."); return; }
-  if (isNaN(amount) || amount <= 0) { _showInvError(errEl, "Amount must be greater than 0."); return; }
+  if (!customerId)               { _showInvError(errEl, _t("Please select a customer.", "יש לבחור לקוח.")); return; }
+  if (!number)                   { _showInvError(errEl, _t("Invoice number is required.", "מספר הדרישה הוא שדה חובה.")); return; }
+  if (!date)                     { _showInvError(errEl, _t("Invoice date is required.", "תאריך הדרישה הוא שדה חובה.")); return; }
+  if (!dueDate)                  { _showInvError(errEl, _t("Due date is required.", "תאריך יעד הוא שדה חובה.")); return; }
+  if (isNaN(amount) || amount <= 0) { _showInvError(errEl, _t("Amount must be greater than 0.", "הסכום חייב להיות גדול מ-0.")); return; }
 
   saveBtn.disabled = true;
   if (errEl) errEl.style.display = "none";
@@ -8462,19 +8820,19 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Update failed."); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Update failed.", "עדכון הדרישה נכשל.")); }
     } else {
       const res = await fetch(`${API_BASE}/invoices`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ customerId, projectId, eventId, invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Create failed."); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Create failed.", "יצירת הדרישה נכשלה.")); }
     }
     _closeInvoiceModal();
     await loadInvoices();
   } catch (e) {
-    _showInvError(errEl, e.message || "An error occurred.");
+    _showInvError(errEl, _t(e.message || "An error occurred.", e.message || "אירעה שגיאה."));
   } finally {
     saveBtn.disabled = false;
   }
@@ -8491,7 +8849,7 @@ function openRecordPaymentModal(invoiceId) {
   const inv   = _allInvoices.find((i) => i.invoiceId === invoiceId);
   const errEl = document.getElementById("inv-pay-error");
   const subEl = document.getElementById("inv-pay-subtitle");
-  if (subEl && inv) subEl.textContent = `${inv.invoiceNumber} — ${_fmtMoney(inv.invoiceAmount)} total`;
+  if (subEl && inv) subEl.textContent = `${inv.invoiceNumber} — ${_fmtMoney(inv.invoiceAmount)} ${_t("total", "סה\"כ")}`;
   if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
   _setVal("inv-pay-amount", inv?.paidAmount || "");
   _setVal("inv-pay-date",   new Date().toISOString().slice(0, 10));
@@ -8517,7 +8875,7 @@ document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
   const paymentDate   = document.getElementById("inv-pay-date")?.value || null;
   const paymentStatus = document.getElementById("inv-pay-status")?.value || null;
 
-  if (isNaN(paidAmount) || paidAmount < 0) { _showInvError(errEl, "Paid amount must be 0 or greater."); return; }
+  if (isNaN(paidAmount) || paidAmount < 0) { _showInvError(errEl, _t("Paid amount must be 0 or greater.", "הסכום ששולם חייב להיות 0 או יותר.")); return; }
 
   saveBtn.disabled = true;
   if (errEl) errEl.style.display = "none";
@@ -8528,11 +8886,11 @@ document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ paidAmount, paymentDate, paymentStatus: paymentStatus || null }),
     });
-    if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Payment save failed."); }
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Payment save failed.", "שמירת התשלום נכשלה.")); }
     _closePaymentModal();
     await loadInvoices();
   } catch (e) {
-    _showInvError(errEl, e.message || "An error occurred.");
+    _showInvError(errEl, _t(e.message || "An error occurred.", e.message || "אירעה שגיאה."));
   } finally {
     saveBtn.disabled = false;
   }
@@ -8580,23 +8938,26 @@ function _invBuildFinanceBlock(invoices, opts = {}) {
   return `
   <div class="ed-finance-section inv-finance-block">
     <div class="inv-finance-header">
-      <h4 class="ed-finance-section-title">Invoices</h4>
+      <h4 class="ed-finance-section-title">${_t("Payment Requests", "דרישות תשלום")}</h4>
       <button class="btn-primary btn-sm btn-with-icon" id="${opts.createBtnId || "inv-finance-create-btn"}">
-        <i data-lucide="plus"></i> New Invoice
+        <i data-lucide="plus"></i> ${_t("New Payment Request", "דרישת תשלום חדשה")}
       </button>
     </div>
     ${invoices.length > 0 ? `
       <div class="ed-finance-cards" style="margin-bottom:12px">
-        <div class="ed-finance-card"><div class="ed-finance-card-label">Invoiced</div><div class="ed-finance-card-value">${fmt(total)}</div></div>
-        <div class="ed-finance-card ed-finance-card--profit"><div class="ed-finance-card-label">Collected</div><div class="ed-finance-card-value">${fmt(paid)}</div></div>
+        <div class="ed-finance-card"><div class="ed-finance-card-label">${_t("Requested", "נדרש")}</div><div class="ed-finance-card-value">${fmt(total)}</div></div>
+        <div class="ed-finance-card ed-finance-card--profit"><div class="ed-finance-card-label">${_t("Collected", "נגבה")}</div><div class="ed-finance-card-value">${fmt(paid)}</div></div>
         <div class="ed-finance-card ${outstanding > 0 ? "ed-finance-card--loss" : ""}">
-          <div class="ed-finance-card-label">Outstanding</div><div class="ed-finance-card-value">${fmt(outstanding)}</div>
+          <div class="ed-finance-card-label">${_t("Outstanding", "יתרה לתשלום")}</div><div class="ed-finance-card-value">${fmt(outstanding)}</div>
         </div>
       </div>
       <table class="ed-worker-table">
-        <thead><tr><th>Invoice #</th><th>Status</th><th>Date</th><th>Due</th><th>Amount</th><th>Paid</th><th>Balance</th></tr></thead>
+        <thead><tr><th>${_t("Request #", "מספר דרישה")}</th><th>${_t("Status", "סטטוס")}</th><th>${_t("Date", "תאריך")}</th><th>${_t("Due", "לתשלום עד")}</th><th>${_t("Amount", "סכום")}</th><th>${_t("Paid", "שולם")}</th><th>${_t("Balance", "יתרה")}</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>` : `<p class="pd-empty-state" style="padding:12px 0">No invoices yet for this ${opts.context || "item"}.</p>`}
+      </table>` : `<p class="pd-empty-state" style="padding:12px 0">${opts.context === "event"
+        ? _t("No payment requests yet for this event.", "אין עדיין דרישות תשלום לאירוע הזה.")
+        : _t("No payment requests yet for this item.", "אין עדיין דרישות תשלום לפריט הזה.")
+      }</p>`}
   </div>`;
 }
 
@@ -8765,10 +9126,8 @@ function _toDatetimeLocal(isoStr) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function openEventEditModal() {
-  const ev = (currentProjectDetail?.events ?? []).find(
-    (e) => e.eventId === currentEventId,
-  );
+async function openEventEditModal() {
+  const ev = _getCurrentEventData();
   if (!ev) return;
 
   document.getElementById("event-edit-name").value       = ev.name       ?? "";
@@ -8780,6 +9139,21 @@ function openEventEditModal() {
   document.getElementById("event-edit-budget").value     = ev.plannedBudget   != null ? ev.plannedBudget   : "";
   document.getElementById("event-edit-revenue").value    = ev.expectedRevenue != null ? ev.expectedRevenue : "";
   document.getElementById("event-edit-attendees").value  = ev.attendeesCount  != null ? ev.attendeesCount  : "";
+
+  // Populate customer dropdown — fetch fresh if cache is empty
+  if (!allCustomers?.length) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/customers`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) allCustomers = await res.json();
+    } catch { /* silently ignore */ }
+  }
+  const custSel = document.getElementById("event-edit-customer");
+  custSel.innerHTML = `<option value="">— ${_t("None", "ללא")} —</option>` +
+    (allCustomers || []).map((c) =>
+      `<option value="${c.customerId}">${escapeHtml(c.customerCompanyName)}</option>`
+    ).join("");
+  custSel.value = ev.customerId ?? "";
 
   const err = document.getElementById("event-edit-error");
   err.textContent  = "";
@@ -8817,6 +9191,7 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
   const budgetVal       = document.getElementById("event-edit-budget").value;
   const revenueVal      = document.getElementById("event-edit-revenue").value;
   const attendeesVal    = document.getElementById("event-edit-attendees").value;
+  const customerId      = document.getElementById("event-edit-customer").value || "";
   const plannedBudget   = budgetVal   !== "" ? parseFloat(budgetVal)   : null;
   const expectedRevenue = revenueVal  !== "" ? parseFloat(revenueVal)  : null;
   const attendeesCount  = attendeesVal !== "" ? parseInt(attendeesVal, 10) : null;
@@ -8853,7 +9228,7 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           name, location, startTime, endTime, status,
-          eventType, plannedBudget, expectedRevenue, attendeesCount,
+          eventType, plannedBudget, expectedRevenue, attendeesCount, customerId,
         }),
       },
     );
@@ -8861,16 +9236,17 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || "Failed to update event.");
     }
+    const updated = await res.json();
+    _currentEventData = {
+      ...(_currentEventData ?? {}),
+      ...updated,
+      displayStatus: updated.status ?? status,
+      customerId:   updated.customerId   ?? (customerId  || null),
+      customerName: updated.customerName ?? null,
+    };
     _closeEventEditModal();
-    // Refresh project detail so events list is up-to-date, then stay on event detail
-    await openProjectDetail(currentProjectId);
-    const updatedEv = (currentProjectDetail?.events ?? []).find(
-      (e) => e.eventId === currentEventId,
-    );
-    if (updatedEv) {
-      document.getElementById("event-detail-title").textContent    = escapeHtml(updatedEv.name);
-      document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(updatedEv);
-    }
+    document.getElementById("event-detail-title").textContent = updated.name ?? name;
+    document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(_currentEventData);
     activateSection("event-detail");
   } catch (err) {
     errEl.textContent  = err.message;
@@ -8898,8 +9274,9 @@ async function _executeDeleteEvent() {
       throw new Error(data.error || "Failed to delete event.");
     }
     _closeDeleteConfirm();
-    await openProjectDetail(currentProjectId);
-    activateSection("project-detail");
+    _stopStaffingPoll();
+    await loadProjects();
+    activateSection("events");
   } catch (err) {
     document.getElementById("delete-confirm-message").textContent = err.message;
   } finally {
@@ -8916,15 +9293,15 @@ async function _executeDeleteEvent() {
 let _deleteTarget = null; // "project" | "event"
 
 const _deleteWarnings = {
-  project: "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Invoices will be detached (not deleted).",
-  event:   "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Invoices will be detached (not deleted).",
+  project: "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Payment requests will be detached (not deleted).",
+  event:   "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Payment requests will be detached (not deleted).",
 };
 
 function confirmDelete(target) {
   _deleteTarget = target;
   const name  = target === "project"
     ? (currentProjectDetail?.name ?? "this project")
-    : ((currentProjectDetail?.events ?? []).find((e) => e.eventId === currentEventId)?.name ?? "this event");
+    : (_getCurrentEventData()?.name ?? "this event");
 
   document.getElementById("delete-confirm-title").textContent        = `Delete ${target === "project" ? "Project" : "Event"}`;
   document.getElementById("delete-confirm-message").textContent      = `Are you sure you want to delete "${name}"?`;
