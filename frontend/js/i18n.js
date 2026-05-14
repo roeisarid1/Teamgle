@@ -100,6 +100,7 @@ const HE_BY_EN = {
   "Status": "סטטוס",
   "All": "הכל",
   "Active": "פעיל",
+  "Pending Registration": "ממתין לרישום",
   "Inactive": "לא פעיל",
   "Clear filters": "נקה סינון",
   "Email": "אימייל",

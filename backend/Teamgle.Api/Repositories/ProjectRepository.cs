@@ -1540,6 +1540,31 @@ public class ProjectRepository : IProjectRepository
                     throw new InvalidOperationException(
                         "This employee is already approved for an overlapping shift in this event.");
             }
+
+            // Block approval if shift is already at capacity
+            const string capacitySql = """
+                SELECT s.required_quantity,
+                       COUNT(es2.employee_user_ID) AS approved_count
+                FROM   Shift s
+                LEFT JOIN Employee_Shift es2
+                       ON es2.shift_ID = s.Shift_ID
+                      AND es2.status   = 'manager_approved'
+                      AND es2.employee_user_ID <> (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
+                WHERE  s.Shift_ID = @shiftId
+                GROUP BY s.required_quantity
+                """;
+            await using var capCmd = new SqlCommand(capacitySql, conn);
+            capCmd.Parameters.AddWithValue("@shiftId",       shiftId);
+            capCmd.Parameters.AddWithValue("@employeeFbUid", employeeFbUid);
+            await using var capReader = await capCmd.ExecuteReaderAsync();
+            if (await capReader.ReadAsync())
+            {
+                var required = capReader.GetInt32(0);
+                var approved = capReader.GetInt32(1);
+                if (required > 0 && approved >= required)
+                    throw new InvalidOperationException("This shift is already full.");
+            }
+            await capReader.CloseAsync();
         }
 
         const string sql = """
@@ -3324,17 +3349,18 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         try
         {
             const string insertSql = """
-                INSERT INTO Employee_Shift (shift_ID, employee_user_ID, status, status_updated_at, payment_status)
-                SELECT @shiftId, @empUserId, 'manager_offer_sent', GETUTCDATE(), 'pending'
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM Employee_Shift
-                    WHERE shift_ID         = @shiftId
-                      AND employee_user_ID = @empUserId
-                      AND status IN (
-                          'manager_offer_sent','employee_request',
-                          'manager_hold','manager_approved'
-                      )
-                )
+                MERGE INTO Employee_Shift AS target
+                USING (SELECT @shiftId AS shift_ID, @empUserId AS employee_user_ID) AS source
+                ON target.shift_ID = source.shift_ID AND target.employee_user_ID = source.employee_user_ID
+                WHEN MATCHED AND target.status NOT IN (
+                    'manager_offer_sent','employee_request','manager_hold','manager_approved'
+                ) THEN
+                    UPDATE SET status            = 'manager_offer_sent',
+                               status_updated_at = GETUTCDATE(),
+                               payment_status    = 'pending'
+                WHEN NOT MATCHED THEN
+                    INSERT (shift_ID, employee_user_ID, status, status_updated_at, payment_status)
+                    VALUES (@shiftId, @empUserId, 'manager_offer_sent', GETUTCDATE(), 'pending');
                 """;
             foreach (var shiftId in shiftIds)
             {

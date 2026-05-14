@@ -275,6 +275,17 @@ async function loadEmployees() {
   }
 }
 
+function employeeRegistrationStatusLabel(status) {
+  switch (status) {
+    case "Active":
+      return _t("Active", "פעיל");
+    case "Pending Registration":
+      return _t("Pending Registration", "ממתין לרישום");
+    default:
+      return status || "";
+  }
+}
+
 function renderEmployees(employees) {
   if (!employees.length) {
     employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_t('No employees yet. Click "+ Add Employee" to get started.', 'אין עובדים עדיין. לחץ על "+ הוסף עובד" להתחלה.')}</td></tr>`;
@@ -305,7 +316,7 @@ function renderEmployees(employees) {
       </td>
       <td>
         <span class="badge ${e.registrationStatus === "Active" ? "badge-active" : "badge-pending"}">
-          ${e.registrationStatus}
+          ${escape(employeeRegistrationStatusLabel(e.registrationStatus))}
         </span>
       </td>
       <td>
@@ -445,7 +456,7 @@ async function openViewModal(employeeId) {
       <div class="view-profile-section">
         ${profileHtml}
         <span class="view-profile-name">${escape(emp.firstName)} ${escape(emp.lastName)}</span>
-        <span class="badge ${statusClass}">${escape(emp.registrationStatus)}</span>
+        <span class="badge ${statusClass}">${escape(employeeRegistrationStatusLabel(emp.registrationStatus))}</span>
       </div>
       <div class="view-info-grid">
         <div class="view-info-item">
@@ -569,7 +580,7 @@ async function renderEmployeeExpanded(container, employeeId) {
         ${profileHtml}
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--text)">${escape(emp.firstName)} ${escape(emp.lastName)}</div>
-          <span class="badge ${statusClass}" style="margin-top:4px;display:inline-block">${escape(emp.registrationStatus)}</span>
+          <span class="badge ${statusClass}" style="margin-top:4px;display:inline-block">${escape(employeeRegistrationStatusLabel(emp.registrationStatus))}</span>
         </div>
       </div>
       <div class="view-info-grid" style="margin-bottom:16px">
@@ -2308,6 +2319,16 @@ document.getElementById("pd-task-filter-bar").addEventListener("click", (e) => {
 
 const TASK_STATUSES = ["open", "in_progress", "done", "canceled"];
 
+function taskStatusLabel(status) {
+  switch (status) {
+    case "open": return _t("Open", "פתוח");
+    case "in_progress": return _t("In Progress", "בתהליך");
+    case "done": return _t("Done", "בוצע");
+    case "canceled": return _t("Canceled", "בוטל");
+    default: return status.replace("_", " ");
+  }
+}
+
 async function renderTasksTab() {
   if (!currentProjectDetail) return;
 
@@ -2406,12 +2427,12 @@ function buildTaskRow(task) {
       <input type="text" class="pd-form-input" name="content" value="${escapeHtml(task.content)}" placeholder="Task description…" maxlength="500">
       <div class="pd-form-selects">
         <div class="pd-select-field">
-          <label class="pd-field-label">Status</label>
+          <label class="pd-field-label">${_t("Status", "סטטוס")}</label>
           <select class="pd-form-select" name="status">
-            ${["open", "in_progress", "done", "canceled"]
+            ${TASK_STATUSES
               .map(
                 (s) =>
-                  `<option value="${s}"${task.status === s ? " selected" : ""}>${s.replace("_", " ")}</option>`,
+                  `<option value="${s}"${task.status === s ? " selected" : ""}>${taskStatusLabel(s)}</option>`,
               )
               .join("")}
           </select>
@@ -2753,7 +2774,7 @@ async function renderProjectFinanceTab() {
       </div>
       <div class="ed-finance-section">
         <h4 class="ed-finance-section-title">${_t("Breakdown by Event", "פירוט לפי אירוע")}</h4>
-        <table class="ed-worker-table">
+        <table class="ed-worker-table ed-finance-breakdown-table">
           <thead><tr><th>${_t("Event", "אירוע")}</th><th>${_t("Budget", "תקציב")}</th><th>${_t("Revenue", "הכנסה")}</th><th>${_t("Labor", "עבודה")}</th><th>${_t("Expenses", "הוצאות")}</th><th>${_t("Total Cost", "עלות כוללת")}</th><th>${_t("P/L", "רווח/הפסד")}</th></tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr>
@@ -5472,15 +5493,17 @@ function _fmtShiftLabel(worker) {
   return time ? `${role} · ${time}` : role;
 }
 
-function _buildWorkerRow(worker, sectionType) {
+function _buildWorkerRow(worker, sectionType, fullShiftIds = new Set()) {
   const initials =
     ((worker.firstName ?? "")[0] ?? "") + ((worker.lastName ?? "")[0] ?? "");
   const name = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
 
+  const shiftFull = worker.shiftId && fullShiftIds.has(worker.shiftId);
+
   let btns = "";
   if (sectionType !== "awaiting") {
     if (sectionType === "applicant" || sectionType === "hold")
-      btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="Approve"><i data-lucide="check"></i></button>`;
+      btns += `<button class="ps-action-btn ps-action-btn--approve" data-action="approve" title="${shiftFull ? _t("Shift is full", "המשמרת מלאה") : "Approve"}"${shiftFull ? ' data-shift-full="true" aria-disabled="true"' : ""}><i data-lucide="check"></i></button>`;
     if (sectionType === "applicant" || sectionType === "approved")
       btns += `<button class="ps-action-btn ps-action-btn--hold" data-action="hold" title="Hold"><i data-lucide="pause"></i></button>`;
     if (sectionType !== "rejected")
@@ -5514,7 +5537,7 @@ function _buildWorkerRow(worker, sectionType) {
     </tr>`;
 }
 
-function _renderEventWorkerSection(eventId, key, workers, sectionType) {
+function _renderEventWorkerSection(eventId, key, workers, sectionType, fullShiftIds = new Set()) {
   const body = document.getElementById(`ps-body-${eventId}-${key}`);
   const badge = document.querySelector(
     `#ps-section-${eventId}-${key} .ps-badge`,
@@ -5527,7 +5550,7 @@ function _renderEventWorkerSection(eventId, key, workers, sectionType) {
   const rows =
     workers.length === 0
       ? `<tr><td colspan="5" class="ps-empty">${_t("No workers in this category yet.", "אין עובדים בקטגוריה זו עדיין.")}</td></tr>`
-      : workers.map((w) => _buildWorkerRow(w, sectionType)).join("");
+      : workers.map((w) => _buildWorkerRow(w, sectionType, fullShiftIds)).join("");
 
   tbody.innerHTML = rows;
   if (badge) badge.textContent = workers.length;
@@ -5545,31 +5568,26 @@ async function loadAndRenderEventWorkers(eventId) {
     if (!res.ok) throw new Error("Failed to load event workers");
     const data = await res.json();
 
-    _renderEventWorkerSection(
-      eventId,
-      "awaiting",
-      data.awaiting ?? [],
-      "awaiting",
+    // Compute which shifts are at capacity based on approved workers
+    const shiftApprovedCounts = new Map();
+    for (const w of data.approved ?? []) {
+      if (!w.shiftId) continue;
+      shiftApprovedCounts.set(w.shiftId, (shiftApprovedCounts.get(w.shiftId) ?? 0) + 1);
+    }
+    const fullShiftIds = new Set(
+      [...shiftApprovedCounts.entries()]
+        .filter(([shiftId, count]) => {
+          const worker = (data.approved ?? []).find((w) => w.shiftId === shiftId);
+          return worker && worker.requiredQuantity > 0 && count >= worker.requiredQuantity;
+        })
+        .map(([shiftId]) => shiftId)
     );
-    _renderEventWorkerSection(
-      eventId,
-      "applicants",
-      data.applicants ?? [],
-      "applicant",
-    );
-    _renderEventWorkerSection(
-      eventId,
-      "approved",
-      data.approved ?? [],
-      "approved",
-    );
-    _renderEventWorkerSection(eventId, "hold", data.hold ?? [], "hold");
-    _renderEventWorkerSection(
-      eventId,
-      "rejected",
-      data.rejected ?? [],
-      "rejected",
-    );
+
+    _renderEventWorkerSection(eventId, "awaiting",   data.awaiting   ?? [], "awaiting");
+    _renderEventWorkerSection(eventId, "applicants", data.applicants ?? [], "applicant", fullShiftIds);
+    _renderEventWorkerSection(eventId, "approved",   data.approved   ?? [], "approved");
+    _renderEventWorkerSection(eventId, "hold",       data.hold       ?? [], "hold",      fullShiftIds);
+    _renderEventWorkerSection(eventId, "rejected",   data.rejected   ?? [], "rejected");
     _renderOverlapWarnings(eventId, data.approved ?? []);
 
     const allWorkers = [
@@ -5885,12 +5903,20 @@ async function _handleWorkerStatusChange(
     );
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      // 409 = employee already approved in another shift of this event
-      if (res.status === 409)
+      // 409 = blocked by a business rule, for example overlap or full shift.
+      if (res.status === 409) {
+        const message =
+          body.error === "This shift is already full."
+            ? _t("Shift is full", "המשמרת מלאה")
+            : body.error ??
+              _t(
+                "This employee is already approved for another shift in this event.",
+                "העובד כבר מאושר למשמרת אחרת באירוע הזה.",
+              );
         throw new Error(
-          body.error ??
-            "This employee is already approved for another shift in this event.",
+          message,
         );
+      }
       throw new Error("Failed to update status");
     }
     await loadAndRenderEventWorkers(eventId);
@@ -6535,6 +6561,11 @@ function _initStaffingHandlers() {
 
         const action = btn.dataset.action;
 
+        if (action === "approve" && btn.dataset.shiftFull === "true") {
+          alert(_t("Shift is full", "המשמרת מלאה"));
+          return;
+        }
+
         // Auto-assign button lives in the section header, not inside a row
         if (action === "auto-assign") {
           const eventId = btn.dataset.eventId;
@@ -7023,12 +7054,12 @@ function _edBuildTaskRow(task) {
       <input type="text" class="pd-form-input" name="content" value="${escapeHtml(task.content)}" placeholder="Task description…" maxlength="500">
       <div class="pd-form-selects">
         <div class="pd-select-field">
-          <label class="pd-field-label">Status</label>
+          <label class="pd-field-label">${_t("Status", "סטטוס")}</label>
           <select class="pd-form-select" name="status">
-            ${["open", "in_progress", "done", "canceled"]
+            ${TASK_STATUSES
               .map(
                 (s) =>
-                  `<option value="${s}"${task.status === s ? " selected" : ""}>${s.replace("_", " ")}</option>`,
+                  `<option value="${s}"${task.status === s ? " selected" : ""}>${taskStatusLabel(s)}</option>`,
               )
               .join("")}
           </select>
@@ -8429,10 +8460,10 @@ function _edBuildFinanceHTML(payroll, expenses) {
         ? `
     <div class="ed-finance-section">
       <h4 class="ed-finance-section-title">${_t("Labor Breakdown", "פירוט עבודה")}</h4>
-      <table class="ed-worker-table">
+      <table class="ed-worker-table ed-finance-labor-table">
         <thead><tr><th>${_t("Employee", "עובד")}</th><th>${_t("Role", "תפקיד")}</th><th>${_t("Regular", "רגילות")}</th><th>${_t("Overtime", "נוספות")}</th><th>${_t("Extras", "תוספות")}</th><th>${_t("Total", "סה\"כ")}</th></tr></thead>
         <tbody>${laborRows}</tbody>
-        <tfoot><tr><td colspan="5"><strong>${_t("Total Labor", "סה\"כ עבודה")}</strong></td><td><strong>${fmt(totalLabor)}</strong></td></tr></tfoot>
+        <tfoot><tr class="ed-finance-total-row"><td colspan="5">${_t("Total Labor", "סה\"כ עבודה")}</td><td>${fmt(totalLabor)}</td></tr></tfoot>
       </table>
     </div>`
         : ""
@@ -8443,10 +8474,10 @@ function _edBuildFinanceHTML(payroll, expenses) {
         ? `
     <div class="ed-finance-section">
       <h4 class="ed-finance-section-title">${_t("Expenses by Category", "הוצאות לפי קטגוריה")}</h4>
-      <table class="ed-worker-table">
+      <table class="ed-worker-table ed-finance-expense-table">
         <thead><tr><th>${_t("Category", "קטגוריה")}</th><th>${_t("Amount", "סכום")}</th></tr></thead>
         <tbody>${expenseRows}</tbody>
-        <tfoot><tr><td><strong>${_t("Total Expenses", "סה\"כ הוצאות")}</strong></td><td><strong>${fmt(totalExpenses)}</strong></td></tr></tfoot>
+        <tfoot><tr class="ed-finance-total-row"><td>${_t("Total Expenses", "סה\"כ הוצאות")}</td><td>${fmt(totalExpenses)}</td></tr></tfoot>
       </table>
     </div>`
         : ""
@@ -8564,7 +8595,7 @@ function _renderInvoiceTable() {
         <button class="btn-icon-sm" title="${_t("Record Payment", "רישום תשלום")}" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
         <button class="btn-icon-sm" title="${_t("Edit", "ערוך")}" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
         <button class="btn-icon-sm" title="${_t("Download PDF", "הורד PDF")}" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
-        <button class="btn-icon-sm btn-icon-danger" title="${_t("Cancel", "ביטול")}" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="x-circle"></i></button>
+        <button class="btn-icon-sm btn-icon-danger" title="${_t("Delete", "מחיקה")}" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="trash-2"></i></button>
       </td>
     </tr>`;
   }).join("");
@@ -8607,7 +8638,7 @@ async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
 }
 
 async function _cancelInvoice(invoiceId) {
-  if (!confirm(_t("Cancel this payment request? It will be marked as Cancelled.", "לבטל את דרישת התשלום? הסטטוס יעודכן למבוטל."))) return;
+  if (!confirm(_t("Delete this payment request? This action cannot be undone.", "למחוק את דרישת התשלום? פעולה זו אינה ניתנת לביטול."))) return;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}`, {
@@ -8615,7 +8646,7 @@ async function _cancelInvoice(invoiceId) {
     });
     if (!res.ok && res.status !== 204) throw new Error();
     await loadInvoices();
-  } catch { alert(_t("Failed to cancel payment request.", "ביטול דרישת התשלום נכשל.")); }
+  } catch { alert(_t("Failed to delete payment request.", "מחיקת דרישת התשלום נכשלה.")); }
 }
 
 // ── Filters wiring ─────────────────────────────────────────────────────────
@@ -8950,7 +8981,7 @@ function _invBuildFinanceBlock(invoices, opts = {}) {
           <div class="ed-finance-card-label">${_t("Outstanding", "יתרה לתשלום")}</div><div class="ed-finance-card-value">${fmt(outstanding)}</div>
         </div>
       </div>
-      <table class="ed-worker-table">
+      <table class="ed-worker-table ed-finance-invoice-table">
         <thead><tr><th>${_t("Request #", "מספר דרישה")}</th><th>${_t("Status", "סטטוס")}</th><th>${_t("Date", "תאריך")}</th><th>${_t("Due", "לתשלום עד")}</th><th>${_t("Amount", "סכום")}</th><th>${_t("Paid", "שולם")}</th><th>${_t("Balance", "יתרה")}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` : `<p class="pd-empty-state" style="padding:12px 0">${opts.context === "event"

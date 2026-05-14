@@ -729,6 +729,9 @@ tbody tr:hover { background: #EEF4FF; }
 }
 
 .field input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 14px;
   border: 1.5px solid var(--border);
   border-radius: 8px;
@@ -736,6 +739,13 @@ tbody tr:hover { background: #EEF4FF; }
   background: #fafafa;
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .field input:focus {
@@ -4085,6 +4095,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .ps-action-btn svg { width: 13px; height: 13px; }
 .ps-action-btn--approve:hover { background: #f0fdf4; border-color: #4ade80; color: #16a34a; }
+.ps-action-btn[aria-disabled="true"] {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.ps-action-btn[aria-disabled="true"]:hover {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
 .ps-action-btn--hold:hover    { background: #fffbeb; border-color: #fcd34d; color: #d97706; }
 .ps-action-btn--reject:hover  { background: #fff1f2; border-color: #f87171; color: var(--red); }
 .ps-action-btn--msg:hover     { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
@@ -5036,6 +5055,10 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .ed-worker-table tfoot td {
   font-weight: 700;
   border-top: 2px solid var(--border);
+}
+.ed-worker-table .ed-finance-total-row td {
+  font-weight: 400;
+  font-family: inherit;
 }
 
 .ed-worker-badge {
@@ -7110,9 +7133,193 @@ body { min-height: 100dvh; }
 
 /* ── Finance summary cards: 2-up on phone, 1-up on tiny phone ───────────── */
 @media (max-width: 640px) {
+  #section-project-detail,
+  #section-event-detail,
+  #section-project-detail *,
+  #section-event-detail * {
+    min-width: 0;
+  }
+
+  #section-project-detail .cp-card,
+  #section-event-detail .cp-card,
+  #section-project-detail .pd-panel,
+  #section-event-detail .pd-panel,
+  #section-event-detail .ps-root,
+  #section-event-detail .ps-event-block,
+  #section-event-detail .ps-section,
+  #section-event-detail .ps-section-body {
+    max-width: 100%;
+  }
+
+  #shift-add-overlay .modal,
+  #shift-edit-overlay .modal {
+    width: 100%;
+  }
+
+  #shift-add-overlay .form-group,
+  #shift-edit-overlay .form-group {
+    overflow: hidden;
+  }
+
+  #shift-add-overlay .field,
+  #shift-edit-overlay .field {
+    min-width: 0;
+  }
+
+  #shift-add-overlay input,
+  #shift-add-overlay select,
+  #shift-edit-overlay input,
+  #shift-edit-overlay select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  #section-event-detail .ps-header-actions,
+  #section-event-detail .ps-search-wrap,
+  #section-event-detail .ps-search,
+  #section-event-detail .ps-potential-filters,
+  #section-event-detail .ps-filter-select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  #section-event-detail .ps-potential-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #section-event-detail .ps-section-body {
+    overflow-x: hidden;
+  }
+
+  #section-event-detail .ps-table,
+  #section-event-detail .ps-table tbody,
+  #section-event-detail .ps-table tr {
+    width: 100%;
+  }
+
+  #section-event-detail .ps-shift-checklist,
+  #section-event-detail .ps-shift-check {
+    width: 100%;
+  }
+
   .ed-finance-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .ed-finance-card  { padding: 14px 16px; }
   .ed-finance-card-value { font-size: 18px; }
+
+  .ed-finance-section {
+    overflow-x: visible;
+  }
+
+  .ed-finance-section .ed-worker-table,
+  .ed-finance-section .ed-worker-table thead,
+  .ed-finance-section .ed-worker-table tbody,
+  .ed-finance-section .ed-worker-table tfoot,
+  .ed-finance-section .ed-worker-table tr,
+  .ed-finance-section .ed-worker-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ed-finance-section .ed-worker-table {
+    border: 0;
+    background: transparent;
+  }
+
+  .ed-finance-section .ed-worker-table thead {
+    display: none;
+  }
+
+  .ed-finance-section .ed-worker-table tbody tr,
+  .ed-finance-section .ed-worker-table tfoot tr {
+    margin: 0 0 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+
+  .ed-finance-section .ed-worker-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--surface-2);
+    text-align: end;
+    white-space: normal;
+  }
+
+  .ed-finance-section .ed-worker-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .ed-finance-section .ed-worker-table td::before {
+    flex: 0 0 auto;
+    margin-inline-end: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .ed-finance-breakdown-table td:nth-child(1)::before { content: "Event"; }
+  .ed-finance-breakdown-table td:nth-child(2)::before { content: "Budget"; }
+  .ed-finance-breakdown-table td:nth-child(3)::before { content: "Revenue"; }
+  .ed-finance-breakdown-table td:nth-child(4)::before { content: "Labor"; }
+  .ed-finance-breakdown-table td:nth-child(5)::before { content: "Expenses"; }
+  .ed-finance-breakdown-table td:nth-child(6)::before { content: "Total Cost"; }
+  .ed-finance-breakdown-table td:nth-child(7)::before { content: "P/L"; }
+
+  .ed-finance-labor-table td:nth-child(1)::before { content: "Employee"; }
+  .ed-finance-labor-table td:nth-child(2)::before { content: "Role"; }
+  .ed-finance-labor-table td:nth-child(3)::before { content: "Regular"; }
+  .ed-finance-labor-table td:nth-child(4)::before { content: "Overtime"; }
+  .ed-finance-labor-table td:nth-child(5)::before { content: "Extras"; }
+  .ed-finance-labor-table td:nth-child(6)::before { content: "Total"; }
+
+  .ed-finance-expense-table td:nth-child(1)::before { content: "Category"; }
+  .ed-finance-expense-table td:nth-child(2)::before { content: "Amount"; }
+
+  .ed-finance-invoice-table td:nth-child(1)::before { content: "Request #"; }
+  .ed-finance-invoice-table td:nth-child(2)::before { content: "Status"; }
+  .ed-finance-invoice-table td:nth-child(3)::before { content: "Date"; }
+  .ed-finance-invoice-table td:nth-child(4)::before { content: "Due"; }
+  .ed-finance-invoice-table td:nth-child(5)::before { content: "Amount"; }
+  .ed-finance-invoice-table td:nth-child(6)::before { content: "Paid"; }
+  .ed-finance-invoice-table td:nth-child(7)::before { content: "Balance"; }
+
+  body.rtl .ed-finance-breakdown-table td:nth-child(1)::before { content: "אירוע"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(2)::before { content: "תקציב"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(3)::before { content: "הכנסה"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(4)::before { content: "עבודה"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(5)::before { content: "הוצאות"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(6)::before { content: "עלות כוללת"; }
+  body.rtl .ed-finance-breakdown-table td:nth-child(7)::before { content: "רווח/הפסד"; }
+
+  body.rtl .ed-finance-labor-table td:nth-child(1)::before { content: "עובד"; }
+  body.rtl .ed-finance-labor-table td:nth-child(2)::before { content: "תפקיד"; }
+  body.rtl .ed-finance-labor-table td:nth-child(3)::before { content: "רגילות"; }
+  body.rtl .ed-finance-labor-table td:nth-child(4)::before { content: "נוספות"; }
+  body.rtl .ed-finance-labor-table td:nth-child(5)::before { content: "תוספות"; }
+  body.rtl .ed-finance-labor-table td:nth-child(6)::before { content: "סה\"כ"; }
+
+  body.rtl .ed-finance-expense-table td:nth-child(1)::before { content: "קטגוריה"; }
+  body.rtl .ed-finance-expense-table td:nth-child(2)::before { content: "סכום"; }
+
+  body.rtl .ed-finance-invoice-table td:nth-child(1)::before { content: "מספר דרישה"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(2)::before { content: "סטטוס"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(3)::before { content: "תאריך"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(4)::before { content: "לתשלום עד"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(5)::before { content: "סכום"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(6)::before { content: "שולם"; }
+  body.rtl .ed-finance-invoice-table td:nth-child(7)::before { content: "יתרה"; }
 }
 @media (max-width: 380px) {
   .ed-finance-cards { grid-template-columns: 1fr; }

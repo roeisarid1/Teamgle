@@ -287,7 +287,7 @@ public class InvoicesController : ControllerBase
         }).GeneratePdf();
     }
 
-    // ── DELETE /api/invoices/{invoiceId} (soft-cancel) ────────────────────
+    // ── DELETE /api/invoices/{invoiceId} ──────────────────────────────────
     [HttpDelete("{invoiceId}")]
     public async Task<IActionResult> DeleteInvoice(string invoiceId)
     {
@@ -295,14 +295,14 @@ public class InvoicesController : ControllerBase
         if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
         try
         {
-            var cancelled = await _invoiceService.DeleteInvoiceAsync(invoiceId, uid);
-            if (!cancelled) return NotFound(new { error = "Invoice not found or already cancelled." });
+            var deleted = await _invoiceService.DeleteInvoiceAsync(invoiceId, uid);
+            if (!deleted) return NotFound(new { error = "Invoice not found." });
             return NoContent();
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling invoice {Id}", invoiceId);
+            _logger.LogError(ex, "Error deleting invoice {Id}", invoiceId);
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
