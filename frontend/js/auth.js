@@ -5,10 +5,10 @@ import {
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initI18n, _t } from "./i18n.js";
+import { getApiBaseUrl } from "./api-config.js";
 
 // ── Backend base URL ───────────────────────────────────────────────────────
-// Change this to your deployed backend URL when in production.
-const API_BASE = "http://localhost:5000/api/auth";
+const API_BASE = getApiBaseUrl("auth");
 
 // ── DOM references ─────────────────────────────────────────────────────────
 const tabLogin    = document.getElementById("tab-login");

@@ -13,8 +13,7 @@ import {
 import { writeUserProfile } from "./chat-service.js";
 import { initChat, destroyChat, openChatWith, openEventChat, openShiftChat } from "./chat-ui.js";
 import { initI18n, applyTranslations, getCurrentLanguage, _t } from "./i18n.js";
-
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "./api-config.js";
 
 // ── DOM ────────────────────────────────────────────────────────────────────
 const navUsername = document.getElementById("nav-username");
