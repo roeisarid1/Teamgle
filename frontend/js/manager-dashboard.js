@@ -129,7 +129,7 @@ let pendingDeleteName = null;
 // ── Auth gate ──────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    window.location.href = "/frontend/auth.html";
+    window.location.href = "auth.html";
     return;
   }
 
@@ -141,7 +141,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!profile || profile.role !== "Manager") {
     alert(_t("Access denied. Manager accounts only.", "גישה נדחתה. חשבונות מנהלים בלבד."));
     await signOut(auth);
-    window.location.href = "/frontend/auth.html";
+    window.location.href = "auth.html";
     return;
   }
 
@@ -1442,7 +1442,7 @@ btnLogout.addEventListener("click", async () => {
   destroyChat();
   await signOut(auth);
   sessionStorage.removeItem("userProfile");
-  window.location.href = "/frontend/auth.html";
+  window.location.href = "auth.html";
 });
 
 // ── Utilities ──────────────────────────────────────────────────────────────

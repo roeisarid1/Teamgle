@@ -916,7 +916,7 @@ function capitalize(str) {
 // ── Auth gate ─────────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (!user) {
-    window.location.href = "/frontend/auth.html";
+    window.location.href = "auth.html";
     return;
   }
 
@@ -924,7 +924,7 @@ onAuthStateChanged(auth, async user => {
   if (!_profile || _profile.role !== "Employee") {
     alert(_t("Access denied. Employee accounts only.", "גישה נדחתה. חשבונות עובדים בלבד."));
     await signOut(auth);
-    window.location.href = "/frontend/auth.html";
+    window.location.href = "auth.html";
     return;
   }
   _currentFirebaseUid = user.uid;
@@ -953,5 +953,5 @@ btnLogout.addEventListener("click", async () => {
   destroyChat();
   await signOut(auth);
   sessionStorage.removeItem("userProfile");
-  window.location.href = "/frontend/auth.html";
+  window.location.href = "auth.html";
 });

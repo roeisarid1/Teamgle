@@ -1,5 +1,5 @@
 const LOCAL_API_BASE = "http://localhost:5000/api";
-const PRODUCTION_API_BASE = "https://proj.ruppin.ac.il//igroup34/test2/teamgle_backend/api";
+const PRODUCTION_API_BASE = "https://proj.ruppin.ac.il/igroup34/test2/tar1/api";
 
 export function getApiBaseUrl(path = "") {
   const { hostname } = window.location;
