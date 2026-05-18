@@ -79,6 +79,8 @@ public interface IProjectRepository
     Task<PayrollItem?> ApproveHoursAsync(string shiftId, string employeeUserId, string eventId, ApproveHoursRequest request, string firebaseUid);
     Task<PayrollItem?> SavePayrollAsync(string shiftId, string employeeUserId, string eventId, SavePayrollRequest request, string firebaseUid);
     Task<PayrollItem?> UpdatePayrollAsync(string shiftId, string employeeUserId, string eventId, UpdatePayrollRequest request, string firebaseUid);
+    Task<bool>         SetShiftBulkHoursAsync(string shiftId, BulkShiftHoursRequest request, string firebaseUid);
+    Task<PayrollItem?> SetEmployeeHoursOverrideAsync(string shiftId, string employeeUserId, string eventId, ManagerOverrideHoursRequest request, string firebaseUid);
 
     // ── Brief Acknowledgment ───────────────────────────────────────────────
     Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string briefId, string firebaseUid);

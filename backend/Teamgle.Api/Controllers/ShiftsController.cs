@@ -175,6 +175,26 @@ public class ShiftsController : ControllerBase
         }
     }
 
+    // ── PUT /api/shifts/{shiftId}/bulk-hours ─────────────────────────────
+    [HttpPut("{shiftId}/bulk-hours")]
+    public async Task<IActionResult> SetBulkHours(string shiftId, [FromBody] BulkShiftHoursRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var ok = await _projectService.SetShiftBulkHoursAsync(uid, shiftId, request);
+            if (!ok) return NotFound(new { error = "Shift not found or access denied." });
+            return Ok(new { message = "Bulk hours saved." });
+        }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting bulk hours for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── PATCH /api/shifts/{shiftId}/report-hours ──────────────────────────
     [HttpPatch("{shiftId}/report-hours")]
     public async Task<IActionResult> ReportHours(string shiftId, [FromBody] ReportHoursRequest request)

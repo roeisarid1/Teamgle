@@ -373,6 +373,26 @@ public class EventsController : ControllerBase
         }
     }
 
+    // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}/override-hours
+    [HttpPut("{eventId}/payroll/{employeeUserId}/{shiftId}/override-hours")]
+    public async Task<IActionResult> OverrideHours(string eventId, string employeeUserId, string shiftId, [FromBody] ManagerOverrideHoursRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var item = await _projectService.SetEmployeeHoursOverrideAsync(uid, eventId, shiftId, employeeUserId, request);
+            if (item == null) return NotFound(new { error = "Record not found." });
+            return Ok(item);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error overriding hours for employee {EmployeeUserId} shift {ShiftId}", employeeUserId, shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
     // PUT /api/events/{eventId}/payroll/{employeeUserId}/{shiftId}  (kept for compat)
     [HttpPut("{eventId}/payroll/{employeeUserId}/{shiftId}")]
     public async Task<IActionResult> UpdatePayroll(string eventId, string employeeUserId, string shiftId, [FromBody] UpdatePayrollRequest request)

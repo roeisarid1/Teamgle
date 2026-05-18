@@ -22,6 +22,7 @@ const chatSection      = document.getElementById("section-chats");
 const shiftsBadge      = document.getElementById("shifts-badge");
 
 const MOBILE_BREAKPOINT = 768;
+const CLOCK_OUT_GRACE_HOURS = 3;
 initI18n();
 
 window.addEventListener("teamgle:languagechange", () => {
@@ -107,11 +108,36 @@ function fmtDateRange(startIso, endIso) {
 function toDatetimeLocal(iso) {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toISOString().slice(0, 16);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = value => String(value).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function isPast(iso) {
   if (!iso) return false;
   return new Date(iso) < new Date();
+}
+function shiftEndCandidate(shift) {
+  return shift?.shiftEnd || shift?.eventEnd || shift?.eventStart || shift?.shiftStart || null;
+}
+function shiftEndWithGrace(shift) {
+  const endIso = shiftEndCandidate(shift);
+  if (!endIso) return null;
+  const end = new Date(endIso);
+  if (Number.isNaN(end.getTime())) return null;
+  return new Date(end.getTime() + CLOCK_OUT_GRACE_HOURS * 60 * 60 * 1000);
+}
+function canQuickClockOut(shift, now = new Date()) {
+  const deadline = shiftEndWithGrace(shift);
+  if (!deadline) return !shift?.actualEnd;
+  return !shift?.actualEnd && now <= deadline;
+}
+function isShiftInActiveTab(shift, now = new Date()) {
+  if (shift?.status !== "manager_approved") return false;
+  return canQuickClockOut(shift, now);
+}
+function isShiftInHistoryTab(shift, now = new Date()) {
+  if (shift?.status !== "manager_approved") return false;
+  return !canQuickClockOut(shift, now);
 }
 
 // ── Needs-action predicate (single source of truth) ──────────────────────────
@@ -119,7 +145,7 @@ function isPast(iso) {
 function _isNeedsAction(s) {
   if (s.status !== "manager_approved") return false;
   const now    = new Date();
-  const isPast = new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now;
+  const isPast = !canQuickClockOut(s, now);
   const hasUnacked = getBriefsForShift(s).some(b => !b.isAcknowledged);
   if (!isPast) return hasUnacked;                               // future: only unacked briefs
   return (!s.actualStart || !s.actualEnd) || hasUnacked;       // past: missing hours OR unacked briefs
@@ -198,13 +224,11 @@ function _tabItems(tab) {
       .map(o => o.shiftId);
   if (tab === "upcoming")
     return (_msApplications ?? [])
-      .filter(s => s.status === "manager_approved" &&
-        new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now)
+      .filter(s => isShiftInActiveTab(s, now))
       .map(s => s.shiftId);
   if (tab === "history")
     return (_msApplications ?? [])
-      .filter(s => s.status === "manager_approved" &&
-        new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now)
+      .filter(s => isShiftInHistoryTab(s, now))
       .map(s => s.shiftId);
   return [];
 }
@@ -438,10 +462,7 @@ async function renderUpcomingTab() {
   }
 
   const now = new Date();
-  const upcoming = (_msApplications ?? []).filter(s => {
-    if (s.status !== "manager_approved") return false;
-    return new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) > now;
-  });
+  const upcoming = (_msApplications ?? []).filter(s => isShiftInActiveTab(s, now));
 
   if (upcoming.length === 0) {
     panel.innerHTML = emptyState("calendar", _t("No upcoming shifts.", "אין משמרות קרובות."), _t("Your confirmed upcoming shifts will appear here.", "המשמרות המאושרות הקרובות שלך יופיעו כאן."));
@@ -507,11 +528,8 @@ async function renderHistoryTab() {
 
   const now = new Date();
 
-  // All approved past shifts — whether or not hours are filled
-  const past = (_msApplications ?? []).filter(s =>
-    s.status === "manager_approved" &&
-    new Date(s.eventEnd || s.shiftEnd || s.eventStart || s.shiftStart || 0) <= now
-  );
+  // Approved shifts leave the active tab after clock-out or 3 hours after planned end.
+  const past = (_msApplications ?? []).filter(s => isShiftInHistoryTab(s, now));
 
   if (past.length === 0) {
     panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here — you can fill in your hours manually.", "משמרות שעברו יופיעו כאן — ניתן למלא שעות ידנית."));
@@ -530,8 +548,8 @@ async function renderHistoryTab() {
 // Derive reporting status from shift data
 function _shiftStatus(shift) {
   if (shift.paymentStatus === "paid")    return "paid";
-  if (shift.approvedRegularHours != null || shift.approvedOvertimeHours != null) return "approved";
   if (shift.actualStart || shift.actualEnd) return "submitted";
+  if (shift.approvedRegularHours != null || shift.approvedOvertimeHours != null) return "submitted";
   return "not-reported";
 }
 
@@ -632,10 +650,16 @@ function _renderDetailBriefs(briefs) {
 
 function _renderDetailAttendance(shift) {
   const isApproved = shift.approvedRegularHours != null || shift.approvedOvertimeHours != null;
-  const isPast     = new Date(shift.eventEnd || shift.shiftEnd || shift.eventStart || shift.shiftStart || 0) <= new Date();
+  const isPaid     = shift.paymentStatus === "paid";
+  const canUseQuickClock = canQuickClockOut(shift);
+  const plannedStart = shift.shiftStart || shift.eventStart || "";
+  const plannedEnd   = shift.shiftEnd   || shift.eventEnd   || "";
+  const reportStart  = shift.actualStart || plannedStart;
+  const reportEnd    = shift.actualEnd   || plannedEnd;
+  const isUsingPlannedTimes = !shift.actualStart && !shift.actualEnd && (plannedStart || plannedEnd);
 
-  // ── Upcoming shift: quick clock buttons only, no manual inputs ──────────
-  if (!isPast) {
+  // ── Active shift: quick clock buttons remain available until 3h after planned end.
+  if (canUseQuickClock) {
     const arrivedNote = shift.actualStart
       ? `<span class="ms-clock-recorded">${_t("Recorded:", "נרשם:")} ${fmtTime(shift.actualStart)}</span>`
       : `<span class="ms-clock-hint">${_t("Tap when you arrive", "הקש כשאתה מגיע")}</span>`;
@@ -652,7 +676,7 @@ function _renderDetailAttendance(shift) {
         <div class="ms-time-quick-btns">
           <div class="ms-clock-btn-wrap">
             <button class="ms-clock-btn ms-clock-btn--in" data-quick-direct="start"
-                    ${shift.actualStart || isApproved ? " disabled" : ""}>
+                    ${shift.actualStart || isPaid ? " disabled" : ""}>
               <i data-lucide="log-in" style="width:22px;height:22px"></i>
             </button>
             <span class="ms-clock-btn-label">${_t("I Arrived", "הגעתי")}</span>
@@ -660,7 +684,7 @@ function _renderDetailAttendance(shift) {
           </div>
           <div class="ms-clock-btn-wrap">
             <button class="ms-clock-btn ms-clock-btn--out" data-quick-direct="end"
-                    ${shift.actualEnd || isApproved ? " disabled" : ""}>
+                    ${shift.actualEnd || isPaid ? " disabled" : ""}>
               <i data-lucide="log-out" style="width:22px;height:22px"></i>
             </button>
             <span class="ms-clock-btn-label">${_t("I Left", "עזבתי")}</span>
@@ -671,31 +695,34 @@ function _renderDetailAttendance(shift) {
       </div>`;
   }
 
-  // ── Past shift: manual form only ─────────────────────────────────────────
+  // ── Closed / expired active window: read-only display only ─────────────
+  const hasRecorded = shift.actualStart || shift.actualEnd;
+  const arrivedDisplay = shift.actualStart ? fmtTime(shift.actualStart) : "—";
+  const leftDisplay    = shift.actualEnd   ? fmtTime(shift.actualEnd)   : "—";
+
   return `
     <div class="ms-detail-section ms-time-report">
       <div class="ms-detail-section-title">
         <i data-lucide="clock" style="width:14px;height:14px"></i>
-        ${_t("Attendance & Hours Reporting", "נוכחות ודיווח שעות")}
+        ${_t("Attendance", "נוכחות")}
       </div>
-      <div class="ms-time-report-fields">
-        <div class="ms-time-field">
-          <label class="ms-time-label">${_t("Actual Arrival", "כניסה בפועל")}</label>
-          <input type="datetime-local" class="ms-time-input" name="actualStart"
-                 value="${escHtml(toDatetimeLocal(shift.actualStart))}"${isApproved ? " readonly" : ""}>
-        </div>
-        <div class="ms-time-field">
-          <label class="ms-time-label">${_t("Actual Departure", "יציאה בפועל")}</label>
-          <input type="datetime-local" class="ms-time-input" name="actualEnd"
-                 value="${escHtml(toDatetimeLocal(shift.actualEnd))}"${isApproved ? " readonly" : ""}>
-        </div>
-      </div>
-      ${isApproved
-        ? `<p class="ms-detail-note ms-detail-note--approved">✓ ${_t("Hours approved by manager — contact manager to request changes.", "השעות אושרו על ידי המנהל — צור קשר עם המנהל לבקשת שינויים.")}</p>`
-        : `<div class="ms-time-actions">
-             <button class="ms-time-save-btn">${_t("Save Hours", "שמור שעות")}</button>
-             <span class="ms-time-save-status" style="display:none"></span>
-           </div>`}
+      ${hasRecorded
+        ? `<div class="ms-clock-readonly">
+             <div class="ms-clock-readonly-row">
+               <i data-lucide="log-in" style="width:15px;height:15px;color:var(--success)"></i>
+               <span class="ms-clock-readonly-label">${_t("Arrived", "הגעה")}:</span>
+               <span class="ms-clock-readonly-val">${arrivedDisplay}</span>
+             </div>
+             <div class="ms-clock-readonly-row">
+               <i data-lucide="log-out" style="width:15px;height:15px;color:var(--danger,#e03)"></i>
+               <span class="ms-clock-readonly-label">${_t("Left", "יציאה")}:</span>
+               <span class="ms-clock-readonly-val">${leftDisplay}</span>
+             </div>
+           </div>`
+        : `<p class="ms-detail-note">${_t("Hours were not recorded for this shift.", "לא נרשמו שעות למשמרת זו.")}</p>`}
+      ${isPaid
+        ? `<p class="ms-detail-note ms-detail-note--approved">✓ ${_t("Payment completed.", "התשלום הושלם.")}</p>`
+        : ""}
     </div>`;
 }
 
@@ -704,7 +731,6 @@ function _renderDetailStatus(shift) {
   const steps    = [
     { key: "not-reported", label: _t("Not Reported", "לא דווח") },
     { key: "submitted",    label: _t("Submitted",    "הוגש")    },
-    { key: "approved",     label: _t("Approved",     "אושר")    },
     { key: "paid",         label: _t("Paid",         "שולם")    },
   ];
   const currentIdx = steps.findIndex(s => s.key === status);

@@ -318,17 +318,29 @@ public class ProjectRepository : IProjectRepository
                 p.customer_ID                                 AS CustomerId,
                 c.customer_company_name                       AS CustomerName,
                 COUNT(DISTINCT e.event_ID)                    AS EventCount,
-                ISNULL(SUM(s.required_quantity), 0)           AS RequiredCount,
-                COUNT(DISTINCT CASE
-                    WHEN es.status IN ('approved', 'manager_approved')
-                     AND (es.canceled IS NULL OR es.canceled = 0)
-                    THEN es.employee_user_ID
-                END)                                          AS StaffedCount
+                ISNULL(SUM(ISNULL(ss.RequiredCount, 0)), 0)   AS RequiredCount,
+                ISNULL(SUM(ISNULL(ss.StaffedCount,  0)), 0)   AS StaffedCount
             FROM Project p
-            LEFT  JOIN Customer c        ON p.customer_ID  = c.customer_ID
-            LEFT  JOIN Event e           ON e.project_ID   = p.Proj_ID
-            LEFT  JOIN Shift s           ON s.event_ID     = e.event_ID
-            LEFT  JOIN Employee_Shift es ON es.shift_ID    = s.Shift_ID
+            LEFT  JOIN Customer c ON p.customer_ID = c.customer_ID
+            LEFT  JOIN Event e    ON e.project_ID  = p.Proj_ID
+            LEFT  JOIN (
+                SELECT s.event_ID,
+                       SUM(s.required_quantity) AS RequiredCount,
+                       SUM(CASE
+                               WHEN ec.cnt IS NULL OR ec.cnt = 0 THEN 0
+                               WHEN ec.cnt >= s.required_quantity THEN s.required_quantity
+                               ELSE ec.cnt
+                           END) AS StaffedCount
+                FROM Shift s
+                LEFT JOIN (
+                    SELECT shift_ID, COUNT(DISTINCT employee_user_ID) AS cnt
+                    FROM   Employee_Shift
+                    WHERE  status IN ('approved', 'manager_approved')
+                      AND  (canceled IS NULL OR canceled = 0)
+                    GROUP BY shift_ID
+                ) ec ON ec.shift_ID = s.Shift_ID
+                GROUP BY s.event_ID
+            ) ss ON ss.event_ID = e.event_ID
             WHERE p.Proj_ID IN (
                 SELECT mp.project_ID
                 FROM   Manager_Project mp
@@ -1738,10 +1750,17 @@ public class ProjectRepository : IProjectRepository
             UPDATE Employee_Shift
             SET    actual_start_time  = @actualStart,
                    actual_end_time    = @actualEnd,
+                   approved_regular_hours  = NULL,
+                   approved_overtime_hours = NULL,
+                   payment_status     = CASE
+                                          WHEN payment_status = 'paid' THEN payment_status
+                                          ELSE 'pending'
+                                        END,
                    status_updated_at  = GETUTCDATE()
             WHERE  shift_ID           = @shiftId
               AND  employee_user_ID   = (SELECT user_ID FROM [User] WHERE FBUID = @fbuid)
               AND  status             = 'manager_approved'
+              AND  ISNULL(payment_status, '') <> 'paid'
             """;
 
         await using var conn = new SqlConnection(_connectionString);
@@ -2103,6 +2122,14 @@ SELECT u.user_ID AS EmployeeUserId, u.FBUID AS EmployeeFbUid,
        es.shift_ID AS ShiftId, r.Roll_name AS RoleName,
        s.start_time AS ShiftStart, s.end_time AS ShiftEnd,
        es.actual_start_time AS ActualStart, es.actual_end_time AS ActualEnd,
+       s.bulk_actual_start_time AS ShiftBulkStart, s.bulk_actual_end_time AS ShiftBulkEnd,
+       es.manager_actual_start_time AS ManagerOverrideStart, es.manager_actual_end_time AS ManagerOverrideEnd,
+       CASE
+           WHEN es.is_manager_hours_override = 1                                              THEN 'manager_override'
+           WHEN s.bulk_actual_start_time IS NOT NULL OR s.bulk_actual_end_time IS NOT NULL    THEN 'shift_bulk'
+           WHEN es.actual_start_time     IS NOT NULL OR es.actual_end_time     IS NOT NULL    THEN 'employee_report'
+           ELSE 'none'
+       END AS HoursSource,
        es.approved_regular_hours AS ApprovedRegularHours,
        es.approved_overtime_hours AS ApprovedOvertimeHours,
        es.approved_at AS ApprovedAt,
@@ -2127,28 +2154,33 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
 
     private static PayrollItem ReadPayrollItem(SqlDataReader reader) => new()
     {
-        EmployeeUserId         = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))        ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
-        EmployeeFbUid          = reader.IsDBNull(reader.GetOrdinal("EmployeeFbUid"))         ? "" : reader.GetString(reader.GetOrdinal("EmployeeFbUid")),
-        FirstName              = reader.IsDBNull(reader.GetOrdinal("FirstName"))             ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
-        LastName               = reader.IsDBNull(reader.GetOrdinal("LastName"))              ? "" : reader.GetString(reader.GetOrdinal("LastName")),
-        ShiftId                = reader.IsDBNull(reader.GetOrdinal("ShiftId"))               ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
-        RoleName               = reader.IsDBNull(reader.GetOrdinal("RoleName"))              ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
-        ShiftStart             = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))            ? null : Utc(reader, reader.GetOrdinal("ShiftStart")),
-        ShiftEnd               = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))              ? null : Utc(reader, reader.GetOrdinal("ShiftEnd")),
-        ActualStart            = reader.IsDBNull(reader.GetOrdinal("ActualStart"))           ? null : Utc(reader, reader.GetOrdinal("ActualStart")),
-        ActualEnd              = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))             ? null : Utc(reader, reader.GetOrdinal("ActualEnd")),
-        ApprovedRegularHours   = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
-        ApprovedOvertimeHours  = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours")) ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
-        ApprovedAt             = reader.IsDBNull(reader.GetOrdinal("ApprovedAt"))            ? null : Utc(reader, reader.GetOrdinal("ApprovedAt")),
-        ApprovedByManagerUserId= reader.IsDBNull(reader.GetOrdinal("ApprovedByManagerUserId"))? null : reader.GetString(reader.GetOrdinal("ApprovedByManagerUserId")),
-        PayRatePerHour         = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))        ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
-        DefaultPayRate         = reader.IsDBNull(reader.GetOrdinal("DefaultPayRate"))        ? null : reader.GetDecimal(reader.GetOrdinal("DefaultPayRate")),
-        OvertimeRatePerHour    = reader.IsDBNull(reader.GetOrdinal("OvertimeRatePerHour"))   ? null : reader.GetDecimal(reader.GetOrdinal("OvertimeRatePerHour")),
-        TravelRefund           = reader.IsDBNull(reader.GetOrdinal("TravelRefund"))          ? null : reader.GetDecimal(reader.GetOrdinal("TravelRefund")),
-        BonusAmount            = reader.IsDBNull(reader.GetOrdinal("BonusAmount"))           ? null : reader.GetDecimal(reader.GetOrdinal("BonusAmount")),
-        PenaltyAmount          = reader.IsDBNull(reader.GetOrdinal("PenaltyAmount"))         ? null : reader.GetDecimal(reader.GetOrdinal("PenaltyAmount")),
-        PaymentStatus          = reader.IsDBNull(reader.GetOrdinal("PaymentStatus"))         ? "pending" : reader.GetString(reader.GetOrdinal("PaymentStatus")),
-        Status                 = reader.IsDBNull(reader.GetOrdinal("Status"))                ? "" : reader.GetString(reader.GetOrdinal("Status")),
+        EmployeeUserId          = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))         ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
+        EmployeeFbUid           = reader.IsDBNull(reader.GetOrdinal("EmployeeFbUid"))          ? "" : reader.GetString(reader.GetOrdinal("EmployeeFbUid")),
+        FirstName               = reader.IsDBNull(reader.GetOrdinal("FirstName"))              ? "" : reader.GetString(reader.GetOrdinal("FirstName")),
+        LastName                = reader.IsDBNull(reader.GetOrdinal("LastName"))               ? "" : reader.GetString(reader.GetOrdinal("LastName")),
+        ShiftId                 = reader.IsDBNull(reader.GetOrdinal("ShiftId"))                ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
+        RoleName                = reader.IsDBNull(reader.GetOrdinal("RoleName"))               ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
+        ShiftStart              = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))             ? null : Utc(reader, reader.GetOrdinal("ShiftStart")),
+        ShiftEnd                = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))               ? null : Utc(reader, reader.GetOrdinal("ShiftEnd")),
+        ActualStart             = reader.IsDBNull(reader.GetOrdinal("ActualStart"))            ? null : Utc(reader, reader.GetOrdinal("ActualStart")),
+        ActualEnd               = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))              ? null : Utc(reader, reader.GetOrdinal("ActualEnd")),
+        ShiftBulkStart          = reader.IsDBNull(reader.GetOrdinal("ShiftBulkStart"))         ? null : Utc(reader, reader.GetOrdinal("ShiftBulkStart")),
+        ShiftBulkEnd            = reader.IsDBNull(reader.GetOrdinal("ShiftBulkEnd"))           ? null : Utc(reader, reader.GetOrdinal("ShiftBulkEnd")),
+        ManagerOverrideStart    = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideStart"))   ? null : Utc(reader, reader.GetOrdinal("ManagerOverrideStart")),
+        ManagerOverrideEnd      = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideEnd"))     ? null : Utc(reader, reader.GetOrdinal("ManagerOverrideEnd")),
+        HoursSource             = reader.IsDBNull(reader.GetOrdinal("HoursSource"))            ? "none" : reader.GetString(reader.GetOrdinal("HoursSource")),
+        ApprovedRegularHours    = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))   ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
+        ApprovedOvertimeHours   = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
+        ApprovedAt              = reader.IsDBNull(reader.GetOrdinal("ApprovedAt"))             ? null : Utc(reader, reader.GetOrdinal("ApprovedAt")),
+        ApprovedByManagerUserId = reader.IsDBNull(reader.GetOrdinal("ApprovedByManagerUserId"))? null : reader.GetString(reader.GetOrdinal("ApprovedByManagerUserId")),
+        PayRatePerHour          = reader.IsDBNull(reader.GetOrdinal("PayRatePerHour"))         ? null : reader.GetDecimal(reader.GetOrdinal("PayRatePerHour")),
+        DefaultPayRate          = reader.IsDBNull(reader.GetOrdinal("DefaultPayRate"))         ? null : reader.GetDecimal(reader.GetOrdinal("DefaultPayRate")),
+        OvertimeRatePerHour     = reader.IsDBNull(reader.GetOrdinal("OvertimeRatePerHour"))    ? null : reader.GetDecimal(reader.GetOrdinal("OvertimeRatePerHour")),
+        TravelRefund            = reader.IsDBNull(reader.GetOrdinal("TravelRefund"))           ? null : reader.GetDecimal(reader.GetOrdinal("TravelRefund")),
+        BonusAmount             = reader.IsDBNull(reader.GetOrdinal("BonusAmount"))            ? null : reader.GetDecimal(reader.GetOrdinal("BonusAmount")),
+        PenaltyAmount           = reader.IsDBNull(reader.GetOrdinal("PenaltyAmount"))          ? null : reader.GetDecimal(reader.GetOrdinal("PenaltyAmount")),
+        PaymentStatus           = reader.IsDBNull(reader.GetOrdinal("PaymentStatus"))          ? "pending" : reader.GetString(reader.GetOrdinal("PaymentStatus")),
+        Status                  = reader.IsDBNull(reader.GetOrdinal("Status"))                 ? "" : reader.GetString(reader.GetOrdinal("Status")),
     };
 
     public async Task<IEnumerable<PayrollItem>?> GetEventPayrollAsync(string eventId, string firebaseUid)
@@ -2272,6 +2304,161 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
         cmd.Parameters.AddWithValue("@now",            DateTime.UtcNow);
         cmd.Parameters.AddWithValue("@shiftId",        shiftId);
         cmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
+        if (await cmd.ExecuteNonQueryAsync() == 0) return null;
+        return await RefetchPayrollItemAsync(conn, shiftId, employeeUserId);
+    }
+
+    // ── Bulk shift hours (manager sets one start/end for all employees in a shift) ──
+
+    public async Task<bool> SetShiftBulkHoursAsync(string shiftId, BulkShiftHoursRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Resolve the event that owns this shift
+        const string resolveEventSql = "SELECT event_ID FROM Shift WHERE Shift_ID = @shiftId";
+        await using var resolveCmd = new SqlCommand(resolveEventSql, conn);
+        resolveCmd.Parameters.AddWithValue("@shiftId", shiftId);
+        var rawEventId = await resolveCmd.ExecuteScalarAsync();
+        if (rawEventId == null) return false;
+        var eventId = rawEventId.ToString()!;
+
+        // Use the same company-scoped access check as the rest of the payroll module
+        if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return false;
+
+        // Update bulk times on the shift
+        const string updateShiftSql = """
+            UPDATE Shift
+            SET bulk_actual_start_time = @bulkStart,
+                bulk_actual_end_time   = @bulkEnd
+            WHERE Shift_ID = @shiftId
+            """;
+        await using var updateShiftCmd = new SqlCommand(updateShiftSql, conn);
+        updateShiftCmd.Parameters.AddWithValue("@bulkStart", (object?)request.BulkActualStart ?? DBNull.Value);
+        updateShiftCmd.Parameters.AddWithValue("@bulkEnd",   (object?)request.BulkActualEnd   ?? DBNull.Value);
+        updateShiftCmd.Parameters.AddWithValue("@shiftId",   shiftId);
+        if (await updateShiftCmd.ExecuteNonQueryAsync() == 0) return false;
+
+        // Auto-approve or reset approvals for all non-override, non-paid employees
+        var now = DateTime.UtcNow;
+        if (request.BulkActualStart.HasValue && request.BulkActualEnd.HasValue)
+        {
+            // Calculate duration in decimal hours and auto-approve
+            var managerUserId = await GetUserIdByFbUidAsync(conn, firebaseUid);
+            decimal durationHours = (decimal)(request.BulkActualEnd.Value - request.BulkActualStart.Value).TotalHours;
+            durationHours = Math.Round(durationHours, 2);
+
+            const string approveAllSql = """
+                UPDATE Employee_Shift
+                SET approved_regular_hours      = @hours,
+                    approved_overtime_hours     = NULL,
+                    approved_at                 = @now,
+                    approved_by_manager_user_ID = @managerId,
+                    status_updated_at           = @now
+                WHERE shift_ID                  = @shiftId
+                  AND is_manager_hours_override = 0
+                  AND status                    = 'manager_approved'
+                  AND ISNULL(payment_status, '') <> 'paid'
+                """;
+            await using var approveCmd = new SqlCommand(approveAllSql, conn);
+            approveCmd.Parameters.AddWithValue("@hours",     durationHours);
+            approveCmd.Parameters.AddWithValue("@now",       now);
+            approveCmd.Parameters.AddWithValue("@managerId", managerUserId ?? (object)DBNull.Value);
+            approveCmd.Parameters.AddWithValue("@shiftId",   shiftId);
+            await approveCmd.ExecuteNonQueryAsync();
+        }
+        else
+        {
+            // Bulk cleared — reset approvals so manager must re-approve manually
+            const string resetSql = """
+                UPDATE Employee_Shift
+                SET approved_regular_hours      = NULL,
+                    approved_overtime_hours     = NULL,
+                    approved_at                 = NULL,
+                    approved_by_manager_user_ID = NULL,
+                    status_updated_at           = @now
+                WHERE shift_ID                  = @shiftId
+                  AND is_manager_hours_override = 0
+                  AND status                    = 'manager_approved'
+                  AND ISNULL(payment_status, '') <> 'paid'
+                """;
+            await using var resetCmd = new SqlCommand(resetSql, conn);
+            resetCmd.Parameters.AddWithValue("@shiftId", shiftId);
+            resetCmd.Parameters.AddWithValue("@now",     now);
+            await resetCmd.ExecuteNonQueryAsync();
+        }
+
+        return true;
+    }
+
+    // ── Manager per-employee hours override ───────────────────────────────────
+
+    public async Task<PayrollItem?> SetEmployeeHoursOverrideAsync(
+        string shiftId, string employeeUserId, string eventId,
+        ManagerOverrideHoursRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Company-scoped event access check (consistent with rest of payroll module)
+        if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
+
+        string sql;
+        if (request.ClearOverride)
+        {
+            // Verify shiftId belongs to this event AND employee is manager_approved
+            sql = """
+                UPDATE Employee_Shift
+                SET manager_actual_start_time   = NULL,
+                    manager_actual_end_time     = NULL,
+                    is_manager_hours_override   = 0,
+                    approved_regular_hours      = NULL,
+                    approved_overtime_hours     = NULL,
+                    approved_at                 = NULL,
+                    approved_by_manager_user_ID = NULL,
+                    status_updated_at           = @now
+                WHERE shift_ID         = @shiftId
+                  AND employee_user_ID = @employeeUserId
+                  AND status           = 'manager_approved'
+                  AND ISNULL(payment_status, '') <> 'paid'
+                  AND EXISTS (
+                      SELECT 1 FROM Shift s WHERE s.Shift_ID = @shiftId AND s.event_ID = @eventId
+                  )
+                """;
+        }
+        else
+        {
+            // Verify shiftId belongs to this event AND employee is manager_approved
+            sql = """
+                UPDATE Employee_Shift
+                SET manager_actual_start_time   = @managerStart,
+                    manager_actual_end_time     = @managerEnd,
+                    is_manager_hours_override   = 1,
+                    approved_regular_hours      = NULL,
+                    approved_overtime_hours     = NULL,
+                    approved_at                 = NULL,
+                    approved_by_manager_user_ID = NULL,
+                    status_updated_at           = @now
+                WHERE shift_ID         = @shiftId
+                  AND employee_user_ID = @employeeUserId
+                  AND status           = 'manager_approved'
+                  AND ISNULL(payment_status, '') <> 'paid'
+                  AND EXISTS (
+                      SELECT 1 FROM Shift s WHERE s.Shift_ID = @shiftId AND s.event_ID = @eventId
+                  )
+                """;
+        }
+
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@now",            DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("@shiftId",        shiftId);
+        cmd.Parameters.AddWithValue("@employeeUserId", employeeUserId);
+        cmd.Parameters.AddWithValue("@eventId",        eventId);
+        if (!request.ClearOverride)
+        {
+            cmd.Parameters.AddWithValue("@managerStart", (object?)request.ManagerActualStart ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@managerEnd",   (object?)request.ManagerActualEnd   ?? DBNull.Value);
+        }
         if (await cmd.ExecuteNonQueryAsync() == 0) return null;
         return await RefetchPayrollItemAsync(conn, shiftId, employeeUserId);
     }
@@ -2879,27 +3066,35 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
                 e.attendees_count       AS AttendeesCount,
                 p.customer_ID           AS CustomerId,
                 c.customer_company_name AS CustomerName,
-                ISNULL(SUM(s.required_quantity), 0) AS RequiredCount,
-                COUNT(DISTINCT CASE
-                    WHEN es.status IN ('approved', 'manager_approved')
-                     AND (es.canceled IS NULL OR es.canceled = 0)
-                    THEN es.employee_user_ID
-                END) AS StaffedCount
+                ISNULL(ss.RequiredCount, 0) AS RequiredCount,
+                ISNULL(ss.StaffedCount,  0) AS StaffedCount
             FROM Event e
-            INNER JOIN Project p        ON p.Proj_ID    = e.project_ID
-            LEFT  JOIN Customer c       ON c.customer_ID = p.customer_ID
-            LEFT  JOIN Shift s          ON s.event_ID   = e.event_ID
-            LEFT  JOIN Employee_Shift es ON es.shift_ID  = s.Shift_ID
+            INNER JOIN Project p  ON p.Proj_ID     = e.project_ID
+            LEFT  JOIN Customer c ON c.customer_ID = p.customer_ID
+            LEFT  JOIN (
+                SELECT s.event_ID,
+                       SUM(s.required_quantity) AS RequiredCount,
+                       SUM(CASE
+                               WHEN ec.cnt IS NULL OR ec.cnt = 0 THEN 0
+                               WHEN ec.cnt >= s.required_quantity THEN s.required_quantity
+                               ELSE ec.cnt
+                           END) AS StaffedCount
+                FROM Shift s
+                LEFT JOIN (
+                    SELECT shift_ID, COUNT(DISTINCT employee_user_ID) AS cnt
+                    FROM   Employee_Shift
+                    WHERE  status IN ('approved', 'manager_approved')
+                      AND  (canceled IS NULL OR canceled = 0)
+                    GROUP BY shift_ID
+                ) ec ON ec.shift_ID = s.Shift_ID
+                GROUP BY s.event_ID
+            ) ss ON ss.event_ID = e.event_ID
             WHERE p.Proj_ID IN (
                 SELECT mp.project_ID
                 FROM   Manager_Project mp
                 INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
                 WHERE  mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @firebaseUid)
             )
-            GROUP BY
-                e.event_ID, e.name, e.start_time, e.end_time, e.status,
-                e.event_type, e.location, e.planned_budget, e.expected_revenue,
-                e.attendees_count, p.customer_ID, c.customer_company_name
             ORDER BY e.start_time DESC
             """;
 

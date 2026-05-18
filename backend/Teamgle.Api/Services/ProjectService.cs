@@ -463,6 +463,31 @@ public class ProjectService : IProjectService
         return await _projectRepo.UpdatePayrollAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
     }
 
+    public async Task<bool> SetShiftBulkHoursAsync(string firebaseUid, string shiftId, BulkShiftHoursRequest request)
+    {
+        ValidateHoursPair(request.BulkActualStart, request.BulkActualEnd, "bulk");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.SetShiftBulkHoursAsync(shiftId, request, firebaseUid);
+    }
+
+    public async Task<PayrollItem?> SetEmployeeHoursOverrideAsync(string firebaseUid, string eventId, string shiftId, string employeeUserId, ManagerOverrideHoursRequest request)
+    {
+        if (!request.ClearOverride)
+            ValidateHoursPair(request.ManagerActualStart, request.ManagerActualEnd, "override");
+        await ResolveCompanyIdAsync(firebaseUid);
+        return await _projectRepo.SetEmployeeHoursOverrideAsync(shiftId, employeeUserId, eventId, request, firebaseUid);
+    }
+
+    private static void ValidateHoursPair(DateTime? start, DateTime? end, string label)
+    {
+        var hasStart = start.HasValue;
+        var hasEnd   = end.HasValue;
+        if (hasStart != hasEnd)
+            throw new ArgumentException($"Both {label} start and end must be provided together, or both left empty.");
+        if (hasStart && end!.Value <= start!.Value)
+            throw new ArgumentException($"The {label} end time must be after the start time.");
+    }
+
     // ── Brief Acknowledgment ───────────────────────────────────────────────
     public async Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string firebaseUid, string briefId)
     {

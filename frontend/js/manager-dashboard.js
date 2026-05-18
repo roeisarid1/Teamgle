@@ -5396,12 +5396,6 @@ function _buildStaffingHTML() {
         <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
         <p class="ps-header-desc">Manage worker assignments for this project's shifts and events.</p>
       </div>
-      <div class="ps-header-actions">
-        <div class="ps-search-wrap">
-          <i data-lucide="search" class="ps-search-icon"></i>
-          <input type="text" class="ps-search" id="ps-search-input" placeholder="Search workers…">
-        </div>
-      </div>
     </div>
     ${eventsHtml}
   `;
@@ -6856,12 +6850,6 @@ function renderEdStaffingTab() {
         <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
         <p class="ps-header-desc">Manage worker assignments for this event's shifts.</p>
       </div>
-      <div class="ps-header-actions">
-        <div class="ps-search-wrap">
-          <i data-lucide="search" class="ps-search-icon"></i>
-          <input type="text" class="ps-search" id="ps-search-input" placeholder="Search workers…">
-        </div>
-      </div>
     </div>
     <div class="ps-event-block" data-event-id="${escapeHtml(currentEventId)}">
       ${_buildPotentialSection(currentEventId)}
@@ -6896,6 +6884,8 @@ async function renderEdWorkersTab() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     root.innerHTML = _buildEdWorkersHTML(data);
+    _initEdWorkerSearch();
+    if (window.lucide) lucide.createIcons({ el: root });
   } catch {
     root.innerHTML = '<div class="pd-loading">Failed to load workers.</div>';
   }
@@ -6937,13 +6927,19 @@ function _buildEdWorkersHTML(data) {
       if (workers.length === 0) return "";
       const workerRows = workers
         .map(
-          (w) => `
-      <tr>
+          (w) => {
+            const name = `${w.firstName ?? ""} ${w.lastName ?? ""}`.trim();
+            const shift = `${fmtTime(w.shiftStart)} – ${fmtTime(w.shiftEnd)}`;
+            const status = _workerStatusLabel(w.status);
+            const searchText = `${name} ${w.roleName ?? ""} ${shift} ${status}`.toLowerCase();
+            return `
+      <tr data-worker-search="${escapeHtml(searchText)}">
         <td>${escapeHtml(w.firstName)} ${escapeHtml(w.lastName)}</td>
         <td>${escapeHtml(w.roleName)}</td>
-        <td>${fmtTime(w.shiftStart)} – ${fmtTime(w.shiftEnd)}</td>
-        <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(_workerStatusLabel(w.status))}</span></td>
-      </tr>`,
+        <td>${shift}</td>
+        <td><span class="ed-worker-badge ed-worker-badge--${color}">${escapeHtml(status)}</span></td>
+      </tr>`;
+          },
         )
         .join("");
       return `
@@ -6967,7 +6963,43 @@ function _buildEdWorkersHTML(data) {
   if (total === 0) {
     return '<div class="pd-empty-state">No workers assigned to this event yet.</div>';
   }
-  return `<div class="ed-worker-sections">${rows}</div>`;
+  return `
+    <div class="ed-worker-toolbar">
+      <div class="ps-search-wrap ed-worker-search-wrap">
+        <i data-lucide="search" class="ps-search-icon"></i>
+        <input type="text" class="ps-search ed-worker-search" id="ed-worker-search-input" placeholder="${_t("Search workers…", "חיפוש עובדים…")}">
+      </div>
+    </div>
+    <div class="ed-worker-sections">${rows}</div>
+    <div class="pd-empty-state ed-worker-search-empty" style="display:none">${_t("No workers match your search.", "לא נמצאו עובדים שמתאימים לחיפוש.")}</div>`;
+}
+
+function _initEdWorkerSearch() {
+  const input = document.getElementById("ed-worker-search-input");
+  if (!input) return;
+  input.addEventListener("input", _applyEdWorkerSearch);
+  _applyEdWorkerSearch();
+}
+
+function _applyEdWorkerSearch() {
+  const root = document.getElementById("ed-workers-root");
+  const q = (document.getElementById("ed-worker-search-input")?.value ?? "").trim().toLowerCase();
+  if (!root) return;
+
+  let visibleRows = 0;
+  root.querySelectorAll(".ed-worker-section").forEach((section) => {
+    let sectionVisible = 0;
+    section.querySelectorAll("tbody tr[data-worker-search]").forEach((row) => {
+      const matches = !q || (row.dataset.workerSearch ?? "").includes(q);
+      row.style.display = matches ? "" : "none";
+      if (matches) sectionVisible++;
+    });
+    section.style.display = sectionVisible > 0 ? "" : "none";
+    visibleRows += sectionVisible;
+  });
+
+  const empty = root.querySelector(".ed-worker-search-empty");
+  if (empty) empty.style.display = q && visibleRows === 0 ? "" : "none";
 }
 
 // ── TASKS TAB ──────────────────────────────────────────────────────────────
@@ -8065,9 +8097,29 @@ async function renderEdPayrollTab() {
 function _fmtDateTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
-  const date = d.toISOString().slice(0, 10);
-  const time = d.toTimeString().slice(0, 5);
-  return `${date}T${time}`;
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function _normalizeHoursPair(startVal, endVal) {
+  if (!startVal && !endVal) return { start: null, end: null };
+  if (!startVal || !endVal) throw new Error(_t("Start and end are required together.", "יש להזין התחלה וסיום יחד."));
+
+  const start = new Date(startVal);
+  let end = new Date(endVal);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error(_t("Invalid date or time.", "תאריך או שעה לא תקינים."));
+  }
+
+  if (end <= start) {
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return {
+    start: startVal,
+    end: _fmtDateTime(end.toISOString()),
+  };
 }
 
 function _fmtDuration(startIso, endIso) {
@@ -8079,69 +8131,180 @@ function _fmtDuration(startIso, endIso) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function _fmtTimeOnly(iso) {
+  return iso
+    ? new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+    : "—";
+}
+
+function _effectiveHours(item) {
+  if (item.hoursSource === "manager_override") return { start: item.managerOverrideStart, end: item.managerOverrideEnd };
+  if (item.hoursSource === "shift_bulk")       return { start: item.shiftBulkStart,       end: item.shiftBulkEnd };
+  return { start: item.actualStart, end: item.actualEnd };
+}
+
+// ── Shift-grouped payroll builder ─────────────────────────────────────────────
+
+function _edBuildPayrollHTML(items) {
+  if (!items || items.length === 0) {
+    return `<div class="pd-empty-state">${_t("No approved workers for payroll.", "אין עובדים מאושרים לשכר.")}</div>`;
+  }
+
+  // Group items by shiftId (preserve order of first occurrence)
+  const shiftOrder = [];
+  const byShift = {};
+  items.forEach((item, idx) => {
+    if (!byShift[item.shiftId]) {
+      shiftOrder.push(item.shiftId);
+      byShift[item.shiftId] = { meta: item, rows: [] };
+    }
+    byShift[item.shiftId].rows.push({ item, idx });
+  });
+
+  return shiftOrder.map((shiftId) => _edBuildShiftGroupHTML(shiftId, byShift[shiftId])).join("");
+}
+
+function _shiftBulkPayStatus(rows) {
+  const statuses = rows.map(({ item }) => item.paymentStatus || "pending");
+  if (statuses.every(s => s === "paid")) return "paid";
+  if (statuses.every(s => s === "paid" || s === "approved")) return "approved";
+  return "pending";
+}
+
+function _edBuildShiftGroupHTML(shiftId, { meta, rows }) {
+  const plannedStart = _fmtTimeOnly(meta.shiftStart);
+  const plannedEnd   = _fmtTimeOnly(meta.shiftEnd);
+
+  // If bulk hours are already saved use them; otherwise default to the planned shift times
+  // so the manager sees a sensible starting point and only needs to tweak the minutes.
+  const bulkStartVal = meta.shiftBulkStart
+    ? _fmtDateTime(meta.shiftBulkStart)
+    : (meta.shiftStart ? _fmtDateTime(meta.shiftStart) : "");
+  const bulkEndVal = meta.shiftBulkEnd
+    ? _fmtDateTime(meta.shiftBulkEnd)
+    : (meta.shiftEnd ? _fmtDateTime(meta.shiftEnd) : "");
+
+  const hasSavedBulk   = !!(meta.shiftBulkStart || meta.shiftBulkEnd);
+  const bulkPayStatus  = _shiftBulkPayStatus(rows);
+  const employeeRows   = rows.map(({ item, idx }) => _edBuildPayrollRowHTML(item, idx)).join("");
+
+  return `
+    <div class="ed-pr-shift-group" data-shift-id="${escapeHtml(shiftId)}">
+      <div class="ed-pr-shift-header">
+        <div class="ed-pr-shift-meta">
+          <span class="ed-pr-shift-role">${escapeHtml(meta.roleName)}</span>
+          <span class="ed-pr-shift-planned">${_t("Planned", "מתוכנן")}: ${plannedStart} – ${plannedEnd}</span>
+        </div>
+        <div class="ed-pr-bulk-controls">
+          <span class="ed-pr-bulk-label">${_t("Bulk actual hours", "שעות בפועל לכולם")}:</span>
+          <div class="ed-pr-bulk-inputs">
+            <div class="ed-pr-bulk-field">
+              <label class="ed-pr-bulk-field-label">${_t("Start", "התחלה")}</label>
+              <input type="datetime-local" class="ed-pr-input ed-pr-bulk-time" name="bulkStart"
+                     value="${escapeHtml(bulkStartVal)}" step="60">
+            </div>
+            <div class="ed-pr-bulk-field">
+              <label class="ed-pr-bulk-field-label">${_t("End", "סיום")}</label>
+              <input type="datetime-local" class="ed-pr-input ed-pr-bulk-time" name="bulkEnd"
+                     value="${escapeHtml(bulkEndVal)}" step="60">
+            </div>
+            <button class="ed-pr-bulk-apply-btn" data-action="bulk-apply"
+                    data-shift-id="${escapeHtml(shiftId)}">
+              ${_t("Apply to all", "החל על כולם")}
+            </button>
+            ${hasSavedBulk ? `<button class="ed-pr-bulk-clear-btn" data-action="bulk-clear" data-shift-id="${escapeHtml(shiftId)}">${_t("Clear bulk", "נקה")}</button>` : ""}
+          </div>
+        </div>
+        <div class="ed-pr-bulk-pay">
+          <label class="ed-pr-bulk-pay-label">${_t("Payment Status", "סטטוס תשלום")}</label>
+          <select class="ed-pr-input ed-pr-select ed-pr-bulk-pay-select"
+                  name="bulkPayStatus"
+                  data-shift-id="${escapeHtml(shiftId)}">
+            ${["pending","approved","paid"].map(s =>
+              `<option value="${s}"${bulkPayStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`
+            ).join("")}
+          </select>
+          <button class="ed-pr-bulk-pay-save-btn" data-action="bulk-pay-save"
+                  data-shift-id="${escapeHtml(shiftId)}">
+            ${_t("Save Payroll", "שמור שכר")}
+          </button>
+        </div>
+        <button class="ed-pr-chevron-btn" data-action="toggle-employees"
+                data-shift-id="${escapeHtml(shiftId)}" aria-label="${_t("Toggle employees", "הצג/הסתר עובדים")}">
+          <svg class="ed-pr-chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+      <div class="ed-pr-employees-list" hidden>
+        ${employeeRows}
+      </div>
+    </div>`;
+}
+
 function _edBuildPayrollRowHTML(item, idx) {
+  const payStatus  = item.paymentStatus || "pending";
   const hasApproved = item.approvedAt != null;
-  const hasReported = item.actualStart || item.actualEnd;
-  const duration = _fmtDuration(item.actualStart, item.actualEnd);
-  const payStatus = item.paymentStatus || "pending";
-  const fmtTimeOnly = (iso) =>
-    iso
-      ? new Date(iso).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        })
-      : "—";
+  const eff = _effectiveHours(item);
+  const effStart = eff.start;
+  const effEnd   = eff.end;
+  const hasEffective = effStart || effEnd;
+  const duration = _fmtDuration(effStart, effEnd);
+
+  // Source badge
+  let srcLabel, srcCls;
+  if (item.hoursSource === "manager_override") {
+    srcLabel = _t("Manager override", "דריסת מנהל"); srcCls = "ed-pr-src--override";
+  } else if (item.hoursSource === "shift_bulk") {
+    srcLabel = _t("Bulk hours", "שעות כלליות");     srcCls = "ed-pr-src--bulk";
+  } else if (item.hoursSource === "employee_report") {
+    srcLabel = _t("Employee report", "דיווח עובד"); srcCls = "ed-pr-src--employee";
+  } else {
+    srcLabel = _t("Not reported", "לא דווח");       srcCls = "ed-pr-src--none";
+  }
 
   // Hours status badge
   let hoursLabel, hoursCls;
-  if (hasApproved) {
-    hoursLabel = _t("Approved", "מאושר");
-    hoursCls = "ed-badge--approved";
-  } else if (hasReported) {
-    hoursLabel = _t("Submitted", "הוגש");
-    hoursCls = "ed-badge--pending";
-  } else {
-    hoursLabel = _t("Not Reported", "לא דווח");
-    hoursCls = "ed-badge--unpaid";
-  }
+  if (hasApproved)    { hoursLabel = _t("Approved", "מאושר"); hoursCls = "ed-badge--approved"; }
+  else if (hasEffective) { hoursLabel = _t("Submitted", "הוגש"); hoursCls = "ed-badge--pending"; }
+  else                { hoursLabel = _t("Not Reported", "לא דווח"); hoursCls = "ed-badge--unpaid"; }
 
   // Payment status badge
   let payLabel, payCls;
-  if (payStatus === "paid") {
-    payLabel = _t("Paid", "שולם");
-    payCls = "ed-badge--paid";
-  } else if (payStatus === "approved") {
-    payLabel = _t("Approved", "מאושר");
-    payCls = "ed-badge--approved";
-  } else {
-    payLabel = _t("Pending", "ממתין");
-    payCls = "ed-badge--unpaid";
-  }
+  if (payStatus === "paid")     { payLabel = _t("Paid", "שולם");    payCls = "ed-badge--paid"; }
+  else if (payStatus === "approved") { payLabel = _t("Approved", "מאושר"); payCls = "ed-badge--approved"; }
+  else                          { payLabel = _t("Pending", "ממתין"); payCls = "ed-badge--unpaid"; }
 
-  const reportedHtml = hasReported
-    ? `<span class="ed-pr-time-summary">${fmtTimeOnly(item.actualStart)} – ${fmtTimeOnly(item.actualEnd)}${duration ? ` (${duration})` : ""}</span>`
+  const reportedHtml = hasEffective
+    ? `<span class="ed-pr-time-summary">${_fmtTimeOnly(effStart)} – ${_fmtTimeOnly(effEnd)}${duration ? ` (${duration})` : ""}</span>`
     : `<span class="ed-pr-not-reported">${_t("Not reported", "לא דווח")}</span>`;
 
-  const sectionAContent = hasReported
-    ? `<div class="ed-pr-fields-row">
-        <div class="ed-pr-field">
-          <label class="ed-pr-field-label">${_t("Actual Arrival", "הגעה בפועל")}</label>
-          <span class="ed-pr-field-val">${item.actualStart ? new Date(item.actualStart).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
-        </div>
-        <div class="ed-pr-field">
-          <label class="ed-pr-field-label">${_t("Actual Departure", "עזיבה בפועל")}</label>
-          <span class="ed-pr-field-val">${item.actualEnd ? new Date(item.actualEnd).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
-        </div>
-        ${duration ? `<div class="ed-pr-field"><label class="ed-pr-field-label">${_t("Duration", "משך")}</label><span class="ed-pr-field-val ed-pr-field-val--strong">${escapeHtml(duration)}</span></div>` : ""}
-      </div>`
-    : `<p class="ed-pr-empty-state">${_t("Employee has not reported hours yet.", "העובד עדיין לא דיווח שעות.")}</p>`;
+  // ── Section A: employee's clock-in / clock-out report (read-only) ───────
+  const fmtDt = (iso) =>
+    iso ? new Date(iso).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+  const empDecimalHours = (item.actualStart && item.actualEnd)
+    ? Math.round((new Date(item.actualEnd) - new Date(item.actualStart)) / 36000) / 100
+    : null;
+
+  const sectionAContent = (item.actualStart || item.actualEnd)
+    ? `<div class="ed-pr-hours-row">
+         <span class="ed-pr-hours-col-label">${_t("Arrived", "הגיע")}</span>
+         <span class="ed-pr-hours-val">${fmtDt(item.actualStart)}</span>
+         <span class="ed-pr-hours-sep">→</span>
+         <span class="ed-pr-hours-col-label">${_t("Left", "עזב")}</span>
+         <span class="ed-pr-hours-val">${fmtDt(item.actualEnd)}</span>
+         ${empDecimalHours !== null ? `<span class="ed-pr-hours-duration">${empDecimalHours.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${_t("hrs", "שע'")}</span>` : ""}
+       </div>`
+    : `<p class="ed-pr-empty-state">${_t("Employee did not report hours.", "העובד לא דיווח שעות.")}</p>`;
 
   const approvedNote = hasApproved
     ? `<p class="ed-pr-approved-note">${_t("Approved", "מאושר")} ${new Date(item.approvedAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</p>`
     : "";
 
-  // Pre-fill pay rate from employee default if not yet set
   const payRateVal = item.payRatePerHour ?? item.defaultPayRate ?? "";
 
   return `
@@ -8160,9 +8323,9 @@ function _edBuildPayrollRowHTML(item, idx) {
       </div>
       <div class="ed-pr-panel" hidden>
 
-        <!-- Step 1: Reported by Employee -->
+        <!-- Step 1: Employee report (read-only) -->
         <div class="ed-pr-panel-section">
-          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> ${_t("Employee Report", "דיווח עובד")}</div>
+          <div class="ed-pr-panel-title"><span class="ed-pr-step-num">1</span> ${_t("Employee report", "דיווח עובד")}</div>
           ${sectionAContent}
         </div>
 
@@ -8209,11 +8372,9 @@ function _edBuildPayrollRowHTML(item, idx) {
               <label class="ed-pr-field-label">${_t("Payment Status", "סטטוס תשלום")}</label>
               <select class="ed-pr-input ed-pr-select" name="paymentStatus">
                 ${["pending", "approved", "paid"]
-                  .map(
-                    (s) =>
-                      `<option value="${s}"${payStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`,
-                  )
-                  .join("")}
+                  .map((s) =>
+                    `<option value="${s}"${payStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`
+                  ).join("")}
               </select>
             </div>
           </div>
@@ -8224,45 +8385,173 @@ function _edBuildPayrollRowHTML(item, idx) {
     </div>`;
 }
 
-function _edBuildPayrollHTML(items) {
-  if (!items || items.length === 0) {
-    return `<div class="pd-empty-state">${_t("No approved workers for payroll.", "אין עובדים מאושרים לשכר.")}</div>`;
-  }
-  const rows = items
-    .map((item, idx) => _edBuildPayrollRowHTML(item, idx))
-    .join("");
-  return `<div class="ed-pr-list">${rows}</div>`;
-}
-
 function _edWirePayrollSaveBtns() {
   const root = document.getElementById("ed-payroll-root");
   if (!root) return;
 
-  // Use onclick (not addEventListener) so re-renders replace instead of stack listeners
   root.onclick = async (e) => {
-    // Review button toggle
+    // Toggle shift employee list
+    if (e.target.closest("[data-action='toggle-employees']")) {
+      const btn  = e.target.closest("[data-action='toggle-employees']");
+      const group = btn.closest(".ed-pr-shift-group");
+      const list  = group?.querySelector(".ed-pr-employees-list");
+      if (!list) return;
+      list.hidden = !list.hidden;
+      btn.classList.toggle("ed-pr-chevron-btn--open", !list.hidden);
+      return;
+    }
+
+    // Apply bulk hours to shift
+    if (e.target.closest("[data-action='bulk-apply']")) {
+      const btn     = e.target.closest("[data-action='bulk-apply']");
+      const shiftId = btn.dataset.shiftId;
+      const header  = btn.closest(".ed-pr-shift-header");
+      const bulkStart = header.querySelector("[name='bulkStart']")?.value;
+      const bulkEnd   = header.querySelector("[name='bulkEnd']")?.value;
+      btn.disabled = true;
+      btn.textContent = _t("Saving…", "שומר…");
+      try {
+        const normalized = _normalizeHoursPair(bulkStart, bulkEnd);
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(shiftId)}/bulk-hours`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bulkActualStart: normalized.start,
+            bulkActualEnd:   normalized.end,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || _t("Failed to save.", "השמירה נכשלה."));
+        }
+        // Refresh full payroll to get updated hoursSource on all employees
+        await renderEdPayrollTab();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = err?.message || _t("Failed", "נכשל");
+        setTimeout(() => { btn.textContent = _t("Apply to all", "החל על כולם"); }, 2200);
+      }
+      return;
+    }
+
+    // Clear bulk hours for shift
+    if (e.target.closest("[data-action='bulk-clear']")) {
+      const btn     = e.target.closest("[data-action='bulk-clear']");
+      const shiftId = btn.dataset.shiftId;
+      btn.disabled = true;
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/shifts/${encodeURIComponent(shiftId)}/bulk-hours`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ bulkActualStart: null, bulkActualEnd: null }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || _t("Failed to save.", "השמירה נכשלה."));
+        }
+        await renderEdPayrollTab();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = err?.message || _t("Failed", "נכשל");
+        setTimeout(() => { btn.textContent = _t("Clear bulk", "נקה"); }, 2200);
+      }
+      return;
+    }
+
+    // Review button toggle (per-employee panel)
     if (e.target.closest(".ed-pr-review-btn")) {
-      const row = e.target.closest(".ed-pr-employee-row");
+      const row   = e.target.closest(".ed-pr-employee-row");
       const panel = row?.querySelector(".ed-pr-panel");
       if (!panel) return;
-      const isOpen = !panel.hidden;
-      panel.hidden = isOpen;
-      e.target.closest(".ed-pr-review-btn").textContent = isOpen
+      panel.hidden = !panel.hidden;
+      e.target.closest(".ed-pr-review-btn").textContent = panel.hidden
         ? _t("Review", "סקור")
         : _t("Close", "סגור");
       return;
     }
 
-    // Approve or Save buttons
+    // Bulk payment-status save (shift-level)
+    if (e.target.closest("[data-action='bulk-pay-save']")) {
+      const btn       = e.target.closest("[data-action='bulk-pay-save']");
+      const shiftId   = btn.dataset.shiftId;
+      const group     = btn.closest(".ed-pr-shift-group");
+      const newStatus = group?.querySelector("[name='bulkPayStatus']")?.value ?? "pending";
+
+      const shiftItems = _edPayrollData
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item }) => item.shiftId === shiftId);
+
+      if (newStatus !== "pending") {
+        const missing = shiftItems.filter(({ item }) => item.approvedRegularHours == null);
+        if (missing.length > 0) {
+          const names = missing.map(({ item }) => `${item.firstName} ${item.lastName}`).join(", ");
+          alert(_t(
+            `Cannot set status — these employees have no approved hours:\n${names}`,
+            `לא ניתן לשנות סטטוס ל"${newStatus === "approved" ? "מאושר" : "שולם"}" — לעובדים הבאים אין שעות באישור מנהל:\n${names}`
+          ));
+          return;
+        }
+      }
+
+      btn.disabled = true;
+      btn.textContent = _t("Saving…", "שומר…");
+      try {
+        const token = await getToken();
+        for (const { item, idx } of shiftItems) {
+          const res = await fetch(
+            `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`,
+            {
+              method: "PUT",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                payRatePerHour: item.payRatePerHour ?? item.defaultPayRate ?? null,
+                travelRefund:   item.travelRefund   ?? null,
+                bonusAmount:    item.bonusAmount     ?? null,
+                penaltyAmount:  item.penaltyAmount   ?? null,
+                paymentStatus:  newStatus,
+              }),
+            }
+          );
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || _t("Failed to save.", "השמירה נכשלה."));
+          }
+          _edPayrollData[idx] = await res.json();
+        }
+        await renderEdPayrollTab();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = _t("Save Payroll", "שמור שכר");
+        alert(err?.message || _t("Failed to update payment status.", "עדכון סטטוס התשלום נכשל."));
+      }
+      return;
+    }
+
+    // Per-employee action buttons (approve / save only)
     const actionBtn = e.target.closest("[data-action]");
     if (!actionBtn) return;
+    const action = actionBtn.dataset.action;
+    if (!["approve", "save"].includes(action)) return;
 
-    const idx = parseInt(actionBtn.dataset.idx, 10);
+    const idx  = parseInt(actionBtn.dataset.idx, 10);
     const item = _edPayrollData[idx];
     const panel = actionBtn.closest(".ed-pr-panel");
     const val = (name) => panel.querySelector(`[name="${name}"]`)?.value ?? "";
     const num = (name) => (val(name) !== "" ? parseFloat(val(name)) : null);
-    const action = actionBtn.dataset.action;
+
+    // Validate before disabling: can't approve/pay without approved hours
+    if (action === "save") {
+      const payStatus = val("paymentStatus") || "pending";
+      if (payStatus !== "pending" && item.approvedRegularHours == null) {
+        alert(_t(
+          `Cannot set payment status to "${payStatus}" without approved hours.`,
+          `לא ניתן לשמור בסטטוס "${payStatus === "approved" ? "מאושר" : "שולם"}" — אין שעות באישור מנהל לעובד זה.`
+        ));
+        return;
+      }
+    }
 
     actionBtn.disabled = true;
     actionBtn.textContent = _t("Saving…", "שומר…");
@@ -8273,32 +8562,29 @@ function _edWirePayrollSaveBtns() {
 
       if (action === "approve") {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/approve`;
-        body = {
-          approvedRegularHours: num("approvedRegularHours"),
-        };
+        body = { approvedRegularHours: num("approvedRegularHours") };
       } else {
         endpoint = `${API_BASE}/events/${encodeURIComponent(currentEventId)}/payroll/${encodeURIComponent(item.employeeUserId)}/${encodeURIComponent(item.shiftId)}/save`;
         body = {
           payRatePerHour: num("payRatePerHour"),
-          travelRefund: num("travelRefund"),
-          bonusAmount: num("bonusAmount"),
-          penaltyAmount: num("penaltyAmount"),
-          paymentStatus: val("paymentStatus") || "pending",
+          travelRefund:   num("travelRefund"),
+          bonusAmount:    num("bonusAmount"),
+          penaltyAmount:  num("penaltyAmount"),
+          paymentStatus:  val("paymentStatus") || "pending",
         };
       }
 
       const res = await fetch(endpoint, {
         method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || _t("Failed to save.", "השמירה נכשלה."));
+      }
       const updated = await res.json();
 
-      // Update data store and re-render the row in-place (keep panel open)
       _edPayrollData[idx] = updated;
       const row = root.querySelector(`.ed-pr-employee-row[data-idx="${idx}"]`);
       if (row) {
@@ -8309,12 +8595,14 @@ function _edWirePayrollSaveBtns() {
         newRow.querySelector(".ed-pr-review-btn").textContent = _t("Close", "סגור");
         row.replaceWith(newRow);
       }
-    } catch {
-      actionBtn.textContent =
-        action === "approve" ? _t("Approve Hours", "אשר שעות") : _t("Save Payroll", "שמור שכר");
+    } catch (err) {
+      const labels = { "approve": _t("Approve Hours", "אשר שעות"), "save": _t("Save Payroll", "שמור שכר") };
+      actionBtn.textContent = err?.message || labels[action] || _t("Retry", "נסה שוב");
       actionBtn.disabled = false;
+      setTimeout(() => { actionBtn.textContent = labels[action] ?? _t("Retry", "נסה שוב"); }, 2200);
     }
   };
+
 }
 
 // ── FINANCE TAB ────────────────────────────────────────────────────────────
