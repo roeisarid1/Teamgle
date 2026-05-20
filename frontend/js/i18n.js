@@ -444,6 +444,12 @@ const HE_BY_EN = {
   "Assigned": "שובץ",
   "Standby": "המתנה",
   "No eligible applicants were scored for this shift.": "לא נמצאו מועמדים מתאימים לדירוג למשמרת הזו.",
+
+  /* ── Calendar ────────────────────────────────────────────────────── */
+  "Today": "היום",
+  "Previous month": "חודש קודם",
+  "Next month": "חודש הבא",
+  "No events scheduled for this month.": "אין אירועים מתוכננים לחודש זה.",
 };
 
 const EN_BY_HE = Object.fromEntries(Object.entries(HE_BY_EN).map(([en, he]) => [he, en]));

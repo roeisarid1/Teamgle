@@ -10,7 +10,11 @@ import {
   listAll,
   deleteObject,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-import { writeUserProfile } from "./chat-service.js";
+import {
+  addParticipantsToScopedConversation,
+  getCompanyUsers,
+  writeUserProfile,
+} from "./chat-service.js";
 import { initChat, destroyChat, openChatWith, openEventChat, openShiftChat } from "./chat-ui.js";
 import { initI18n, applyTranslations, getCurrentLanguage, _t } from "./i18n.js";
 import { API_BASE } from "./api-config.js";
@@ -40,17 +44,37 @@ initI18n();
 
 window.addEventListener("teamgle:languagechange", () => {
   applyTranslations();
-  const activeSection = document.querySelector(".page-section:not([style*='display:none'])")?.dataset.section;
-  if (activeSection === "events") renderProjectsKanban(_applyProjectFilters(_allProjects ?? []));
-  if (activeSection === "event-detail" && currentEventId) activateEventTab(
-    document.querySelector("#event-detail-tabs .pd-tab.active")?.dataset.etab ?? "staffing",
-  );
+  const activeSection = getActiveSectionName();
+  if (activeSection === "events") _applyProjectFilters();
+  if (activeSection === "project-detail" && currentProjectDetail) {
+    _refreshProjectDetailHeader();
+    activateProjectTab(
+      document.querySelector("#section-project-detail .pd-tab.active")?.dataset.tab ?? "dashboard",
+    );
+  }
+  if (activeSection === "event-detail" && currentEventId) {
+    _refreshEventDetailHeader();
+    activateEventTab(
+      document.querySelector("#event-detail-tabs .pd-tab.active")?.dataset.etab ?? "staffing",
+    );
+  }
   if (activeSection === "chats") {
     destroyChat();
     chatInitialized = false;
     _initChatSection();
   }
+  if (activeSection === "calendar") renderCalendar();
+  applyTranslations();
 });
+
+function getActiveSectionName() {
+  const sections = [...document.querySelectorAll(".page-section[data-section]")];
+  const active = sections.find((section) => {
+    if (section.style.display === "none") return false;
+    return getComputedStyle(section).display !== "none";
+  });
+  return active?.dataset.section ?? null;
+}
 
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
@@ -110,6 +134,53 @@ let chatInitialized = false;
 let _staffingPollInterval = null;
 let _staffingClickController = null;
 const _eventChatWorkers = new Map();
+let _chatCompanyUsersCache = null;
+let _managerNoticeTimer = null;
+
+function showManagerNotice(message, type = "info") {
+  let notice = document.getElementById("manager-notice");
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "manager-notice";
+    notice.className = "manager-notice";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    document.body.appendChild(notice);
+  }
+
+  notice.className = `manager-notice manager-notice--${type} visible`;
+  notice.innerHTML = `
+    <span class="material-symbols-outlined manager-notice-icon">info</span>
+    <span class="manager-notice-text">${escapeHtml(message)}</span>
+  `;
+
+  if (_managerNoticeTimer) clearTimeout(_managerNoticeTimer);
+  _managerNoticeTimer = setTimeout(() => {
+    notice.classList.remove("visible");
+  }, 4200);
+}
+
+function friendlyWorkerStatusError(message) {
+  if (message === "This shift is already full.") {
+    return _t(
+      "This shift is already full. You can place the worker on standby or adjust the required staff count.",
+      "המשמרת כבר מלאה. אפשר להעביר את העובד להמתנה או לעדכן את כמות העובדים הנדרשת.",
+    );
+  }
+  if (message === "This employee is already approved for an overlapping shift in this event.") {
+    return _t(
+      "This employee is already scheduled for another shift that overlaps this time.",
+      "העובד כבר שובץ למשמרת אחרת שחופפת לשעה הזו.",
+    );
+  }
+  if (message === "This employee is already approved for another shift in this event.") {
+    return _t(
+      "This employee is already approved for another shift in this event.",
+      "העובד כבר מאושר למשמרת אחרת באירוע הזה.",
+    );
+  }
+  return message || _t("Could not update the worker status.", "לא ניתן היה לעדכן את סטטוס העובד.");
+}
 
 // Add mode
 let profileFile = null; // File | null — new file chosen for profile
@@ -224,7 +295,7 @@ function filterEmployees(list) {
       if (!full.includes(q) && !e.firstName.toLowerCase().includes(q) && !e.lastName.toLowerCase().includes(q)) return false;
     }
     if (statusVal) {
-      const empStatus = (e.status ?? "active").toLowerCase();
+      const empStatus = employeeRegistrationStatusKey(e.registrationStatus);
       if (empStatus !== statusVal) return false;
     }
     return true;
@@ -272,6 +343,17 @@ async function loadEmployees() {
     renderEmployees(filterEmployees(allEmployees));
   } catch {
     employeeTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444">${_t("Failed to load employees.", "טעינת עובדים נכשלה.")}</td></tr>`;
+  }
+}
+
+function employeeRegistrationStatusKey(status) {
+  switch ((status ?? "Active").toLowerCase()) {
+    case "active":
+      return "active";
+    case "pending registration":
+      return "pending";
+    default:
+      return (status ?? "").toLowerCase();
   }
 }
 
@@ -1523,6 +1605,7 @@ function activateSection(name) {
   if (name === "create-event") loadProjectCustomerDropdown();
   if (name === "chats") _initChatSection();
   if (name === "invoices") loadInvoices();
+  if (name === "calendar") _initCalendarSection();
 }
 
 function _initChatSection() {
@@ -1585,6 +1668,25 @@ function _updateFilterBtnState() {
 }
 
 let _projectFiltersInited = false;
+function _positionProjectFilterPopup(button, popup) {
+  const row = button?.closest(".events-filter-row");
+  if (!row || !popup) return;
+
+  popup.style.left = "";
+  popup.style.right = "";
+
+  const rowWidth = row.clientWidth;
+  const popupWidth = popup.offsetWidth;
+  const isRtl = getComputedStyle(row).direction === "rtl";
+  const alignedLeft = isRtl
+    ? button.offsetLeft + button.offsetWidth - popupWidth
+    : button.offsetLeft;
+  const maxLeft = Math.max(0, rowWidth - popupWidth);
+  const safeLeft = Math.min(Math.max(0, alignedLeft), maxLeft);
+
+  popup.style.left = `${safeLeft}px`;
+}
+
 function _initProjectFilters() {
   if (_projectFiltersInited) return;
   _projectFiltersInited = true;
@@ -1603,13 +1705,21 @@ function _initProjectFilters() {
   // Toggle popups
   dateBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    datePop.hidden = !datePop.hidden;
+    const shouldOpen = datePop.hidden;
+    datePop.hidden = !shouldOpen;
     statusPop.hidden = true;
+    if (shouldOpen) _positionProjectFilterPopup(dateBtn, datePop);
   });
   statusBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    statusPop.hidden = !statusPop.hidden;
+    const shouldOpen = statusPop.hidden;
+    statusPop.hidden = !shouldOpen;
     datePop.hidden = true;
+    if (shouldOpen) _positionProjectFilterPopup(statusBtn, statusPop);
+  });
+  window.addEventListener("resize", () => {
+    if (!datePop.hidden) _positionProjectFilterPopup(dateBtn, datePop);
+    if (!statusPop.hidden) _positionProjectFilterPopup(statusBtn, statusPop);
   });
   document.addEventListener("click", () => {
     datePop.hidden = true;
@@ -1845,6 +1955,31 @@ function activateProjectTab(name) {
   }
 }
 
+function _projectStatusLabel(status) {
+  const labels = {
+    draft: _t("Draft", "טיוטה"),
+    planning: _t("Planning", "תכנון"),
+    active: _t("Active", "פעיל"),
+    completed: _t("Completed", "הושלם"),
+    canceled: _t("Canceled", "בוטל"),
+  };
+  return labels[status] ?? status ?? "";
+}
+
+function _refreshProjectDetailHeader() {
+  const titleEl = document.getElementById("project-detail-title");
+  const subtitleEl = document.getElementById("project-detail-subtitle");
+  if (!titleEl || !subtitleEl || !currentProjectDetail) return;
+
+  const eventCount = Number(currentProjectDetail.eventCount ?? 0);
+  const eventLabel = eventCount === 1
+    ? _t("event", "אירוע")
+    : _t("events", "אירועים");
+
+  titleEl.textContent = currentProjectDetail.name ?? _t("Project", "פרויקט");
+  subtitleEl.textContent = `${_projectStatusLabel(currentProjectDetail.displayStatus ?? currentProjectDetail.status)} · ${eventCount} ${eventLabel}`;
+}
+
 async function openProjectDetail(projId) {
   currentProjectId = projId;
   // Reset to dashboard tab and show the section
@@ -1879,11 +2014,10 @@ async function openProjectDetail(projId) {
     const project = await res.json();
 
     currentProjectDetail = project;
-    titleEl.textContent = escapeHtml(project.name);
-    subtitleEl.textContent = `${project.displayStatus ?? project.status} · ${project.eventCount} event${project.eventCount !== 1 ? "s" : ""}`;
+    _refreshProjectDetailHeader();
     renderDashboardTab();
   } catch {
-    titleEl.textContent = "Error loading project";
+    titleEl.textContent = _t("Error loading project", "שגיאה בטעינת הפרויקט");
     subtitleEl.textContent = "";
   }
 }
@@ -5393,8 +5527,8 @@ function _buildStaffingHTML() {
   return `
     <div class="ps-header">
       <div class="ps-header-info">
-        <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
-        <p class="ps-header-desc">Manage worker assignments for this project's shifts and events.</p>
+        <h3 class="ps-header-title">${_t("Staffing & Assignments", "שיבוץ והקצאות")}</h3>
+        <p class="ps-header-desc">${_t("Manage worker assignments for this project's shifts and events.", "נהל שיבוץ עובדים למשמרות ולאירועים.")}</p>
       </div>
     </div>
     ${eventsHtml}
@@ -5593,8 +5727,10 @@ async function loadAndRenderEventWorkers(eventId) {
     ];
     _eventChatWorkers.set(eventId, allWorkers);
     _renderShiftSummaryStrip(eventId, allWorkers);
+    return allWorkers;
   } catch (err) {
     console.error("[Staffing] Failed to load event workers:", err);
+    return [];
   }
 }
 
@@ -5681,6 +5817,94 @@ function _formatChatShiftTitle(worker) {
   const end = fmt(worker?.shiftEnd);
   const time = start ? (end ? `${start}-${end}` : start) : "";
   return time ? `${role} · ${time}` : role;
+}
+
+async function _getChatCompanyUsers() {
+  if (_chatCompanyUsersCache) return _chatCompanyUsersCache;
+  if (!profile?.companyId || !currentFirebaseUid) return [];
+  try {
+    _chatCompanyUsersCache = await getCompanyUsers(profile.companyId, currentFirebaseUid);
+  } catch (err) {
+    console.warn("[Chat] Failed to load company users for membership sync:", err);
+    _chatCompanyUsersCache = [];
+  }
+  return _chatCompanyUsersCache;
+}
+
+async function _buildChatParticipantInfo(workers) {
+  const companyUsers = await _getChatCompanyUsers();
+  const usersByUid = new Map(companyUsers.map((u) => [u.uid, u]));
+  const info = {};
+
+  (workers ?? []).forEach((worker) => {
+    const uid = worker?.fbUid;
+    if (!uid) return;
+    const user = usersByUid.get(uid);
+    const workerName = `${worker.firstName ?? ""} ${worker.lastName ?? ""}`.trim();
+    info[uid] = {
+      name: user?.displayName || workerName || uid,
+      email: user?.email || "",
+      role: user?.role || "Employee",
+    };
+  });
+
+  return info;
+}
+
+async function _syncApprovedWorkersToExistingChats(eventId, workers) {
+  if (!eventId || !profile?.companyId) return;
+
+  const approvedWorkers = (workers ?? []).filter(
+    (w) => w.status === "manager_approved" && w.fbUid,
+  );
+  if (approvedWorkers.length === 0) return;
+
+  const ev =
+    (currentProjectDetail?.events ?? []).find((item) => item.eventId === eventId)
+    ?? (eventId === currentEventId ? _getCurrentEventData() : null);
+  const eventTitle = ev?.name || _t("Event Chat", "צ'אט אירוע");
+
+  try {
+    await addParticipantsToScopedConversation(
+      "event",
+      eventId,
+      profile.companyId,
+      _uniqueWorkerUids(approvedWorkers),
+      await _buildChatParticipantInfo(approvedWorkers),
+      {
+        title: eventTitle,
+        subtitle: _t("Event chat", "צ'אט אירוע"),
+        eventId,
+      },
+    );
+
+    const workersByShift = new Map();
+    approvedWorkers.forEach((worker) => {
+      if (!worker.shiftId) return;
+      const list = workersByShift.get(worker.shiftId) ?? [];
+      list.push(worker);
+      workersByShift.set(worker.shiftId, list);
+    });
+
+    for (const [shiftId, shiftWorkers] of workersByShift.entries()) {
+      const firstWorker = shiftWorkers[0];
+      await addParticipantsToScopedConversation(
+        "shift",
+        shiftId,
+        profile.companyId,
+        _uniqueWorkerUids(shiftWorkers),
+        await _buildChatParticipantInfo(shiftWorkers),
+        {
+          title: _formatChatShiftTitle(firstWorker),
+          subtitle: eventTitle,
+          eventId,
+          shiftId,
+        },
+      );
+    }
+  } catch (err) {
+    console.warn("[Chat] Failed to sync approved workers into existing chats:", err);
+  }
 }
 
 async function _openCurrentEventChat() {
@@ -5913,7 +6137,10 @@ async function _handleWorkerStatusChange(
       }
       throw new Error("Failed to update status");
     }
-    await loadAndRenderEventWorkers(eventId);
+    const workers = await loadAndRenderEventWorkers(eventId);
+    if (newStatus === "manager_approved") {
+      await _syncApprovedWorkersToExistingChats(eventId, workers);
+    }
   } catch (err) {
     // btn may be detached after re-render — re-query by fbUid+shiftId
     document
@@ -5923,7 +6150,7 @@ async function _handleWorkerStatusChange(
       .forEach((b) => {
         b.disabled = false;
       });
-    alert(err.message);
+    showManagerNotice(friendlyWorkerStatusError(err.message), "warning");
   }
 }
 
@@ -6099,7 +6326,8 @@ async function _handleAutoAssign(eventId, btn) {
     // Refresh the workers panel — this re-renders the button so reset it first
     btn.disabled = false;
     btn.textContent = "⚡ Auto-Assign";
-    await loadAndRenderEventWorkers(eventId);
+    const workers = await loadAndRenderEventWorkers(eventId);
+    await _syncApprovedWorkersToExistingChats(eventId, workers);
 
     _showAutoAssignInsights(results);
   } catch (err) {
@@ -6767,6 +6995,16 @@ function _getCurrentEventData() {
     ?? null;
 }
 
+function _refreshEventDetailHeader() {
+  const titleEl = document.getElementById("event-detail-title");
+  const subtitleEl = document.getElementById("event-detail-subtitle");
+  if (!titleEl || !subtitleEl) return;
+
+  const ev = _getCurrentEventData();
+  titleEl.textContent = ev?.name ?? _t("Event", "אירוע");
+  subtitleEl.textContent = ev ? _edFormatSubtitle(ev) : "";
+}
+
 // ── Open event detail ──────────────────────────────────────────────────────
 async function openEventDetail(eventId, evData) {
   currentEventId = eventId;
@@ -6780,12 +7018,7 @@ async function openEventDetail(eventId, evData) {
   _edTaskFilterPriority = "all";
 
   // Update header — evData comes from the kanban list, or fallback from project detail cache
-  const ev = evData ?? _getCurrentEventData();
-  document.getElementById("event-detail-title").textContent =
-    ev?.name ?? "Event";
-  document.getElementById("event-detail-subtitle").textContent = ev
-    ? _edFormatSubtitle(ev)
-    : "";
+  _refreshEventDetailHeader();
 
   activateSection("event-detail");
 
@@ -6813,10 +7046,10 @@ function _edFormatSubtitle(ev) {
   }
 
   const statusLabels = {
-    planning: "Planning",
-    active: "Active",
-    completed: "Completed",
-    canceled: "Canceled",
+    planning: _t("Planning", "תכנון"),
+    active: _t("Active", "פעיל"),
+    completed: _t("Completed", "הושלם"),
+    canceled: _t("Canceled", "בוטל"),
   };
   if (ev.status && statusLabels[ev.status]) parts.push(statusLabels[ev.status]);
 
@@ -6847,8 +7080,8 @@ function renderEdStaffingTab() {
   root.innerHTML = `
     <div class="ps-header">
       <div class="ps-header-info">
-        <h3 class="ps-header-title">Staffing &amp; Assignments</h3>
-        <p class="ps-header-desc">Manage worker assignments for this event's shifts.</p>
+        <h3 class="ps-header-title">${_t("Staffing & Assignments", "שיבוץ והקצאות")}</h3>
+        <p class="ps-header-desc">${_t("Manage worker assignments for this event's shifts.", "נהל שיבוץ עובדים למשמרות האירוע.")}</p>
       </div>
     </div>
     <div class="ps-event-block" data-event-id="${escapeHtml(currentEventId)}">
@@ -8933,7 +9166,7 @@ async function _cancelInvoice(invoiceId) {
       method: "DELETE", headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok && res.status !== 204) throw new Error();
-    await loadInvoices();
+    await _refreshInvoiceViewsAfterChange();
   } catch { alert(_t("Failed to delete payment request.", "מחיקת דרישת התשלום נכשלה.")); }
 }
 
@@ -9148,7 +9381,7 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Create failed.", "יצירת הדרישה נכשלה.")); }
     }
     _closeInvoiceModal();
-    await loadInvoices();
+    await _refreshInvoiceViewsAfterChange();
   } catch (e) {
     _showInvError(errEl, _t(e.message || "An error occurred.", e.message || "אירעה שגיאה."));
   } finally {
@@ -9159,6 +9392,28 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
 function _showInvError(el, msg) {
   if (!el) return;
   el.textContent = msg; el.style.display = "block";
+}
+
+async function _refreshInvoiceViewsAfterChange() {
+  const activeSection = getActiveSectionName?.();
+
+  if (activeSection === "event-detail") {
+    const activeTab = document.querySelector("#event-detail-tabs .pd-tab.active")?.dataset.etab;
+    if (activeTab === "finance" && currentEventId) {
+      await renderEdFinanceTab();
+      return;
+    }
+  }
+
+  if (activeSection === "project-detail") {
+    const activeTab = document.querySelector("#section-project-detail .pd-tab.active")?.dataset.tab;
+    if (activeTab === "finance" && currentProjectDetail) {
+      await renderProjectFinanceTab();
+      return;
+    }
+  }
+
+  await loadInvoices();
 }
 
 // ── Record Payment Modal ───────────────────────────────────────────────────
@@ -9206,7 +9461,7 @@ document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
     });
     if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Payment save failed.", "שמירת התשלום נכשלה.")); }
     _closePaymentModal();
-    await loadInvoices();
+    await _refreshInvoiceViewsAfterChange();
   } catch (e) {
     _showInvError(errEl, _t(e.message || "An error occurred.", e.message || "אירעה שגיאה."));
   } finally {
@@ -9647,4 +9902,196 @@ document.getElementById("delete-confirm-ok").addEventListener("click", () => {
   if (_deleteTarget === "project") _executeDeleteProject();
   else if (_deleteTarget === "event") _executeDeleteEvent();
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CALENDAR SECTION
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _CAL_MONTHS = {
+  en: ["January","February","March","April","May","June",
+       "July","August","September","October","November","December"],
+  he: ["ינואר","פברואר","מרץ","אפריל","מאי","יוני",
+       "יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"],
+};
+
+const _CAL_DAYS = {
+  en: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
+  he: ["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"],
+};
+
+let _calYear  = new Date().getFullYear();
+let _calMonth = new Date().getMonth(); // 0-indexed
+
+function _calMonthName(month) {
+  const lang = getCurrentLanguage();
+  return (_CAL_MONTHS[lang] ?? _CAL_MONTHS.en)[month];
+}
+
+function _calDayLabels() {
+  const lang = getCurrentLanguage();
+  return _CAL_DAYS[lang] ?? _CAL_DAYS.en;
+}
+
+function _calDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function _calGroupByDay(events) {
+  const map = new Map();
+  for (const ev of events) {
+    if (!ev.startTime) continue;
+    const key = _calDateKey(new Date(ev.startTime));
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(ev);
+  }
+  return map;
+}
+
+function renderCalendar() {
+  const root = document.getElementById("cal-root");
+  if (!root) return;
+
+  const year      = _calYear;
+  const month     = _calMonth;
+  const today     = new Date();
+  const todayKey  = _calDateKey(today);
+  const monthName = _calMonthName(month);
+  const dayLabels = _calDayLabels();
+
+  const firstDow    = new Date(year, month, 1).getDay();       // 0 = Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const trailing    = (7 - ((firstDow + daysInMonth) % 7)) % 7;
+
+  const eventMap = _calGroupByDay(_allProjects ?? []);
+
+  // Detect whether this month has any events to show an empty state
+  const hasThisMonth = (_allProjects ?? []).some((ev) => {
+    if (!ev.startTime) return false;
+    const d = new Date(ev.startTime);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+
+  // ── Build cells ──────────────────────────────────────────────────────────
+
+  let cellsHtml = "";
+
+  // Leading padding cells
+  for (let i = 0; i < firstDow; i++) {
+    cellsHtml += `<div class="cal-cell cal-cell--other" aria-hidden="true"></div>`;
+  }
+
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key     = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isToday = key === todayKey;
+    const events  = eventMap.get(key) ?? [];
+
+    const evHtml = events.map((ev) => {
+      const statusCls = escapeHtml(ev.displayStatus ?? "planning");
+      return `
+        <button class="cal-event cal-event--${statusCls}"
+                type="button"
+                data-event-id="${escapeHtml(ev.eventId)}"
+                title="${escapeHtml(ev.name)}">
+          <span class="cal-event-dot cal-event-dot--${statusCls}" aria-hidden="true"></span>
+          <span class="cal-event-name">${escapeHtml(ev.name)}</span>
+        </button>`;
+    }).join("");
+
+    const todayLabel = isToday ? ` (${_t("Today", "היום")})` : "";
+    cellsHtml += `
+      <div class="cal-cell${isToday ? " cal-cell--today" : ""}"
+           role="gridcell"
+           aria-label="${escapeHtml(monthName)} ${d}${todayLabel}">
+        <span class="cal-day-num">${d}</span>
+        <div class="cal-events">${evHtml}</div>
+      </div>`;
+  }
+
+  // Trailing padding cells
+  for (let i = 0; i < trailing; i++) {
+    cellsHtml += `<div class="cal-cell cal-cell--other" aria-hidden="true"></div>`;
+  }
+
+  // ── Empty-month notice ───────────────────────────────────────────────────
+  const emptyNotice = hasThisMonth ? "" : `
+    <div class="cal-empty-month">
+      <span class="material-symbols-outlined cal-empty-icon">event_busy</span>
+      <p>${_t("No events scheduled for this month.", "אין אירועים מתוכננים לחודש זה.")}</p>
+    </div>`;
+
+  // ── Assemble HTML ────────────────────────────────────────────────────────
+  root.innerHTML = `
+    <div class="cal-header">
+      <button class="cal-nav-btn cal-prev" type="button"
+              aria-label="${_t("Previous month", "חודש קודם")}">
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <h2 class="cal-title">${escapeHtml(monthName)} ${year}</h2>
+      <button class="cal-nav-btn cal-next" type="button"
+              aria-label="${_t("Next month", "חודש הבא")}">
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+    </div>
+
+    <div class="cal-board" role="grid" aria-label="${escapeHtml(monthName)} ${year}">
+      <div class="cal-weekdays" role="row">
+        ${dayLabels.map((d) => `<div class="cal-weekday" role="columnheader">${escapeHtml(d)}</div>`).join("")}
+      </div>
+      <div class="cal-cells" role="rowgroup">
+        ${cellsHtml}
+      </div>
+    </div>
+    ${emptyNotice}
+  `;
+
+  // ── Navigation ───────────────────────────────────────────────────────────
+  root.querySelector(".cal-prev").addEventListener("click", () => {
+    _calMonth--;
+    if (_calMonth < 0) { _calMonth = 11; _calYear--; }
+    renderCalendar();
+  });
+
+  root.querySelector(".cal-next").addEventListener("click", () => {
+    _calMonth++;
+    if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+    renderCalendar();
+  });
+
+  // ── Click / keyboard on event pill → open event detail ──────────────────
+  root.querySelector(".cal-cells").addEventListener("click", (e) => {
+    const btn = e.target.closest(".cal-event[data-event-id]");
+    if (!btn) return;
+    const evId   = btn.dataset.eventId;
+    const evData = (_allProjects ?? []).find((p) => p.eventId === evId) ?? null;
+    openEventDetail(evId, evData);
+  });
+
+  root.querySelector(".cal-cells").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const btn = e.target.closest(".cal-event[data-event-id]");
+    if (!btn) return;
+    e.preventDefault();
+    btn.click();
+  });
+}
+
+async function _initCalendarSection() {
+  // Render immediately with whatever data is already in memory (may be empty)
+  renderCalendar();
+  // Then refresh from the API in the background so the calendar stays current
+  try {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}/events`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      _allProjects = await res.json();
+      renderCalendar();
+    }
+  } catch { /* keep existing render */ }
+}
 

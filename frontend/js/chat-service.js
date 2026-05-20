@@ -189,6 +189,64 @@ export async function getOrCreateScopedConversation(
 }
 
 /**
+ * Add participants to an existing scoped event/shift conversation.
+ * Unlike getOrCreateScopedConversation, this does not create a new chat.
+ * @returns {Promise<boolean>} true when an existing conversation was updated.
+ */
+export async function addParticipantsToScopedConversation(
+  type,
+  scopeId,
+  companyId,
+  participants,
+  participantInfo,
+  scope,
+) {
+  if (type !== "event" && type !== "shift") {
+    throw new Error("Unsupported conversation type.");
+  }
+
+  const uniqueParticipants = [...new Set(participants.filter(Boolean))].sort();
+  if (uniqueParticipants.length === 0) return false;
+
+  const safeScopeId = String(scopeId).replaceAll("/", "_");
+  const convDocId = `conv_${type}_${safeScopeId}`;
+  const convRef = doc(db, "conversations", convDocId);
+  let updated = false;
+
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(convRef);
+    if (!snap.exists()) return;
+
+    const existing = snap.data();
+    const mergedParticipants = [
+      ...new Set([...(existing.participants ?? []), ...uniqueParticipants])
+    ].sort();
+    const mergedInfo = { ...(existing.participantInfo ?? {}), ...participantInfo };
+    const mergedUnread = { ...(existing.unreadCounts ?? {}) };
+    mergedParticipants.forEach(uid => {
+      if (mergedUnread[uid] == null) mergedUnread[uid] = 0;
+    });
+
+    tx.update(convRef, {
+      companyId,
+      type,
+      scope: {
+        ...(existing.scope ?? {}),
+        ...scope,
+        id: scopeId,
+        title: scope?.title || existing.scope?.title || (type === "event" ? "Event Chat" : "Shift Chat")
+      },
+      participants: mergedParticipants,
+      participantInfo: mergedInfo,
+      unreadCounts: mergedUnread
+    });
+    updated = true;
+  });
+
+  return updated;
+}
+
+/**
  * Subscribe to all conversations for a user in a company.
  * Conversations are sorted by most recent activity (client-side).
  * Calls callback(conversations[]) on every change.

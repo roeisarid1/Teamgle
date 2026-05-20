@@ -688,6 +688,49 @@ tbody tr:hover { background: #EEF4FF; }
   box-shadow: 0 8px 40px rgba(79,110,247,.12), 0 2px 8px rgba(0,0,0,.08);
 }
 
+.manager-notice {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 350;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, .16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.manager-notice.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.manager-notice-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.manager-notice-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.manager-notice--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -7941,4 +7984,224 @@ body { min-height: 100dvh; }
 @media (max-width: 480px) {
   .ms-chat-btn      { min-height: 40px; }
   .ms-open-shift-btn{ min-height: 40px; padding: 10px 18px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CALENDAR SECTION
+   ══════════════════════════════════════════════════════════════════════════ */
+
+#cal-root {
+  padding: 20px 24px 28px;
+}
+
+/* ── Header (month title + prev/next) ───────────────────────────────────── */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.cal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.2px;
+}
+
+.cal-nav-btn {
+  background: none;
+  border: 1.5px solid var(--border-2);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+
+.cal-nav-btn:hover {
+  background: var(--blue-light);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.cal-nav-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.cal-nav-btn .material-symbols-outlined { font-size: 20px; line-height: 1; }
+
+/* RTL: flip chevron direction so prev stays visually "back" */
+body.rtl .cal-nav-btn.cal-prev .material-symbols-outlined,
+body.rtl .cal-nav-btn.cal-next .material-symbols-outlined {
+  transform: scaleX(-1);
+}
+
+/* ── Calendar board (grid + border box) ─────────────────────────────────── */
+.cal-board {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* ── Weekday labels ─────────────────────────────────────────────────────── */
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--surface);
+  border-bottom: 1.5px solid var(--border);
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: .6px;
+  padding: 10px 4px;
+}
+
+/* ── Day grid ───────────────────────────────────────────────────────────── */
+.cal-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-cell {
+  min-height: 118px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 6px 6px;
+  vertical-align: top;
+}
+
+/* Remove right border on last cell of each row */
+.cal-cell:nth-child(7n) { border-right: none; }
+
+/* Dimmed background for out-of-month padding cells */
+.cal-cell--other { background: var(--surface); }
+
+/* ── Day number ─────────────────────────────────────────────────────────── */
+.cal-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: 50%;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+/* Today highlight */
+.cal-cell--today .cal-day-num {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ── Event pills ────────────────────────────────────────────────────────── */
+.cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cal-event {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  text-align: start;
+  width: 100%;
+  overflow: hidden;
+  transition: background var(--transition), color var(--transition);
+  line-height: 1.3;
+  /* default: planning / unknown */
+  background: var(--blue-light);
+  color: var(--blue);
+}
+
+.cal-event:hover       { background: var(--blue); color: #fff; }
+.cal-event:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Active events — green */
+.cal-event--active           { background: var(--green-light); color: #226b3a; }
+.cal-event--active:hover     { background: var(--green); color: #fff; }
+
+/* Completed events — grey */
+.cal-event--completed        { background: #F3F4F6; color: var(--text-muted); }
+.cal-event--completed:hover  { background: #9CA3AF; color: #fff; }
+
+/* Canceled events — red */
+.cal-event--canceled         { background: var(--red-light); color: var(--red); }
+.cal-event--canceled:hover   { background: var(--red); color: #fff; }
+
+/* Status dot */
+.cal-event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cal-event-dot--planning  { background: var(--yellow); }
+.cal-event-dot--active    { background: var(--green);  }
+.cal-event-dot--completed { background: #9CA3AF;       }
+.cal-event-dot--canceled  { background: var(--red);    }
+
+/* Truncate long event names */
+.cal-event-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Empty-month notice ─────────────────────────────────────────────────── */
+.cal-empty-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 0 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cal-empty-icon {
+  font-size: 40px;
+  color: var(--border-2);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  #cal-root          { padding: 16px 16px 24px; }
+  .cal-cell          { min-height: 80px; padding: 6px 4px 4px; }
+  .cal-event         { font-size: 10px; padding: 2px 4px; }
+  .cal-event-dot     { display: none; }
+}
+
+@media (max-width: 480px) {
+  #cal-root          { padding: 12px 10px 20px; }
+  .cal-cell          { min-height: 54px; padding: 4px 2px 2px; }
+  .cal-day-num       { width: 20px; height: 20px; font-size: 10px; }
+  .cal-event         { font-size: 9px; padding: 1px 3px; gap: 2px; }
+  .cal-weekday       { font-size: 9px; letter-spacing: 0; padding: 7px 2px; }
 }

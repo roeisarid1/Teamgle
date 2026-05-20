@@ -553,6 +553,12 @@ function _shiftStatus(shift) {
   return "not-reported";
 }
 
+function formatPendingBriefsFlag(count) {
+  return count === 1
+    ? _t("1 brief pending approval", "תדריך אחד ממתין לאישור")
+    : _t(`${count} briefs pending approval`, `${count} תדריכים ממתינים לאישור`);
+}
+
 // opts: { showAttendance: bool, compact: bool }
 function renderShiftCard(shift, opts = {}) {
   const { compact = false, hideAttendance = false } = opts;
@@ -567,7 +573,7 @@ function renderShiftCard(shift, opts = {}) {
 
   const flags = [];
   if (missingHours)          flags.push(`<span class="ms-action-flag ms-action-flag--hours">${_t("Hours not reported", "שעות לא דווחו")}</span>`);
-  if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${_t(`${unackedBriefs.length} brief${unackedBriefs.length > 1 ? "s" : ""} pending`, `${unackedBriefs.length} תדריכ${unackedBriefs.length > 1 ? "ים" : ""} ממתינ${unackedBriefs.length > 1 ? "ים" : ""} לאישור`)}</span>`);
+  if (unackedBriefs.length)  flags.push(`<span class="ms-action-flag ms-action-flag--briefs">${formatPendingBriefsFlag(unackedBriefs.length)}</span>`);
   const flagsHtml = flags.length ? `<div class="ms-action-flags">${flags.join("")}</div>` : "";
 
   // Status badge for header

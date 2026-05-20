@@ -89,7 +89,7 @@
         <i data-lucide="building-2"></i>
         <span>Customers</span>
       </a>
-      <a href="#" class="nav-item disabled">
+      <a href="#" class="nav-item" data-section="calendar">
         <i data-lucide="calendar"></i>
         <span>Calendar</span>
       </a>
@@ -124,7 +124,7 @@
           <select class="emp-filter-select" id="emp-filter-status">
             <option value="">All</option>
             <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="pending">Pending Registration</option>
           </select>
         </div>
         <button class="emp-filter-clear" id="emp-filter-clear" style="display:none">Clear filters</button>
@@ -701,6 +701,11 @@
 
     <!-- Chat section — injected by chat-ui.js, fills content area in chat-mode -->
     <div class="page-section" id="section-chats" data-section="chats" style="display:none">
+    </div>
+
+    <!-- Calendar section -->
+    <div class="section-card page-section" id="section-calendar" data-section="calendar" style="display:none">
+      <div id="cal-root"></div>
     </div>
 
   </div>
