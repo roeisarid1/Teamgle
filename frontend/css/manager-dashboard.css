@@ -8205,3 +8205,627 @@ body.rtl .cal-nav-btn.cal-next .material-symbols-outlined {
   .cal-event         { font-size: 9px; padding: 1px 3px; gap: 2px; }
   .cal-weekday       { font-size: 9px; letter-spacing: 0; padding: 7px 2px; }
 }
+
+/* Mobile density pass: keep desktop untouched, fit more useful UI on phones. */
+@media (max-width: 640px) {
+  body {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .navbar {
+    height: 54px;
+    padding: 0 10px;
+  }
+
+  .body-layout,
+  .sidebar {
+    min-height: calc(100dvh - 54px);
+  }
+
+  .sidebar {
+    top: 54px;
+    height: calc(100dvh - 54px);
+    padding: 16px 10px !important;
+  }
+
+  .nav-item {
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .page-content {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .section-card,
+  .form-section-card,
+  .event-block,
+  .ed-pr-employee-row,
+  .ed-pr-shift-group,
+  .ev-card {
+    border-radius: 8px;
+  }
+
+  .section-header,
+  .form-section-header,
+  .event-block-header,
+  .shifts-subheader,
+  .pd-section-header,
+  .cp-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .section-header h2,
+  .form-section-title,
+  .event-block-label,
+  .pd-section-title,
+  .cp-title,
+  #section-project-detail .cp-title,
+  #section-event-detail .cp-title {
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .cp-subtitle,
+  #section-project-detail .cp-subtitle,
+  #section-event-detail .cp-subtitle {
+    font-size: 11.5px;
+  }
+
+  .search-bar,
+  .emp-filter-bar,
+  .modal-body,
+  .form-section-body,
+  .event-block-body,
+  .event-edit-section,
+  .shifts-list,
+  .pd-panel,
+  .ed-panel,
+  #cal-root {
+    padding: 10px;
+  }
+
+  .modal-header,
+  .modal-footer {
+    padding: 10px 12px;
+  }
+
+  .modal {
+    border-radius: 14px 14px 0 0;
+    max-height: 94dvh;
+  }
+
+  .modal-body,
+  .auth-form,
+  .cp-body,
+  .form-section-body,
+  .event-block-body,
+  .event-edit-section,
+  .pd-task-list,
+  .pd-brief-list,
+  .ed-worker-sections,
+  .ed-pr-list {
+    gap: 9px;
+  }
+
+  .field,
+  .ed-pr-field,
+  .ed-pr-bulk-field {
+    gap: 3px;
+  }
+
+  .field label,
+  .pd-field-label,
+  .ed-pr-field-label,
+  .ed-pr-bulk-field-label,
+  .emp-filter-label {
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+
+  input:not([type=checkbox]):not([type=radio]),
+  select,
+  textarea,
+  .field input,
+  .field select,
+  .field textarea,
+  .search-input,
+  .emp-filter-input,
+  .emp-filter-select,
+  .doc-title-select,
+  .pd-form-input,
+  .pd-form-select,
+  .pd-form-textarea,
+  .ed-pr-input,
+  .ed-pr-select,
+  .ed-pr-input--sm,
+  .ed-pr-bulk-time,
+  .ed-pr-override-time {
+    font-size: 14px;
+    padding-block: 7px;
+    min-height: 34px;
+    border-radius: 7px;
+  }
+
+  .search-input {
+    max-width: none;
+    padding-inline-start: 32px;
+  }
+
+  body.rtl .search-input {
+    padding-inline-start: 12px;
+    padding-inline-end: 32px;
+  }
+
+  .btn-primary,
+  .btn-cancel,
+  .btn-danger,
+  .btn-action,
+  .btn-header-action,
+  .btn-add-inline,
+  .pd-add-btn,
+  .pd-form-save-btn,
+  .pd-form-cancel-btn,
+  .pd-filter-pill,
+  .ps-send-btn,
+  .ps-btn-primary,
+  .ps-btn-send-all,
+  .ed-pr-review-btn,
+  .ed-pr-approve-btn,
+  .ed-pr-save-btn,
+  .ed-pr-bulk-apply-btn,
+  .ed-pr-bulk-clear-btn,
+  .ms-chat-btn,
+  .ms-open-shift-btn {
+    font-size: 12px;
+    padding: 7px 10px;
+    min-height: 34px;
+    border-radius: 7px;
+  }
+
+  .btn-icon-sm,
+  .ps-action-btn,
+  .btn-remove-block,
+  .btn-remove-shift,
+  .ed-expense-delete {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  table,
+  tbody td,
+  #section-project-detail,
+  #section-event-detail,
+  #section-project-detail table,
+  #section-project-detail tbody td,
+  #section-project-detail .task-content,
+  #section-project-detail .brief-title,
+  #section-project-detail .brief-body,
+  #section-project-detail .ps-table,
+  #section-project-detail .ps-worker-name,
+  #section-project-detail .pw-name,
+  .ed-worker-table,
+  .ps-table {
+    font-size: 13px;
+  }
+
+  thead th,
+  .ed-worker-table th,
+  #section-project-detail thead th,
+  #section-project-detail .ps-table thead th {
+    font-size: 10.5px;
+    padding: 7px 8px;
+  }
+
+  tbody td,
+  .ed-worker-table td {
+    padding: 7px 8px;
+  }
+
+  #section-project-detail .pd-tab,
+  #section-event-detail .pd-tab {
+    font-size: 11.5px;
+    min-height: 34px;
+    padding: 6px 5px;
+  }
+
+  .pd-tabs {
+    gap: 3px;
+    padding-bottom: 4px;
+  }
+
+  .pd-task-row,
+  .pd-brief-row,
+  #section-employees .table-wrap tbody tr,
+  #section-customers .table-wrap tbody tr,
+  #section-invoices .table-wrap tbody tr,
+  .contacts-table tbody tr,
+  .ed-finance-section .ed-worker-table tbody tr,
+  .ed-finance-section .ed-worker-table tfoot tr {
+    margin-bottom: 8px;
+    border-radius: 8px;
+  }
+
+  .pd-row-summary,
+  .pd-task-row > .pd-row-form.expanded,
+  .pd-row-form.expanded,
+  .ed-expense-summary,
+  .ed-expense-form,
+  .ed-pr-row-header,
+  .ed-pr-panel-section,
+  .ed-pr-shift-header {
+    padding: 10px;
+  }
+
+  .pd-badge,
+  .badge,
+  .role-chip,
+  .ed-badge,
+  .ev-status-badge,
+  .app-status-badge {
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
+
+  .ed-finance-cards {
+    gap: 8px;
+  }
+
+  .ed-finance-card {
+    padding: 10px 11px;
+  }
+
+  .ed-finance-card-label {
+    font-size: 10.5px;
+  }
+
+  .ed-finance-card-value {
+    font-size: 15px;
+  }
+
+  .ed-pr-fields-row,
+  .ed-pr-bulk-controls,
+  .ed-pr-bulk-inputs,
+  .ed-pr-status-badges {
+    gap: 7px;
+  }
+
+  .ed-pr-name,
+  .ed-pr-field-val,
+  .ed-pr-shift-role {
+    font-size: 13px;
+  }
+
+  .ed-pr-role,
+  .ed-pr-reported,
+  .ed-pr-shift-planned,
+  .ed-pr-empty-state,
+  .pd-brief-preview-text,
+  .pd-brief-author-text,
+  .pd-brief-date-text {
+    font-size: 11.5px;
+  }
+
+  .ev-grid {
+    gap: 10px;
+  }
+
+  .ev-card-body {
+    padding: 12px;
+    gap: 7px;
+  }
+
+  .ev-card-title,
+  .app-event-name {
+    font-size: 14px;
+  }
+
+  .ev-meta-row,
+  .app-group-header,
+  .empty-state,
+  .pd-empty-state {
+    font-size: 12px;
+  }
+
+  #section-employees .table-wrap tbody td,
+  #section-customers .table-wrap tbody td,
+  #section-invoices .table-wrap tbody td,
+  .contacts-table tbody td,
+  .ed-finance-section .ed-worker-table td,
+  .ps-table td {
+    min-height: 32px;
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  #section-employees .table-wrap tbody td:first-child,
+  #section-customers .table-wrap tbody td:first-child,
+  #section-invoices .table-wrap tbody td:nth-child(1),
+  .contacts-table tbody td:first-child {
+    font-size: 13px;
+    padding: 9px 10px;
+  }
+
+  .cal-header {
+    margin-bottom: 10px;
+  }
+
+  .cal-cell {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 380px) {
+  .page-content {
+    padding: 6px;
+  }
+
+  .section-header,
+  .form-section-header,
+  .event-block-header,
+  .pd-row-summary,
+  .ed-pr-row-header,
+  .ed-pr-panel-section {
+    padding: 8px;
+  }
+
+  input:not([type=checkbox]):not([type=radio]),
+  select,
+  textarea,
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 13.5px;
+  }
+}
+
+/* Mobile detail hardening: project/event detail screens were still too tall. */
+@media (max-width: 640px) {
+  #section-project-detail,
+  #section-event-detail {
+    font-size: 12.5px !important;
+  }
+
+  #section-project-detail .pd-tabs,
+  #section-event-detail .pd-tabs {
+    display: flex !important;
+    grid-template-columns: none !important;
+    gap: 4px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 4px 2px 6px !important;
+    margin: 0 -2px 8px !important;
+    border-bottom-width: 1px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  #section-project-detail .pd-tabs::-webkit-scrollbar,
+  #section-event-detail .pd-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  #section-project-detail .pd-tab,
+  #section-event-detail .pd-tab {
+    flex: 0 0 auto !important;
+    min-width: 72px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    padding: 4px 9px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    border-radius: 7px !important;
+    white-space: nowrap !important;
+  }
+
+  #section-project-detail .cp-header,
+  #section-event-detail .cp-header,
+  #section-project-detail .cp-card,
+  #section-event-detail .cp-card,
+  #section-project-detail .pd-panel,
+  #section-event-detail .pd-panel {
+    padding: 8px !important;
+  }
+
+  #section-project-detail .cp-title,
+  #section-event-detail .cp-title {
+    font-size: 14px !important;
+  }
+
+  #section-project-detail .cp-subtitle,
+  #section-event-detail .cp-subtitle {
+    font-size: 10.5px !important;
+  }
+
+  #ed-payroll-root,
+  #pd-finance-root {
+    font-size: 12px !important;
+  }
+
+  #ed-payroll-root .ed-pr-list,
+  #ed-payroll-root .ed-pr-employees-list {
+    gap: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-shift-group,
+  #ed-payroll-root .ed-pr-employee-row,
+  #pd-finance-root .ed-finance-card,
+  #section-event-detail .ps-section {
+    border-radius: 7px !important;
+  }
+
+  #ed-payroll-root .ed-pr-shift-header,
+  #ed-payroll-root .ed-pr-row-header,
+  #ed-payroll-root .ed-pr-panel-section {
+    padding: 8px !important;
+    gap: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-shift-meta {
+    gap: 1px !important;
+    min-width: 0 !important;
+  }
+
+  #ed-payroll-root .ed-pr-shift-role,
+  #ed-payroll-root .ed-pr-name {
+    font-size: 12.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  #ed-payroll-root .ed-pr-shift-planned,
+  #ed-payroll-root .ed-pr-role,
+  #ed-payroll-root .ed-pr-reported,
+  #ed-payroll-root .ed-pr-empty-state,
+  #ed-payroll-root .ed-pr-ot-note {
+    font-size: 10.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-controls {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: end !important;
+    width: 100% !important;
+    gap: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-label {
+    grid-column: 1 / -1 !important;
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-inputs,
+  #ed-payroll-root .ed-pr-override-inputs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    gap: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-field,
+  #ed-payroll-root .ed-pr-field {
+    min-width: 0 !important;
+    gap: 2px !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-field-label,
+  #ed-payroll-root .ed-pr-field-label,
+  #ed-payroll-root .ed-pr-panel-title,
+  #ed-payroll-root .ed-badge-label,
+  #ed-payroll-root .ed-pr-bulk-pay-label {
+    font-size: 9.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  #ed-payroll-root .ed-pr-input,
+  #ed-payroll-root .ed-pr-select,
+  #ed-payroll-root .ed-pr-input--sm,
+  #ed-payroll-root .ed-pr-bulk-time,
+  #ed-payroll-root .ed-pr-override-time,
+  #ed-payroll-root .ed-pr-bulk-pay-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 5px 7px !important;
+    font-size: 12.5px !important;
+    line-height: 1.15 !important;
+    border-radius: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-apply-btn,
+  #ed-payroll-root .ed-pr-bulk-clear-btn,
+  #ed-payroll-root .ed-pr-bulk-pay-save-btn,
+  #ed-payroll-root .ed-pr-review-btn,
+  #ed-payroll-root .ed-pr-approve-btn,
+  #ed-payroll-root .ed-pr-save-btn,
+  #ed-payroll-root .ed-pr-override-save-btn,
+  #ed-payroll-root .ed-pr-override-clear-btn {
+    width: auto !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 5px 10px !important;
+    font-size: 11.5px !important;
+    line-height: 1.1 !important;
+    border-radius: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-apply-btn,
+  #ed-payroll-root .ed-pr-bulk-clear-btn {
+    align-self: end !important;
+    white-space: nowrap !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-pay {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: end !important;
+    width: 100% !important;
+    gap: 6px !important;
+    margin-inline-start: 0 !important;
+  }
+
+  #ed-payroll-root .ed-pr-bulk-pay-label {
+    grid-column: 1 / -1 !important;
+  }
+
+  #ed-payroll-root .ed-pr-chevron-btn {
+    width: 30px !important;
+    height: 30px !important;
+    margin: 0 !important;
+  }
+
+  #ed-payroll-root .ed-pr-chevron-icon {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  #ed-payroll-root .ed-pr-fields-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-panel-section .ed-pr-fields-row:has(select) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #ed-payroll-root .ed-pr-panel-section .ed-pr-field:has(select) {
+    grid-column: 1 / -1 !important;
+  }
+
+  #ed-payroll-root .ed-pr-hours-block {
+    margin-bottom: 8px !important;
+    border-radius: 6px !important;
+  }
+
+  #ed-payroll-root .ed-pr-hours-section {
+    padding: 7px 8px !important;
+    gap: 4px !important;
+  }
+
+  #ed-payroll-root .ed-pr-hours-section-label,
+  #ed-payroll-root .ed-pr-hours-col-label {
+    font-size: 9.5px !important;
+  }
+
+  #ed-payroll-root .ed-pr-hours-val,
+  #ed-payroll-root .ed-pr-hours-duration {
+    font-size: 11px !important;
+  }
+
+  #ed-payroll-root .ed-badge,
+  #ed-payroll-root .ed-pr-src-badge {
+    font-size: 9.5px !important;
+    padding: 2px 6px !important;
+  }
+}

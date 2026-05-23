@@ -1,4 +1,4 @@
-const CACHE_NAME = "teamgle-pwa-v2";
+const CACHE_NAME = "teamgle-pwa-v3";
 
 const APP_SHELL = [
   "./auth.html",
