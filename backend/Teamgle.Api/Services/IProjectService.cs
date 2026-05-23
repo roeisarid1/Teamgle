@@ -84,4 +84,5 @@ public interface IProjectService
     Task<EventListItemResponse> CreateStandaloneEventAsync(string firebaseUid, CreateEventStandaloneRequest request);
     Task<IEnumerable<PotentialWorkerResponse>?> GetPotentialWorkersForEventAsync(string firebaseUid, string eventId);
     Task SendOfferForEventAsync(string firebaseUid, string eventId, string employeeFbUid, SendOfferRequest request);
+
 }

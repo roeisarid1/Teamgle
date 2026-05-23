@@ -1682,6 +1682,7 @@ public class ProjectRepository : IProjectRepository
               AND es.status IN (
                   'employee_request',
                   'manager_approved',
+                  'manager_hold',
                   'manager_reject',
                   'manager_approved_canceled'
               )
@@ -3572,4 +3573,5 @@ INNER JOIN Roll     r ON r.Roll_ID  = s.roll_ID
             throw;
         }
     }
+
 }

@@ -15,7 +15,7 @@ public class ShiftsController : ControllerBase
     public ShiftsController(IProjectService projectService, ILogger<ShiftsController> logger)
     {
         _projectService = projectService;
-        _logger = logger;
+        _logger         = logger;
     }
 
     // ── Helper: extract and verify Firebase token from Authorization header ─

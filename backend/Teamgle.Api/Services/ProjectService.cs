@@ -569,4 +569,5 @@ public class ProjectService : IProjectService
     {
         await _projectRepo.SendOfferByEventAsync(eventId, employeeFbUid, request.ShiftIds, firebaseUid);
     }
+
 }

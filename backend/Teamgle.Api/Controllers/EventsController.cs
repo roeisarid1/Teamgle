@@ -15,7 +15,7 @@ public class EventsController : ControllerBase
     public EventsController(IProjectService projectService, ILogger<EventsController> logger)
     {
         _projectService = projectService;
-        _logger = logger;
+        _logger         = logger;
     }
 
     private async Task<string?> GetFirebaseUidAsync()

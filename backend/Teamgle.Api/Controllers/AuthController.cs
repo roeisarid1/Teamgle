@@ -1,5 +1,7 @@
+using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Teamgle.Api.Models.DTOs;
+using Teamgle.Api.Repositories;
 using Teamgle.Api.Services;
 
 namespace Teamgle.Api.Controllers;
@@ -14,7 +16,7 @@ public class AuthController : ControllerBase
     public AuthController(IAuthService authService, ILogger<AuthController> logger)
     {
         _authService = authService;
-        _logger = logger;
+        _logger      = logger;
     }
 
     // ── POST /api/auth/check-first-registration ───────────────────────────
@@ -94,4 +96,5 @@ public class AuthController : ControllerBase
             return StatusCode(500, new { error = "An unexpected error occurred." });
         }
     }
+
 }

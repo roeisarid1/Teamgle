@@ -285,5 +285,15 @@ function friendlyError(message) {
     return _t("Too many attempts. Please wait a moment and try again.", "יותר מדי ניסיונות. המתן רגע ונסה שוב.");
   if (message.includes("auth/network-request-failed"))
     return _t("Network error. Please check your connection.", "שגיאת רשת. בדוק את החיבור שלך.");
-  return _t(message, message);
+  if (message.includes("no matching record in the system database"))
+    return _t("Authenticated Firebase user has no matching record in the system database. Please contact your administrator.", "המשתמש אומת ב-Firebase אך לא נמצא במערכת. פנה למנהל שלך.");
+  if (message.includes("not eligible for registration"))
+    return _t("This email is not eligible for registration.", "האימייל הזה אינו מאושר לרישום. פנה למנהל שלך.");
+  if (message.includes("Login verification failed"))
+    return _t("Login verification failed.", "אימות ההתחברות נכשל.");
+  if (message.includes("Registration could not be completed"))
+    return _t("Registration could not be completed. Please try again.", "לא ניתן היה להשלים את הרישום. נסה שוב.");
+  if (message.includes("unexpected error"))
+    return _t("An unexpected error occurred.", "אירעה שגיאה בלתי צפויה. נסה שוב.");
+  return message;
 }

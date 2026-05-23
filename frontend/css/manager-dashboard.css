@@ -1049,34 +1049,37 @@ thead th:last-child {
 }
 
 .btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 12px;
   font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
   cursor: pointer;
-  border: 1.5px solid;
-  background: none;
+  border: none;
   white-space: nowrap;
-  transition: background var(--transition), color var(--transition);
+  transition: filter var(--transition), transform var(--transition);
 }
+.btn-action i { width: 13px; height: 13px; }
+.btn-action:hover { filter: brightness(0.93); transform: translateY(-1px); }
+.btn-action:active { transform: translateY(0); }
 
 .btn-action-view {
+  background: #dcfce7;
   color: #15803d;
-  border-color: var(--green);
 }
-.btn-action-view:hover { background: #dcfce7; }
 
 .btn-action-edit {
-  color: var(--blue);
-  border-color: var(--blue);
+  background: #dbeafe;
+  color: #1d4ed8;
 }
-.btn-action-edit:hover { background: var(--blue-light); }
 
 .btn-action-delete {
-  color: var(--red);
-  border-color: var(--red);
+  background: #fee2e2;
+  color: #b91c1c;
 }
-.btn-action-delete:hover { background: #fef2f2; }
 
 /* ── Danger button ───────────────────────────────────────────────────────── */
 .btn-danger {
@@ -2868,10 +2871,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .gantt-mobile-shift {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
@@ -2881,11 +2883,19 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-bottom: none;
 }
 
-.gantt-mobile-main {
-  min-width: 0;
+/* Top row: role name + count badge + action buttons */
+.gantt-mobile-top {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gantt-mobile-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .gantt-mobile-role {
@@ -2893,16 +2903,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-weight: 700;
   color: var(--text);
   overflow-wrap: anywhere;
-}
-
-.gantt-mobile-time {
-  font-size: 12px;
-  color: var(--text-muted);
+  min-width: 0;
 }
 
 .gantt-mobile-count {
-  justify-self: end;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
   background: var(--blue-50);
   color: var(--blue);
@@ -2911,17 +2916,45 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   white-space: nowrap;
 }
 
-.gantt-mobile-actions {
-  display: flex;
-  gap: 6px;
+.gantt-mobile-top-right .gantt-bar-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
 }
 
-.gantt-mobile-actions .gantt-bar-btn {
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+/* Mini Gantt bar track */
+.gantt-mobile-track {
+  position: relative;
+  height: 14px;
+  background: var(--surface-2, #f1f5f9);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.gantt-mobile-bar-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 6px;
+  border: 1.5px solid;
+  min-width: 4%;
+}
+
+/* Time labels below the bar */
+.gantt-mobile-times {
+  position: relative;
+  height: 13px;
+}
+
+.gantt-mobile-times span {
+  position: absolute;
+  font-size: 10px;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .gantt-mobile-empty {
@@ -5603,7 +5636,66 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   min-width: 18px;
   text-align: center;
 }
+.ms-tab-badge--alert { background: #ef4444; }
 .ms-panel { padding-bottom: 32px; }
+
+/* ── Update cards (hold / cancelled / rejected) ─────────────────────────── */
+.update-card {
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.update-card-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.update-card-status i { width: 16px; height: 16px; flex-shrink: 0; }
+
+.update-card--hold   .update-card-status { background: #fefce8; color: #92400e; }
+.update-card--hold   .update-card-status i { color: #d97706; }
+.update-card--cancelled .update-card-status { background: #fef2f2; color: #991b1b; }
+.update-card--cancelled .update-card-status i { color: #ef4444; }
+.update-card--rejected  .update-card-status { background: #f8fafc; color: #475569; }
+.update-card--rejected  .update-card-status i { color: #94a3b8; }
+
+.update-card-body {
+  padding: 10px 14px 4px;
+}
+.update-card-role {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.update-card-event {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.update-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.update-card-sub {
+  padding: 8px 14px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+}
 
 /* ── Shift card ─────────────────────────────────────────────────────────── */
 .ms-shift-card {
@@ -7876,9 +7968,11 @@ body { min-height: 100dvh; }
 
 /* ── Payment Request table → card layout on mobile ──────────────────────── */
 @media (max-width: 640px) {
+  #section-invoices .table-wrap { overflow: visible; }
+
   /* Flatten the table into block elements */
   #section-invoices .table-wrap table,
-  #section-invoices .table-wrap tbody { display: block; }
+  #section-invoices .table-wrap tbody { display: block; width: 100%; min-width: 0; }
   #section-invoices .table-wrap thead { display: none; }
 
   /* Each <tr> becomes a card */
@@ -8357,8 +8451,8 @@ body.rtl .cal-nav-btn.cal-next .material-symbols-outlined {
   }
 
   body.rtl .search-input {
-    padding-inline-start: 12px;
-    padding-inline-end: 32px;
+    padding-inline-start: 36px;
+    padding-inline-end: 12px;
   }
 
   .btn-primary,

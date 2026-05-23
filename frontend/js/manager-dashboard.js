@@ -160,6 +160,55 @@ function showManagerNotice(message, type = "info") {
   }, 4200);
 }
 
+function showManagerAlert(message, type = "error") {
+  showManagerNotice(message, type);
+}
+
+function showManagerConfirm({
+  title = _t("Confirm", "אישור"),
+  message = "",
+  warning = "",
+  okText = _t("OK", "אישור"),
+  cancelText = _t("Cancel", "ביטול"),
+  danger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay open";
+    overlay.innerHTML = `
+      <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="app-confirm-title">
+        <div class="modal-header">
+          <h2 class="modal-title ${danger ? "modal-title--danger" : ""}" id="app-confirm-title">${escapeHtml(title)}</h2>
+          <button class="modal-close" type="button" data-confirm-close aria-label="${escapeHtml(_t("Close", "סגור"))}">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-confirm-msg">${escapeHtml(message)}</p>
+          ${warning ? `<p class="delete-confirm-warning"><i data-lucide="triangle-alert"></i> <span>${escapeHtml(warning)}</span></p>` : ""}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" type="button" data-confirm-cancel>${escapeHtml(cancelText)}</button>
+          <button class="btn ${danger ? "btn-danger" : "btn-primary"}" type="button" data-confirm-ok>${escapeHtml(okText)}</button>
+        </div>
+      </div>`;
+
+    const close = (value) => {
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay || e.target.closest("[data-confirm-close], [data-confirm-cancel]")) close(false);
+      if (e.target.closest("[data-confirm-ok]")) close(true);
+    });
+
+    document.body.appendChild(overlay);
+    if (window.lucide) lucide.createIcons();
+    overlay.querySelector("[data-confirm-ok]")?.focus();
+  });
+}
+
 function friendlyWorkerStatusError(message) {
   if (message === "This shift is already full.") {
     return _t(
@@ -210,7 +259,7 @@ onAuthStateChanged(auth, async (user) => {
   profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
 
   if (!profile || profile.role !== "Manager") {
-    alert(_t("Access denied. Manager accounts only.", "גישה נדחתה. חשבונות מנהלים בלבד."));
+    showManagerAlert(_t("Access denied. Manager accounts only.", "גישה נדחתה. חשבונות מנהלים בלבד."));
     await signOut(auth);
     window.location.href = "auth.html";
     return;
@@ -409,11 +458,11 @@ function renderEmployees(employees) {
             title="Toggle details">▾</button>
           <button class="btn-action btn-action-edit"
             data-action="edit"
-            data-id="${e.userId}">Edit</button>
+            data-id="${e.userId}"><i data-lucide="pencil"></i>${_t("Edit","ערוך")}</button>
           <button class="btn-action btn-action-delete"
             data-action="delete"
             data-id="${e.userId}"
-            data-name="${escape(e.firstName + " " + e.lastName)}">Delete</button>
+            data-name="${escape(e.firstName + " " + e.lastName)}"><i data-lucide="trash-2"></i>${_t("Delete","מחק")}</button>
         </div>
       </td>
     </tr>
@@ -1116,7 +1165,10 @@ function openDeleteModal(employeeId, fullName) {
   pendingDeleteId = employeeId;
   pendingDeleteName = fullName;
   document.getElementById("delete-confirm-text").textContent =
-    `Are you sure you want to permanently delete "${fullName}"?`;
+    _t(
+      `Are you sure you want to permanently delete "${fullName}"?`,
+      `האם למחוק לצמיתות את "${fullName}"?`,
+    );
   document.getElementById("delete-modal-overlay").classList.add("open");
 }
 
@@ -1146,7 +1198,7 @@ document
 
     const btn = document.getElementById("btn-confirm-delete");
     btn.disabled = true;
-    btn.textContent = "Deleting…";
+    btn.textContent = _t("Deleting…", "מוחק…");
 
     try {
       const token = await getToken();
@@ -1159,7 +1211,7 @@ document
 
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Failed to delete employee.");
+        showManagerAlert(data.error || _t("Failed to delete employee.", "מחיקת העובד נכשלה."));
         return;
       }
 
@@ -1176,10 +1228,10 @@ document
       closeDeleteModal();
       await loadEmployees();
     } catch {
-      alert("Network error. Could not delete employee.");
+      showManagerAlert(_t("Network error. Could not delete employee.", "שגיאת רשת. לא ניתן היה למחוק את העובד."));
     } finally {
       btn.disabled = false;
-      btn.textContent = "Delete Employee";
+      btn.textContent = _t("Delete Employee", "מחק עובד");
     }
   });
 
@@ -1261,7 +1313,7 @@ async function submitNewRole(input, row) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Failed to create role.");
+      showManagerAlert(data.error || _t("Failed to create role.", "יצירת התפקיד נכשלה."));
       btn.disabled = false;
       btn.textContent = "Add";
       return;
@@ -1285,7 +1337,7 @@ async function submitNewRole(input, row) {
           cb.checked = true;
       });
   } catch {
-    alert("Network error. Could not save role.");
+    showManagerAlert(_t("Network error. Could not save role.", "שגיאת רשת. לא ניתן היה לשמור את התפקיד."));
     btn.disabled = false;
     btn.textContent = "Add";
   }
@@ -1412,11 +1464,11 @@ function addDocumentRow() {
 function validateDocument(file) {
   const ext = file.name.split(".").pop().toLowerCase();
   if (!["pdf", "doc", "docx"].includes(ext)) {
-    alert("Documents must be PDF, DOC, or DOCX.");
+    showManagerAlert(_t("Documents must be PDF, DOC, or DOCX.", "מסמכים חייבים להיות מסוג PDF, DOC או DOCX."));
     return false;
   }
   if (file.size > 10 * 1024 * 1024) {
-    alert("Each document must be under 10 MB.");
+    showManagerAlert(_t("Each document must be under 10 MB.", "כל מסמך חייב להיות קטן מ-10MB."));
     return false;
   }
   return true;
@@ -1838,13 +1890,10 @@ function renderProjectCard(project) {
     label: project.displayStatus,
     cls: "badge-pending",
   };
+  const _mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fmt = (d) =>
     d
-      ? new Date(d).toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
+      ? (() => { const _d = new Date(d); return `${String(_d.getDate()).padStart(2,"0")} ${_mo[_d.getMonth()]} ${_d.getFullYear()}`; })()
       : "—";
   const pct =
     project.requiredCount > 0
@@ -2062,13 +2111,11 @@ function renderDashboardTab() {
     other:      { icon: "event",        label: _t("Event",      "אירוע")     },
   };
 
+  const _moGantt = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fmtDate = (iso) => {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    const _d = new Date(iso);
+    return `${_d.getDate()} ${_moGantt[_d.getMonth()]} ${_d.getFullYear()}`;
   };
   const fmtTime = (iso) => {
     if (!iso) return "—";
@@ -2246,11 +2293,9 @@ function renderGantt(schedule, container) {
   }
   function fmtDate(isoStr) {
     if (!isoStr) return "";
-    return new Date(isoStr).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    const _d = new Date(isoStr);
+    const _mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${String(_d.getDate()).padStart(2,"0")} ${_mo[_d.getMonth()]} ${_d.getFullYear()}`;
   }
 
   // Returns minutes from day-start, adding 1440 for cross-midnight times
@@ -2352,27 +2397,41 @@ function renderGantt(schedule, container) {
           ? `<div class="gantt-mobile-empty">${_t("No shifts defined for this event", "לא הוגדרו משמרות לאירוע הזה")}</div>`
           : ev.shifts
               .map((shift) => {
-                const time = `${fmtTime(shift.startTime)}${shift.endTime ? `-${fmtTime(shift.endTime)}` : ""}`;
+                const color  = getColor(shift.roleName);
+                const leftM  = toMinutes(shift.startTime);
+                const rightM = toMinutes(shift.endTime, shift.startTime);
+                const left   = ((leftM  - winStart) / spanMinutes) * 100;
+                const width  = Math.max(((rightM - leftM) / spanMinutes) * 100, 4);
+                const startLbl = fmtTime(shift.startTime) || "—";
+                const endLbl   = fmtTime(shift.endTime)   || "—";
                 return `
             <div class="gantt-mobile-shift">
-              <div class="gantt-mobile-main">
+              <div class="gantt-mobile-top">
                 <span class="gantt-mobile-role">${escapeHtml(shift.roleName)}</span>
-                <span class="gantt-mobile-time">${escapeHtml(time || "—")}</span>
+                <div class="gantt-mobile-top-right">
+                  <span class="gantt-mobile-count">${escapeHtml(String(shift.staffedCount ?? 0))}/${escapeHtml(String(shift.requiredQuantity ?? 0))}</span>
+                  <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="${_t("Edit shift", "ערוך משמרת")}"
+                          data-shift-id="${escapeHtml(shift.shiftId)}"
+                          data-role-id="${escapeHtml(shift.roleId)}"
+                          data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
+                          data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
+                          data-qty="${shift.requiredQuantity}">
+                    <i data-lucide="pencil" style="width:14px;height:14px"></i>
+                  </button>
+                  <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="${_t("Delete shift", "מחק משמרת")}"
+                          data-shift-id="${escapeHtml(shift.shiftId)}">
+                    <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+                  </button>
+                </div>
               </div>
-              <span class="gantt-mobile-count">${escapeHtml(String(shift.staffedCount ?? 0))}/${escapeHtml(String(shift.requiredQuantity ?? 0))}</span>
-              <div class="gantt-mobile-actions">
-                <button class="gantt-bar-btn gantt-bar-btn-edit" type="button" title="${_t("Edit shift", "ערוך משמרת")}"
-                        data-shift-id="${escapeHtml(shift.shiftId)}"
-                        data-role-id="${escapeHtml(shift.roleId)}"
-                        data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
-                        data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
-                        data-qty="${shift.requiredQuantity}">
-                  <i data-lucide="pencil" style="width:14px;height:14px"></i>
-                </button>
-                <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="${_t("Delete shift", "מחק משמרת")}"
-                        data-shift-id="${escapeHtml(shift.shiftId)}">
-                  <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-                </button>
+              <div class="gantt-mobile-track" dir="ltr">
+                <div class="gantt-mobile-bar-fill"
+                     style="left:${left.toFixed(1)}%;width:${width.toFixed(1)}%;background:${color.bg};border-color:${color.border}">
+                </div>
+              </div>
+              <div class="gantt-mobile-times" dir="ltr">
+                <span style="left:${left.toFixed(1)}%">${escapeHtml(startLbl)}</span>
+                <span style="left:${Math.min(left + width, 98).toFixed(1)}%">${escapeHtml(endLbl)}</span>
               </div>
             </div>`;
               })
@@ -2684,9 +2743,9 @@ function wireTaskDeleteBtn(row, deleteBtn, task) {
 
     const confirm = document.createElement("div");
     confirm.className = "pd-delete-confirm";
-    confirm.innerHTML = `<span>Delete this task?</span>
-      <button class="btn-confirm-yes">Delete</button>
-      <button class="btn-confirm-no">Cancel</button>`;
+    confirm.innerHTML = `<span>${_t("Delete this task?", "למחוק את המשימה הזו?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
     row.querySelector(".pd-row-summary").appendChild(confirm);
 
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
@@ -3146,9 +3205,9 @@ function wireBriefDeleteBtn(row, deleteBtn, brief) {
 
     const confirm = document.createElement("div");
     confirm.className = "pd-delete-confirm";
-    confirm.innerHTML = `<span>Delete this brief?</span>
-      <button class="btn-confirm-yes">Delete</button>
-      <button class="btn-confirm-no">Cancel</button>`;
+    confirm.innerHTML = `<span>${_t("Delete this brief?", "למחוק את התדריך הזה?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
     row.querySelector(".pd-row-summary").appendChild(confirm);
 
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
@@ -3355,9 +3414,9 @@ function renderCustomers(customers) {
       (c) => `
     <tr>
       <td><strong>${escape(c.customerCompanyName)}</strong></td>
-      <td>${escape(c.companyPhone || "—")}</td>
-      <td>${escape(c.companyEmail || "—")}</td>
-      <td>${escape(c.companyCity || "—")}</td>
+      <td>${escape(c.companyPhone  || "—")}</td>
+      <td>${escape(c.companyEmail  || "—")}</td>
+      <td>${escape(c.companyCity   || "—")}</td>
       <td>${escape(c.businessNumber || "—")}</td>
       <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</td>
       <td>
@@ -3366,16 +3425,17 @@ function renderCustomers(customers) {
             data-cust-action="toggle" data-id="${c.customerId}"
             title="Toggle details">▾</button>
           <button class="btn-action btn-action-edit"
-            data-cust-action="edit" data-id="${c.customerId}">Edit</button>
+            data-cust-action="edit" data-id="${c.customerId}"><i data-lucide="pencil"></i>${_t("Edit","ערוך")}</button>
           <button class="btn-action btn-action-delete"
             data-cust-action="delete" data-id="${c.customerId}"
-            data-name="${escape(c.customerCompanyName)}">Delete</button>
+            data-name="${escape(c.customerCompanyName)}"><i data-lucide="trash-2"></i>${_t("Delete","מחק")}</button>
         </div>
       </td>
     </tr>
   `,
     )
     .join("");
+  if (window.lucide) lucide.createIcons();
 }
 
 document
@@ -3791,10 +3851,10 @@ async function refreshCustomerView(customerId) {
                   <td>
                     <div class="actions-cell">
                       <button class="btn-action btn-action-edit"
-                        data-caction="edit" data-cid="${ct.contactId}">Edit</button>
+                        data-caction="edit" data-cid="${ct.contactId}"><i data-lucide="pencil"></i>${_t("Edit","ערוך")}</button>
                       <button class="btn-action btn-action-delete"
                         data-caction="delete" data-cid="${ct.contactId}"
-                        data-cname="${escape(ct.firstName + " " + ct.lastName)}">Delete</button>
+                        data-cname="${escape(ct.firstName + " " + ct.lastName)}"><i data-lucide="trash-2"></i>${_t("Delete","מחק")}</button>
                     </div>
                   </td>
                 </tr>
@@ -3900,7 +3960,7 @@ async function refreshCustomerView(customerId) {
         const file = e.target.files[0];
         if (!file) return;
         if (file.size > 15 * 1024 * 1024) {
-          alert("File must be under 15 MB.");
+          showManagerAlert(_t("File must be under 15 MB.", "הקובץ חייב להיות קטן מ-15MB."));
           e.target.value = "";
           return;
         }
@@ -3916,7 +3976,7 @@ async function refreshCustomerView(customerId) {
           await uploadBytes(storageRef, file);
           await refreshCustomerView(customerId);
         } catch {
-          alert("Upload failed. Please try again.");
+          showManagerAlert(_t("Upload failed. Please try again.", "ההעלאה נכשלה. נסה שוב."));
         } finally {
           e.target.value = "";
         }
@@ -3925,12 +3985,19 @@ async function refreshCustomerView(customerId) {
     // Wire — Delete file buttons
     body.querySelectorAll("[data-fpath]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Delete this file? This cannot be undone.")) return;
+        const confirmed = await showManagerConfirm({
+          title: _t("Delete File", "מחיקת קובץ"),
+          message: _t("Are you sure you want to delete this file?", "למחוק את הקובץ הזה?"),
+          warning: _t("This action cannot be undone.", "לא ניתן לבטל פעולה זו."),
+          okText: _t("Delete", "מחק"),
+          danger: true,
+        });
+        if (!confirmed) return;
         try {
           await deleteObject(ref(storage, btn.dataset.fpath));
           await refreshCustomerView(customerId);
         } catch {
-          alert("Failed to delete file.");
+          showManagerAlert(_t("Failed to delete file.", "מחיקת הקובץ נכשלה."));
         }
       });
     });
@@ -3977,7 +4044,10 @@ custDeleteOverlay.addEventListener("click", (e) => {
 function openCustomerDeleteModal(customerId, name) {
   pendingDeleteCustomerId = customerId;
   document.getElementById("customer-delete-text").textContent =
-    `Are you sure you want to permanently delete "${name}"?`;
+    _t(
+      `Are you sure you want to permanently delete "${name}"?`,
+      `האם למחוק לצמיתות את "${name}"?`,
+    );
   custDeleteOverlay.classList.add("open");
 }
 
@@ -3992,7 +4062,7 @@ document
     if (!pendingDeleteCustomerId) return;
     const btn = document.getElementById("btn-confirm-customer-delete");
     btn.disabled = true;
-    btn.textContent = "Deleting…";
+    btn.textContent = _t("Deleting…", "מוחק…");
     try {
       const token = await getToken();
       const res = await fetch(
@@ -4004,7 +4074,7 @@ document
       );
       if (!res.ok) {
         const d = await res.json();
-        alert(d.error || "Failed to delete.");
+        showManagerAlert(d.error || _t("Failed to delete.", "המחיקה נכשלה."));
         return;
       }
       try {
@@ -4015,10 +4085,10 @@ document
       closeCustomerDeleteModal();
       await loadCustomers();
     } catch {
-      alert("Network error. Could not delete customer.");
+      showManagerAlert(_t("Network error. Could not delete customer.", "שגיאת רשת. לא ניתן היה למחוק את הלקוח."));
     } finally {
       btn.disabled = false;
-      btn.textContent = "Delete Customer";
+      btn.textContent = _t("Delete Customer", "מחק לקוח");
     }
   });
 
@@ -4268,7 +4338,10 @@ function openContactDeleteModal(contactId, name, customerId) {
   pendingDeleteContactId = contactId;
   pendingDeleteContactCustId = customerId;
   document.getElementById("contact-delete-text").textContent =
-    `Are you sure you want to delete contact "${name}"?`;
+    _t(
+      `Are you sure you want to delete contact "${name}"?`,
+      `האם למחוק את איש הקשר "${name}"?`,
+    );
   contactDeleteOverlay.classList.add("open");
 }
 
@@ -4284,7 +4357,7 @@ document
     if (!pendingDeleteContactId) return;
     const btn = document.getElementById("btn-confirm-contact-delete");
     btn.disabled = true;
-    btn.textContent = "Deleting…";
+    btn.textContent = _t("Deleting…", "מוחק…");
     try {
       const token = await getToken();
       const res = await fetch(
@@ -4293,16 +4366,16 @@ document
       );
       if (!res.ok) {
         const d = await res.json();
-        alert(d.error || "Failed to delete contact.");
+        showManagerAlert(d.error || _t("Failed to delete contact.", "מחיקת איש הקשר נכשלה."));
         return;
       }
       closeContactDeleteModal();
       if (viewingCustomerId) await refreshCustomerView(viewingCustomerId);
     } catch {
-      alert("Network error. Could not delete contact.");
+      showManagerAlert(_t("Network error. Could not delete contact.", "שגיאת רשת. לא ניתן היה למחוק את איש הקשר."));
     } finally {
       btn.disabled = false;
-      btn.textContent = "Delete Contact";
+      btn.textContent = _t("Delete Contact", "מחק איש קשר");
     }
   });
 
@@ -5241,7 +5314,7 @@ document
 
     const btn = document.getElementById("btn-confirm-shift-delete");
     btn.disabled = true;
-    btn.textContent = "Deleting…";
+    btn.textContent = _t("Deleting…", "מוחק…");
 
     try {
       const token = await getToken();
@@ -5255,7 +5328,7 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to delete shift.");
+        showManagerAlert(data.error || _t("Failed to delete shift.", "מחיקת המשמרת נכשלה."));
         return;
       }
 
@@ -5264,10 +5337,10 @@ document
       if (currentEventId) loadEventSchedule(currentEventId);
       else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      alert("Network error. Please try again.");
+      showManagerAlert(_t("Network error. Please try again.", "שגיאת רשת. נסה שוב."));
     } finally {
       btn.disabled = false;
-      btn.textContent = "Delete";
+      btn.textContent = _t("Delete", "מחק");
     }
   });
 
@@ -6297,7 +6370,7 @@ async function _handleAutoAssign(eventId, btn) {
   ];
 
   if (shiftIds.length === 0) {
-    alert("No applicants to assign.");
+    showManagerAlert(_t("No applicants to assign.", "אין מועמדים לשיבוץ."), "warning");
     return;
   }
 
@@ -6332,7 +6405,7 @@ async function _handleAutoAssign(eventId, btn) {
     _showAutoAssignInsights(results);
   } catch (err) {
     console.error("Auto-assign failed:", err);
-    alert(`Auto-assign failed: ${err.message}`);
+    showManagerAlert(_t(`Auto-assign failed: ${err.message}`, `השיבוץ האוטומטי נכשל: ${err.message}`));
     btn.disabled = false;
     btn.textContent = "⚡ Auto-Assign";
   }
@@ -6372,7 +6445,7 @@ async function _handleReturnToPool(eventId, fbUid, shiftId, btn) {
     btn.innerHTML = `<i data-lucide="users"></i> ${_t("Return to Pool", "החזר למאגר")}`;
       if (window.lucide) lucide.createIcons();
     }
-    alert("Failed to return worker to pool. Please try again.");
+    showManagerAlert(_t("Failed to return worker to pool. Please try again.", "החזרת העובד למאגר נכשלה. נסה שוב."));
   }
 }
 
@@ -6579,7 +6652,7 @@ function _attachPotentialWorkerHandlers(eventId) {
         ...row.querySelectorAll("input[data-shift-id]:checked"),
       ].map((cb) => cb.dataset.shiftId);
       if (shiftIds.length === 0) {
-        alert("Select at least one shift before sending.");
+        showManagerAlert(_t("Select at least one shift before sending.", "יש לבחור לפחות משמרת אחת לפני שליחה."), "warning");
         return;
       }
 
@@ -6612,13 +6685,19 @@ function _attachPotentialWorkerHandlers(eventId) {
           ),
         ),
       );
-      if (eligibleRows.length === 0) { alert("No workers with selected shifts to send."); return; }
-      if (
-        !confirm(
-          `Send shift requests to ${eligibleRows.length} worker(s) across ${uniqueShifts.size} shift(s)?`,
-        )
-      )
+      if (eligibleRows.length === 0) {
+        showManagerAlert(_t("No workers with selected shifts to send.", "אין עובדים עם משמרות מסומנות לשליחה."), "warning");
         return;
+      }
+      const confirmed = await showManagerConfirm({
+        title: _t("Send Shift Requests", "שליחת בקשות משמרת"),
+        message: _t(
+          `Send shift requests to ${eligibleRows.length} worker(s) across ${uniqueShifts.size} shift(s)?`,
+          `לשלוח בקשות משמרת ל-${eligibleRows.length} עובדים על פני ${uniqueShifts.size} משמרות?`,
+        ),
+        okText: _t("Send", "שלח"),
+      });
+      if (!confirmed) return;
 
       sendAll.disabled = true;
       sendAll.innerHTML = `<i data-lucide="loader-2" class="ps-spin"></i> Sending…`;
@@ -6710,7 +6789,7 @@ async function _sendOfferToWorker(
       btn.innerHTML = `<i data-lucide="send"></i> Send Request`;
       if (window.lucide) lucide.createIcons();
     }
-    alert("Failed to send offer. Please try again.");
+    showManagerAlert(_t("Failed to send offer. Please try again.", "שליחת ההצעה נכשלה. נסה שוב."));
   }
 }
 
@@ -6784,7 +6863,7 @@ function _initStaffingHandlers() {
         const action = btn.dataset.action;
 
         if (action === "approve" && btn.dataset.shiftFull === "true") {
-          alert(_t("Shift is full", "המשמרת מלאה"));
+          showManagerAlert(_t("Shift is full", "המשמרת מלאה"), "warning");
           return;
         }
 
@@ -7036,13 +7115,9 @@ function _edFormatSubtitle(ev) {
   const parts = [];
 
   if (ev.startTime) {
-    parts.push(
-      new Date(ev.startTime).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-    );
+    const _d = new Date(ev.startTime);
+    const _mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    parts.push(`‎${_d.getDate()} ${_mo[_d.getMonth()]} ${_d.getFullYear()}`);
   }
 
   const statusLabels = {
@@ -7430,9 +7505,9 @@ function _edWireTaskRow(row, task) {
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
     confirm.className = "pd-delete-confirm";
-    confirm.innerHTML = `<span>Delete this task?</span>
-      <button class="btn-confirm-yes">Delete</button>
-      <button class="btn-confirm-no">Cancel</button>`;
+    confirm.innerHTML = `<span>${_t("Delete this task?", "למחוק את המשימה הזו?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
     row.querySelector(".pd-row-summary").appendChild(confirm);
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -7784,9 +7859,9 @@ function _edWireBriefRow(row, brief) {
     row.classList.add("pd-row--deleting");
     const confirm = document.createElement("div");
     confirm.className = "pd-delete-confirm";
-    confirm.innerHTML = `<span>Delete this brief?</span>
-      <button class="btn-confirm-yes">Delete</button>
-      <button class="btn-confirm-no">Cancel</button>`;
+    confirm.innerHTML = `<span>${_t("Delete this brief?", "למחוק את התדריך הזה?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
     row.querySelector(".pd-row-summary").appendChild(confirm);
     confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -7988,11 +8063,9 @@ function _edBuildExpenseTotals() {
 
 function _fmtDate(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  const _d = new Date(iso);
+  const _mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${_d.getDate()} ${_mo[_d.getMonth()]} ${_d.getFullYear()}`;
 }
 
 function _edBuildExpenseRow(exp) {
@@ -8720,7 +8793,7 @@ function _edWirePayrollSaveBtns() {
         const missing = shiftItems.filter(({ item }) => item.approvedRegularHours == null);
         if (missing.length > 0) {
           const names = missing.map(({ item }) => `${item.firstName} ${item.lastName}`).join(", ");
-          alert(_t(
+          showManagerAlert(_t(
             `Cannot set status — these employees have no approved hours:\n${names}`,
             `לא ניתן לשנות סטטוס ל"${newStatus === "approved" ? "מאושר" : "שולם"}" — לעובדים הבאים אין שעות באישור מנהל:\n${names}`
           ));
@@ -8757,7 +8830,7 @@ function _edWirePayrollSaveBtns() {
       } catch (err) {
         btn.disabled = false;
         btn.textContent = _t("Save Payroll", "שמור שכר");
-        alert(err?.message || _t("Failed to update payment status.", "עדכון סטטוס התשלום נכשל."));
+        showManagerAlert(err?.message || _t("Failed to update payment status.", "עדכון סטטוס התשלום נכשל."));
       }
       return;
     }
@@ -8778,7 +8851,7 @@ function _edWirePayrollSaveBtns() {
     if (action === "save") {
       const payStatus = val("paymentStatus") || "pending";
       if (payStatus !== "pending" && item.approvedRegularHours == null) {
-        alert(_t(
+        showManagerAlert(_t(
           `Cannot set payment status to "${payStatus}" without approved hours.`,
           `לא ניתן לשמור בסטטוס "${payStatus === "approved" ? "מאושר" : "שולם"}" — אין שעות באישור מנהל לעובד זה.`
         ));
@@ -9155,11 +9228,18 @@ async function _downloadInvoicePdf(invoiceId, invoiceNumber) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  } catch { alert(_t("Failed to download PDF.", "הורדת ה-PDF נכשלה.")); }
+  } catch { showManagerAlert(_t("Failed to download PDF.", "הורדת ה-PDF נכשלה.")); }
 }
 
 async function _cancelInvoice(invoiceId) {
-  if (!confirm(_t("Delete this payment request? This action cannot be undone.", "למחוק את דרישת התשלום? פעולה זו אינה ניתנת לביטול."))) return;
+  const confirmed = await showManagerConfirm({
+    title: _t("Delete Payment Request", "מחיקת דרישת תשלום"),
+    message: _t("Delete this payment request?", "למחוק את דרישת התשלום?"),
+    warning: _t("This action cannot be undone.", "לא ניתן לבטל פעולה זו."),
+    okText: _t("Delete", "מחק"),
+    danger: true,
+  });
+  if (!confirmed) return;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}`, {
@@ -9167,7 +9247,7 @@ async function _cancelInvoice(invoiceId) {
     });
     if (!res.ok && res.status !== 204) throw new Error();
     await _refreshInvoiceViewsAfterChange();
-  } catch { alert(_t("Failed to delete payment request.", "מחיקת דרישת התשלום נכשלה.")); }
+  } catch { showManagerAlert(_t("Failed to delete payment request.", "מחיקת דרישת התשלום נכשלה.")); }
 }
 
 // ── Filters wiring ─────────────────────────────────────────────────────────
@@ -9657,7 +9737,7 @@ document.getElementById("proj-edit-save").addEventListener("click", async () => 
 async function _executeDeleteProject() {
   const btn = document.getElementById("delete-confirm-ok");
   btn.disabled    = true;
-  btn.textContent = "Deleting…";
+  btn.textContent = _t("Deleting…", "מוחק…");
   try {
     const token = await getToken();
     const res   = await fetch(
@@ -9666,7 +9746,7 @@ async function _executeDeleteProject() {
     );
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete project.");
+      throw new Error(data.error || _t("Failed to delete project.", "מחיקת הפרויקט נכשלה."));
     }
     _closeDeleteConfirm();
     _stopStaffingPoll();
@@ -9676,7 +9756,7 @@ async function _executeDeleteProject() {
     document.getElementById("delete-confirm-message").textContent = err.message;
   } finally {
     btn.disabled    = false;
-    btn.textContent = "Delete";
+    btn.textContent = _t("Delete", "מחק");
   }
 }
 
@@ -9835,7 +9915,7 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
 async function _executeDeleteEvent() {
   const btn = document.getElementById("delete-confirm-ok");
   btn.disabled    = true;
-  btn.textContent = "Deleting…";
+  btn.textContent = _t("Deleting…", "מוחק…");
   try {
     const token = await getToken();
     const res   = await fetch(
@@ -9844,7 +9924,7 @@ async function _executeDeleteEvent() {
     );
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete event.");
+      throw new Error(data.error || _t("Failed to delete event.", "מחיקת האירוע נכשלה."));
     }
     _closeDeleteConfirm();
     _stopStaffingPoll();
@@ -9854,7 +9934,7 @@ async function _executeDeleteEvent() {
     document.getElementById("delete-confirm-message").textContent = err.message;
   } finally {
     btn.disabled    = false;
-    btn.textContent = "Delete";
+    btn.textContent = _t("Delete", "מחק");
   }
 }
 
@@ -9866,21 +9946,33 @@ async function _executeDeleteEvent() {
 let _deleteTarget = null; // "project" | "event"
 
 const _deleteWarnings = {
-  project: "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Payment requests will be detached (not deleted).",
-  event:   "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Payment requests will be detached (not deleted).",
+  project: () => _t(
+    "This will permanently delete all events, shifts, staffing, tasks, briefs, expenses, and payroll records linked to this project. Payment requests will be detached (not deleted).",
+    "פעולה זו תמחק לצמיתות את כל האירועים, המשמרות, השיבוצים, המשימות, התדריכים, ההוצאות ורשומות השכר המקושרים לפרויקט זה. דרישות תשלום ינותקו (לא יימחקו).",
+  ),
+  event: () => _t(
+    "This will permanently delete all shifts, staffing, tasks, briefs, expenses, and payroll records linked to this event. Payment requests will be detached (not deleted).",
+    "פעולה זו תמחק לצמיתות את כל המשמרות, השיבוצים, המשימות, התדריכים, ההוצאות ורשומות השכר המקושרים לאירוע זה. דרישות תשלום ינותקו (לא יימחקו).",
+  ),
 };
 
 function confirmDelete(target) {
   _deleteTarget = target;
   const name  = target === "project"
-    ? (currentProjectDetail?.name ?? "this project")
-    : (_getCurrentEventData()?.name ?? "this event");
+    ? (currentProjectDetail?.name ?? _t("this project", "הפרויקט הזה"))
+    : (_getCurrentEventData()?.name ?? _t("this event", "האירוע הזה"));
+  const targetLabel = target === "project"
+    ? _t("Project", "פרויקט")
+    : _t("Event", "אירוע");
 
-  document.getElementById("delete-confirm-title").textContent        = `Delete ${target === "project" ? "Project" : "Event"}`;
-  document.getElementById("delete-confirm-message").textContent      = `Are you sure you want to delete "${name}"?`;
-  document.getElementById("delete-confirm-warning-text").textContent = _deleteWarnings[target];
+  document.getElementById("delete-confirm-title").textContent        = _t(`Delete ${targetLabel}`, `מחק ${targetLabel}`);
+  document.getElementById("delete-confirm-message").textContent      = _t(
+    `Are you sure you want to delete "${name}"?`,
+    `האם למחוק את "${name}"?`,
+  );
+  document.getElementById("delete-confirm-warning-text").textContent = _deleteWarnings[target]();
   document.getElementById("delete-confirm-ok").disabled              = false;
-  document.getElementById("delete-confirm-ok").textContent           = "Delete";
+  document.getElementById("delete-confirm-ok").textContent           = _t("Delete", "מחק");
 
   const overlay = document.getElementById("delete-confirm-overlay");
   overlay.style.display = "flex";

@@ -25,6 +25,26 @@ const MOBILE_BREAKPOINT = 768;
 const CLOCK_OUT_GRACE_HOURS = 3;
 initI18n();
 
+let _employeeNoticeTimer = null;
+function showEmployeeAlert(message, type = "error") {
+  let notice = document.getElementById("manager-notice");
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "manager-notice";
+    notice.className = "manager-notice";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    document.body.appendChild(notice);
+  }
+
+  notice.className = `manager-notice manager-notice--${type} visible`;
+  notice.innerHTML = `<span class="material-symbols-outlined manager-notice-icon">info</span><span class="manager-notice-text"></span>`;
+  notice.querySelector(".manager-notice-text").textContent = message;
+
+  if (_employeeNoticeTimer) clearTimeout(_employeeNoticeTimer);
+  _employeeNoticeTimer = setTimeout(() => notice.classList.remove("visible"), 4200);
+}
+
 window.addEventListener("teamgle:languagechange", () => {
   applyTranslations();
   if (_msActiveTab) renderActiveTab();
@@ -139,6 +159,9 @@ function isShiftInHistoryTab(shift, now = new Date()) {
   if (shift?.status !== "manager_approved") return false;
   return !canQuickClockOut(shift, now);
 }
+function isShiftInUpdatesTab(shift) {
+  return ["manager_hold", "manager_approved_canceled", "manager_reject"].includes(shift?.status);
+}
 
 // ── Needs-action predicate (single source of truth) ──────────────────────────
 // Returns true if this approved shift still requires employee action.
@@ -201,7 +224,7 @@ let _msActiveTab    = "offers";
 let _msLoading      = false;
 
 // ── Tab notification helpers (seen/unseen tracking via localStorage) ──────────
-const _SEEN_KEY = { offers: "ms-seen-offers", upcoming: "ms-seen-upcoming", history: "ms-seen-history" };
+const _SEEN_KEY = { offers: "ms-seen-offers", updates: "ms-seen-updates", approved: "ms-seen-approved", history: "ms-seen-history" };
 
 function _getSeenIds(tab) {
   try { return new Set(JSON.parse(localStorage.getItem(_SEEN_KEY[tab]) || "[]")); }
@@ -222,7 +245,11 @@ function _tabItems(tab) {
     return (_msOffers ?? [])
       .filter(o => (o.status || "manager_offer_sent") === "manager_offer_sent")
       .map(o => o.shiftId);
-  if (tab === "upcoming")
+  if (tab === "updates")
+    return (_msApplications ?? [])
+      .filter(s => isShiftInUpdatesTab(s))
+      .map(s => s.shiftId);
+  if (tab === "approved")
     return (_msApplications ?? [])
       .filter(s => isShiftInActiveTab(s, now))
       .map(s => s.shiftId);
@@ -254,7 +281,7 @@ async function loadMyShifts() {
   _msLoading = true;
 
   // Show skeleton on all panels
-  ["offers", "upcoming", "history"].forEach(tab => {
+  ["offers", "updates", "approved", "history"].forEach(tab => {
     const el = document.getElementById(`ms-panel-${tab}`);
     if (el) el.innerHTML = renderSkeletons(2);
   });
@@ -278,15 +305,16 @@ async function loadMyShifts() {
   }
 
   // Update unseen badges for all tabs; active tab is marked seen immediately
-  ["offers", "upcoming", "history"].forEach(tab => {
+  ["offers", "updates", "approved", "history"].forEach(tab => {
     if (tab === _msActiveTab) _markTabSeen(tab);
     else _updateTabBadge(tab);
   });
 
-  // Nav badge = total unseen across offers + upcoming
+  // Nav badge = total unseen across offers + updates + approved
   const navCount =
     _tabItems("offers").filter(id => !_getSeenIds("offers").has(id)).length +
-    _tabItems("upcoming").filter(id => !_getSeenIds("upcoming").has(id)).length;
+    _tabItems("updates").filter(id => !_getSeenIds("updates").has(id)).length +
+    _tabItems("approved").filter(id => !_getSeenIds("approved").has(id)).length;
   shiftsBadge.textContent   = navCount;
   shiftsBadge.style.display = navCount > 0 ? "" : "none";
 
@@ -316,7 +344,8 @@ function activateMsTab(name, render = true) {
 function renderActiveTab() {
   switch (_msActiveTab) {
     case "offers":   renderOffersTab();   break;
-    case "upcoming": renderUpcomingTab(); break;
+    case "updates":  renderUpdatesTab();  break;
+    case "approved": renderApprovedTab(); break;
     case "history":  renderHistoryTab();  break;
     default: break;
   }
@@ -449,10 +478,79 @@ function renderOfferCard(o) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  UPCOMING TAB
+//  UPDATES TAB — shifts with status changes (hold / cancelled / rejected)
 // ────────────────────────────────────────────────────────────────────────────
-async function renderUpcomingTab() {
-  const panel = document.getElementById("ms-panel-upcoming");
+async function renderUpdatesTab() {
+  const panel = document.getElementById("ms-panel-updates");
+  if (!panel) return;
+
+  if (_msApplications === null) {
+    panel.innerHTML = renderSkeletons(2);
+    lucide.createIcons();
+    await _fetchApplications();
+  }
+
+  const list = (_msApplications ?? []).filter(s => isShiftInUpdatesTab(s));
+
+  if (list.length === 0) {
+    panel.innerHTML = emptyState("bell", _t("No updates.", "אין עדכונים."), _t("Status changes to your shifts will appear here.", "שינויי סטטוס במשמרות שלך יופיעו כאן."));
+    lucide.createIcons(); return;
+  }
+
+  panel.innerHTML = list.map(s => renderUpdateCard(s)).join("");
+  lucide.createIcons();
+}
+
+function renderUpdateCard(s) {
+  const statusMeta = {
+    manager_hold: {
+      icon: "pause-circle",
+      label: _t("On Hold", "ממתין לאישור מחדש"),
+      sub:   _t("The manager has put your shift on hold.", "המנהל העביר את המשמרת שלך להמתנה."),
+      cls:   "update-card--hold",
+    },
+    manager_approved_canceled: {
+      icon: "x-circle",
+      label: _t("Shift Cancelled", "המשמרת בוטלה"),
+      sub:   _t("The manager cancelled your approved shift.", "המנהל ביטל את המשמרת המאושרת שלך."),
+      cls:   "update-card--cancelled",
+    },
+    manager_reject: {
+      icon: "minus-circle",
+      label: _t("Application Rejected", "הבקשה נדחתה"),
+      sub:   _t("The manager did not approve your application for this shift.", "המנהל לא אישר את בקשתך למשמרת זו."),
+      cls:   "update-card--rejected",
+    },
+  };
+  const meta = statusMeta[s.status] ?? statusMeta["manager_reject"];
+
+  const eventDate = s.eventStart
+    ? new Date(s.eventStart).toLocaleDateString(_t("en-GB", "he-IL"), { day: "2-digit", month: "short", year: "numeric" })
+    : "";
+  const shiftTime = s.shiftStart
+    ? `${fmtTime(s.shiftStart)}–${fmtTime(s.shiftEnd)}`
+    : s.eventStart ? `${fmtTime(s.eventStart)}–${fmtTime(s.eventEnd)}` : "";
+
+  return `
+    <div class="update-card ${escHtml(meta.cls)}">
+      <div class="update-card-status">
+        <i data-lucide="${escHtml(meta.icon)}"></i>
+        <span>${meta.label}</span>
+      </div>
+      <div class="update-card-body">
+        <div class="update-card-role">${escHtml(s.roleName || "")}</div>
+        <div class="update-card-event">${escHtml(s.eventName || "")}</div>
+        ${eventDate ? `<div class="update-card-meta"><i data-lucide="calendar" style="width:12px;height:12px"></i> ${escHtml(eventDate)}${shiftTime ? ` · ${escHtml(shiftTime)}` : ""}</div>` : ""}
+      </div>
+      <div class="update-card-sub">${meta.sub}</div>
+    </div>`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  APPROVED TAB (formerly: UPCOMING TAB)
+// ────────────────────────────────────────────────────────────────────────────
+async function renderApprovedTab() {
+  const panel = document.getElementById("ms-panel-approved");
   if (!panel) return;
 
   if (_msApplications === null) {
@@ -462,14 +560,14 @@ async function renderUpcomingTab() {
   }
 
   const now = new Date();
-  const upcoming = (_msApplications ?? []).filter(s => isShiftInActiveTab(s, now));
+  const approved = (_msApplications ?? []).filter(s => isShiftInActiveTab(s, now));
 
-  if (upcoming.length === 0) {
+  if (approved.length === 0) {
     panel.innerHTML = emptyState("calendar", _t("No upcoming shifts.", "אין משמרות קרובות."), _t("Your confirmed upcoming shifts will appear here.", "המשמרות המאושרות הקרובות שלך יופיעו כאן."));
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = upcoming.map(s => renderShiftCard(s, { showAttendance: true })).join("");
+  panel.innerHTML = approved.map(s => renderShiftCard(s, { showAttendance: true })).join("");
   lucide.createIcons();
   wireShiftCards(panel);
 }
@@ -532,7 +630,7 @@ async function renderHistoryTab() {
   const past = (_msApplications ?? []).filter(s => isShiftInHistoryTab(s, now));
 
   if (past.length === 0) {
-    panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here — you can fill in your hours manually.", "משמרות שעברו יופיעו כאן — ניתן למלא שעות ידנית."));
+    panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here.", "משמרות שעברו יופיעו כאן."));
     lucide.createIcons(); return;
   }
 
@@ -954,7 +1052,7 @@ onAuthStateChanged(auth, async user => {
 
   _profile = JSON.parse(sessionStorage.getItem("userProfile") || "null");
   if (!_profile || _profile.role !== "Employee") {
-    alert(_t("Access denied. Employee accounts only.", "גישה נדחתה. חשבונות עובדים בלבד."));
+    showEmployeeAlert(_t("Access denied. Employee accounts only.", "גישה נדחתה. חשבונות עובדים בלבד."));
     await signOut(auth);
     window.location.href = "auth.html";
     return;
