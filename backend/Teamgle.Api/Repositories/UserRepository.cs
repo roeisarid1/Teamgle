@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Data.SqlClient;
 using Teamgle.Api.Models;
 
@@ -18,29 +19,11 @@ public class UserRepository : IUserRepository
     // ── Check first-registration eligibility ──────────────────────────────
     public async Task<UserModel?> GetUnregisteredUserByEmailAsync(string email)
     {
-        const string sql = """
-            SELECT
-                u.user_ID,
-                u.FBUID,
-                u.email,
-                u.firstName,
-                u.lastName,
-                u.DOB,
-                u.phoneNum,
-                u.created_at,
-                u.company_ID,
-                CASE WHEN m.user_ID IS NOT NULL THEN 1 ELSE 0 END AS IsManager,
-                CASE WHEN e.user_ID IS NOT NULL THEN 1 ELSE 0 END AS IsEmployee,
-                e.cost_per_hour
-            FROM [User] u
-            LEFT JOIN Manager m ON u.user_ID = m.user_ID
-            LEFT JOIN Employee e ON u.user_ID = e.user_ID
-            WHERE u.email = @email
-              AND u.FBUID IS NULL
-            """;
-
         await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand("sp_GetUnregisteredUserByEmail", conn)
+        {
+            CommandType = CommandType.StoredProcedure
+        };
         cmd.Parameters.AddWithValue("@email", email);
 
         await conn.OpenAsync();
@@ -55,20 +38,16 @@ public class UserRepository : IUserRepository
     // ── Save Firebase UID after successful Firebase account creation ───────
     public async Task SaveFirebaseUidAsync(string email, string firebaseUid)
     {
-        const string sql = """
-            UPDATE [User]
-            SET FBUID = @fbuid
-            WHERE email = @email
-              AND FBUID IS NULL
-            """;
-
         await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand("sp_SaveFirebaseUid", conn)
+        {
+            CommandType = CommandType.StoredProcedure
+        };
         cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
         cmd.Parameters.AddWithValue("@email", email);
 
         await conn.OpenAsync();
-        int rows = await cmd.ExecuteNonQueryAsync();
+        int rows = Convert.ToInt32(await cmd.ExecuteScalarAsync());
 
         if (rows == 0)
             throw new InvalidOperationException(
@@ -78,28 +57,11 @@ public class UserRepository : IUserRepository
     // ── Get user profile by Firebase UID (used during login) ──────────────
     public async Task<UserModel?> GetUserByFirebaseUidAsync(string firebaseUid)
     {
-        const string sql = """
-            SELECT
-                u.user_ID,
-                u.FBUID,
-                u.email,
-                u.firstName,
-                u.lastName,
-                u.DOB,
-                u.phoneNum,
-                u.created_at,
-                u.company_ID,
-                CASE WHEN m.user_ID IS NOT NULL THEN 1 ELSE 0 END AS IsManager,
-                CASE WHEN e.user_ID IS NOT NULL THEN 1 ELSE 0 END AS IsEmployee,
-                e.cost_per_hour
-            FROM [User] u
-            LEFT JOIN Manager m ON u.user_ID = m.user_ID
-            LEFT JOIN Employee e ON u.user_ID = e.user_ID
-            WHERE u.FBUID = @fbuid
-            """;
-
         await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand("sp_GetUserByFirebaseUid", conn)
+        {
+            CommandType = CommandType.StoredProcedure
+        };
         cmd.Parameters.AddWithValue("@fbuid", firebaseUid);
 
         await conn.OpenAsync();

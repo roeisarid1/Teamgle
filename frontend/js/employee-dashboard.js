@@ -6,6 +6,7 @@ import { writeUserProfile }            from "./chat-service.js";
 import { initChat, destroyChat, openEventChat, openShiftChat } from "./chat-ui.js";
 import { initI18n, applyTranslations, _t } from "./i18n.js";
 import { API_BASE } from "./api-config.js";
+import { loadShiftChampions } from "./gamification.js";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const navUsername      = document.getElementById("nav-username");
@@ -53,7 +54,18 @@ window.addEventListener("teamgle:languagechange", () => {
     _chatInitialized = false;
     _initChatSection();
   }
+  const activeSection = getActiveSectionName();
+  if (activeSection === "champions") loadShiftChampions("gc-container", getToken);
 });
+
+function getActiveSectionName() {
+  const sections = [...document.querySelectorAll(".page-section[data-section]")];
+  const active = sections.find((section) => {
+    if (section.style.display === "none") return false;
+    return getComputedStyle(section).display !== "none";
+  });
+  return active?.dataset.section ?? null;
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function setSidebarOpen(open) {
@@ -82,8 +94,9 @@ function showSection(sectionId) {
   });
   pageContent.classList.toggle("chat-mode", sectionId === "chats");
   lucide.createIcons();
-  if (sectionId === "my-shifts") loadMyShifts();
-  if (sectionId === "chats")    _initChatSection();
+  if (sectionId === "my-shifts")  loadMyShifts();
+  if (sectionId === "chats")     _initChatSection();
+  if (sectionId === "champions") loadShiftChampions("gc-container", getToken);
 }
 
 document.querySelectorAll(".nav-item[data-section]").forEach(link => {

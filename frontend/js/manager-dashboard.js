@@ -18,6 +18,7 @@ import {
 import { initChat, destroyChat, openChatWith, openEventChat, openShiftChat } from "./chat-ui.js";
 import { initI18n, applyTranslations, getCurrentLanguage, _t } from "./i18n.js";
 import { API_BASE } from "./api-config.js";
+import { loadShiftChampions } from "./gamification.js";
 
 // ── DOM ────────────────────────────────────────────────────────────────────
 const navUsername = document.getElementById("nav-username");
@@ -64,6 +65,7 @@ window.addEventListener("teamgle:languagechange", () => {
     _initChatSection();
   }
   if (activeSection === "calendar") renderCalendar();
+  if (activeSection === "champions") loadShiftChampions("gc-container", getToken);
   applyTranslations();
 });
 
@@ -1658,6 +1660,7 @@ function activateSection(name) {
   if (name === "chats") _initChatSection();
   if (name === "invoices") loadInvoices();
   if (name === "calendar") _initCalendarSection();
+  if (name === "champions") loadShiftChampions("gc-container", getToken);
 }
 
 function _initChatSection() {
@@ -3027,6 +3030,27 @@ async function renderBriefTab() {
   }
 }
 
+function updateBriefAckSummary(row, readCount, total) {
+  const authorEl = row.querySelector(".pd-brief-author-text");
+  if (!authorEl) return;
+
+  let badge = row.querySelector(".ed-brief-ack");
+  if (total <= 0) {
+    badge?.remove();
+    return;
+  }
+
+  const allReadClass = readCount >= total ? " ed-brief-ack--all" : "";
+  const title = `${readCount} of ${total} acknowledged`;
+  const html = `<span class="ed-brief-ack${allReadClass}" title="${title}">&#10003; ${readCount} / ${total}</span>`;
+
+  if (badge) {
+    badge.outerHTML = html;
+  } else {
+    authorEl.insertAdjacentHTML("beforeend", html);
+  }
+}
+
 function buildBriefRow(brief) {
   const row = document.createElement("div");
   row.className = "pd-brief-row";
@@ -3104,11 +3128,17 @@ function wireBriefRow(row, brief) {
           .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then((acks) => {
             if (acks.length === 0) {
+              brief.ackCount = 0;
+              brief.totalRelevant = 0;
+              updateBriefAckSummary(row, 0, 0);
               ackListEl.innerHTML =
                 '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
             } else {
               const readCount = acks.filter((a) => a.isRead).length;
               const total = acks.length;
+              brief.ackCount = readCount;
+              brief.totalRelevant = total;
+              updateBriefAckSummary(row, readCount, total);
               const headerEl = form.querySelector(".ed-ack-header");
               if (headerEl) headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
               ackListEl.innerHTML = acks
@@ -5719,6 +5749,17 @@ function _buildWorkerRow(worker, sectionType, fullShiftIds = new Set()) {
   const costLabel = worker.costPerHour ? `₪${Number(worker.costPerHour).toFixed(0)}/hr` : "—";
   const costDataLabel = escapeHtml(_t("Cost", "עלות"));
 
+  const rejectedByBadge = sectionType === "rejected"
+    ? (() => {
+        const s = worker.status ?? "";
+        if (s === "employee_request_canceled")
+          return `<span class="ps-rejected-by ps-rejected-by--employee">${_t("Employee declined", "העובד דחה")}</span>`;
+        if (s === "manager_approved_canceled")
+          return `<span class="ps-rejected-by ps-rejected-by--manager">${_t("Manager cancelled", "המנהל ביטל")}</span>`;
+        return `<span class="ps-rejected-by ps-rejected-by--manager">${_t("Manager declined", "המנהל דחה")}</span>`;
+      })()
+    : "";
+
   return `
     <tr class="ps-row"
         data-worker-fbuid="${escapeHtml(worker.fbUid ?? "")}"
@@ -5727,7 +5768,7 @@ function _buildWorkerRow(worker, sectionType, fullShiftIds = new Set()) {
       <td><div class="ps-cell-worker">
         <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
         <div>
-          <div class="ps-worker-name">${escapeHtml(name)}</div>
+          <div class="ps-worker-name">${escapeHtml(name)}${rejectedByBadge}</div>
           <div class="ps-worker-meta">${escapeHtml(worker.roleName ?? "")}</div>
         </div>
       </div></td>
@@ -7760,11 +7801,17 @@ function _edWireBriefRow(row, brief) {
           .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then((acks) => {
             if (acks.length === 0) {
+              brief.ackCount = 0;
+              brief.totalRelevant = 0;
+              updateBriefAckSummary(row, 0, 0);
               ackListEl.innerHTML =
                 '<span class="ed-ack-empty">No employees assigned to this brief\'s scope.</span>';
             } else {
               const readCount = acks.filter((a) => a.isRead).length;
               const total = acks.length;
+              brief.ackCount = readCount;
+              brief.totalRelevant = total;
+              updateBriefAckSummary(row, readCount, total);
               const headerEl = form.querySelector(".ed-ack-header");
               if (headerEl) {
                 headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
@@ -9187,7 +9234,7 @@ function _renderInvoiceTable() {
       <td>${_invStatusBadge(inv.paymentStatus)}</td>
       <td class="inv-actions">
         <button class="btn-icon-sm" title="${_t("Record Payment", "רישום תשלום")}" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
-        <button class="btn-icon-sm" title="${_t("Edit", "ערוך")}" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon-sm" title="${_t("View", "צפה")}" data-inv-view="${escapeHtml(inv.invoiceId)}"><i data-lucide="eye"></i></button>
         <button class="btn-icon-sm" title="${_t("Download PDF", "הורד PDF")}" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
         <button class="btn-icon-sm btn-icon-danger" title="${_t("Delete", "מחיקה")}" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="trash-2"></i></button>
       </td>
@@ -9202,8 +9249,8 @@ function _wireInvoiceTableActions() {
   if (!tbody) return;
   tbody.querySelectorAll("[data-inv-pay]").forEach((btn) =>
     btn.addEventListener("click", () => openRecordPaymentModal(btn.dataset.invPay)));
-  tbody.querySelectorAll("[data-inv-edit]").forEach((btn) =>
-    btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invEdit })));
+  tbody.querySelectorAll("[data-inv-view]").forEach((btn) =>
+    btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invView })));
   tbody.querySelectorAll("[data-inv-pdf]").forEach((btn) =>
     btn.addEventListener("click", () => _downloadInvoicePdf(btn.dataset.invPdf, btn.dataset.invNum)));
   tbody.querySelectorAll("[data-inv-cancel]").forEach((btn) =>
@@ -9259,16 +9306,51 @@ document.getElementById("inv-filter-status")?.addEventListener("change", () => {
 });
 document.getElementById("btn-create-invoice")?.addEventListener("click", () => openInvoiceModal({}));
 
-// ── Create / Edit Invoice Modal ────────────────────────────────────────────
+function _setInvoiceModalViewMode(isViewMode) {
+  const fieldIds = [
+    "inv-customer",
+    "inv-project",
+    "inv-event",
+    "inv-number",
+    "inv-status",
+    "inv-date",
+    "inv-due-date",
+    "inv-amount",
+    "inv-notes",
+  ];
+
+  fieldIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = isViewMode;
+    if ("readOnly" in el) el.readOnly = isViewMode;
+  });
+
+  const saveBtn = document.getElementById("inv-modal-save");
+  if (saveBtn) saveBtn.style.display = isViewMode ? "none" : "";
+
+  const cancelBtn = document.getElementById("inv-modal-cancel");
+  if (cancelBtn) cancelBtn.textContent = isViewMode ? _t("Close", "סגור") : _t("Cancel", "ביטול");
+}
+
+// ── Create / View Invoice Modal ────────────────────────────────────────────
 async function openInvoiceModal(opts = {}) {
   _editingInvoiceId = opts.invoiceId || null;
+  const isViewMode = Boolean(_editingInvoiceId);
   const overlay = document.getElementById("inv-modal-overlay");
   document.getElementById("inv-modal-title").textContent =
-    _editingInvoiceId ? _t("Edit Payment Request", "ערוך דרישת תשלום") : _t("New Payment Request", "דרישת תשלום חדשה");
+    isViewMode ? _t("Payment Request Details", "פרטי דרישת תשלום") : _t("New Payment Request", "דרישת תשלום חדשה");
+  const subtitleEl = document.getElementById("inv-modal-subtitle");
+  if (subtitleEl) {
+    subtitleEl.textContent = isViewMode
+      ? _t("View payment request details", "צפייה בפרטי דרישת התשלום")
+      : _t("Fill in the payment request details below", "מלא את פרטי דרישת התשלום");
+  }
   document.getElementById("inv-modal-save-label").textContent =
-    _editingInvoiceId ? _t("Update Request", "עדכן דרישה") : _t("Save Request", "שמור דרישה");
+    _t("Save Request", "שמור דרישה");
   const errEl = document.getElementById("inv-modal-error");
   if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+  _setInvoiceModalViewMode(false);
 
   await _invLoadCustomerDropdown(opts.prefillCustomerId || null);
 
@@ -9286,6 +9368,7 @@ async function openInvoiceModal(opts = {}) {
       _setVal("inv-due-date", inv.dueDate     ? inv.dueDate.slice(0, 10)     : due30);
       _setVal("inv-amount",   inv.invoiceAmount);
       _setVal("inv-notes",    inv.notes || "");
+      _setInvoiceModalViewMode(true);
     }
   } else {
     _setVal("inv-customer",  opts.prefillCustomerId || "");
@@ -9420,9 +9503,15 @@ document.getElementById("inv-modal-overlay")?.addEventListener("click", (e) => {
 function _closeInvoiceModal() {
   document.getElementById("inv-modal-overlay").style.display = "none";
   _editingInvoiceId = null;
+  _setInvoiceModalViewMode(false);
 }
 
 document.getElementById("inv-modal-save")?.addEventListener("click", async () => {
+  if (_editingInvoiceId) {
+    _closeInvoiceModal();
+    return;
+  }
+
   const errEl   = document.getElementById("inv-modal-error");
   const saveBtn = document.getElementById("inv-modal-save");
   const customerId = document.getElementById("inv-customer")?.value?.trim();

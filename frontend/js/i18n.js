@@ -91,6 +91,18 @@ const HE_BY_EN = {
   "Calendar": "לוח שנה",
   "Payment Requests": "דרישות תשלום",
   "Chats": "הודעות",
+  "Shift Champions": "אלופי המשמרות",
+  "How many events did we complete this month?": "כמה אירועים סיימנו החודש?",
+  "No completed events this month yet.": "עוד אין אירועים שהסתיימו החודש",
+  "Failed to load champions.": "טעינת אלופי המשמרות נכשלה.",
+  "Full Ranking": "דירוג מלא",
+  "Badge": "תגית",
+  "You": "את/ה",
+  "events": "אירועים",
+  "this month": "החודש",
+  "Shift Champion": "אלוף משמרות",
+  "Team Regular": "קבוע בצוות",
+  "Rising Star": "מתחיל חזק",
   "My Shifts": "המשמרות שלי",
   "All your shifts, offers, and briefings in one place": "כל המשמרות, ההצעות והתדריכים שלך במקום אחד",
   "Offered": "הצעות",
@@ -480,7 +492,9 @@ function normalizeLanguage(lang) {
 }
 
 export function getCurrentLanguage() {
-  return normalizeLanguage(localStorage.getItem(LANGUAGE_KEY) || "he");
+  const stored = localStorage.getItem(LANGUAGE_KEY);
+  if (stored) return normalizeLanguage(stored);
+  return normalizeLanguage(document.documentElement.lang || "en");
 }
 
 export function _t(en, he) {
