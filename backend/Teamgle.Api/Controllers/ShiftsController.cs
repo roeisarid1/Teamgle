@@ -130,6 +130,24 @@ public class ShiftsController : ControllerBase
         }
     }
 
+    // ── GET /api/shifts/my-cancellations  (employee: shifts deleted after approval)
+    [HttpGet("my-cancellations")]
+    public async Task<IActionResult> GetMyCancellations()
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var notices = await _projectService.GetMyCancellationNoticesAsync(uid);
+            return Ok(notices);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching cancellation notices for employee");
+            return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
     // ── GET /api/shifts/my-offers ──────────────────────────────────────────
     [HttpGet("my-offers")]
     public async Task<IActionResult> GetMyOffers()
@@ -360,6 +378,191 @@ public class ShiftsController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting worker assignment");
             return StatusCode(500, new { error = "An unexpected error occurred." });
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  SHIFT BRIEFS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // GET /api/shifts/{shiftId}/briefs
+    [HttpGet("{shiftId}/briefs")]
+    public async Task<IActionResult> GetShiftBriefs(string shiftId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var briefs = await _projectService.GetShiftBriefsAsync(uid, shiftId);
+            if (briefs == null) return NotFound(new { error = "Shift not found." });
+            return Ok(briefs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching briefs for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // POST /api/shifts/{shiftId}/briefs
+    [HttpPost("{shiftId}/briefs")]
+    public async Task<IActionResult> CreateShiftBrief(string shiftId, [FromBody] CreateBriefRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var brief = await _projectService.CreateShiftBriefAsync(uid, shiftId, request);
+            if (brief == null) return NotFound(new { error = "Shift not found." });
+            return StatusCode(201, brief);
+        }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating brief for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // PUT /api/shifts/{shiftId}/briefs/{briefId}
+    [HttpPut("{shiftId}/briefs/{briefId}")]
+    public async Task<IActionResult> UpdateShiftBrief(string shiftId, string briefId, [FromBody] UpdateBriefRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var brief = await _projectService.UpdateShiftBriefAsync(uid, shiftId, briefId, request);
+            if (brief == null) return NotFound(new { error = "Brief not found." });
+            return Ok(brief);
+        }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // DELETE /api/shifts/{shiftId}/briefs/{briefId}
+    [HttpDelete("{shiftId}/briefs/{briefId}")]
+    public async Task<IActionResult> DeleteShiftBrief(string shiftId, string briefId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var result = await _projectService.DeleteShiftBriefAsync(uid, shiftId, briefId);
+            if (result == null)  return NotFound(new { error = "Shift not found." });
+            if (result == false) return NotFound(new { error = "Brief not found." });
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // GET /api/shifts/{shiftId}/briefs/{briefId}/acknowledgments
+    [HttpGet("{shiftId}/briefs/{briefId}/acknowledgments")]
+    public async Task<IActionResult> GetShiftBriefAcknowledgments(string shiftId, string briefId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var acks = await _projectService.GetBriefAcknowledgmentsAsync(uid, briefId);
+            if (acks == null) return NotFound(new { error = "Brief not found or access denied." });
+            return Ok(acks);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching acknowledgments for brief {BriefId}", briefId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  SHIFT EQUIPMENT
+    // ══════════════════════════════════════════════════════════════════════
+
+    // GET /api/shifts/{shiftId}/equipment
+    [HttpGet("{shiftId}/equipment")]
+    public async Task<IActionResult> GetShiftEquipment(string shiftId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var items = await _projectService.GetShiftEquipmentAsync(uid, shiftId);
+            if (items == null) return NotFound(new { error = "Shift not found." });
+            return Ok(items);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching equipment for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // POST /api/shifts/{shiftId}/equipment
+    [HttpPost("{shiftId}/equipment")]
+    public async Task<IActionResult> CreateShiftEquipment(string shiftId, [FromBody] CreateEquipmentRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var item = await _projectService.CreateShiftEquipmentAsync(uid, shiftId, request);
+            if (item == null) return NotFound(new { error = "Shift not found." });
+            return StatusCode(201, item);
+        }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating equipment for shift {ShiftId}", shiftId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // PUT /api/shifts/{shiftId}/equipment/{equipmentId}
+    [HttpPut("{shiftId}/equipment/{equipmentId}")]
+    public async Task<IActionResult> UpdateShiftEquipment(string shiftId, string equipmentId, [FromBody] UpdateEquipmentRequest request)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var item = await _projectService.UpdateShiftEquipmentAsync(uid, shiftId, equipmentId, request);
+            if (item == null) return NotFound(new { error = "Equipment item not found." });
+            return Ok(item);
+        }
+        catch (ArgumentException ex)           { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating equipment {EquipmentId}", equipmentId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // DELETE /api/shifts/{shiftId}/equipment/{equipmentId}
+    [HttpDelete("{shiftId}/equipment/{equipmentId}")]
+    public async Task<IActionResult> DeleteShiftEquipment(string shiftId, string equipmentId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var result = await _projectService.DeleteShiftEquipmentAsync(uid, shiftId, equipmentId);
+            if (result == null)  return NotFound(new { error = "Shift not found." });
+            if (result == false) return NotFound(new { error = "Equipment item not found." });
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting equipment {EquipmentId}", equipmentId);
+            return StatusCode(500, new { error = "Unexpected error." });
         }
     }
 }

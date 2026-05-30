@@ -230,9 +230,11 @@ async function _openEmployeeShiftChat(item) {
 }
 
 // ── My Shifts state ───────────────────────────────────────────────────────────
-let _msOffers       = null;
-let _msApplications = null;
-let _msBriefs       = null;
+let _msOffers         = null;
+let _msApplications   = null;
+let _msBriefs         = null;
+let _msEquipment      = null;
+let _msCancellations  = null;
 let _msActiveTab    = "offers";
 let _msLoading      = false;
 
@@ -259,9 +261,10 @@ function _tabItems(tab) {
       .filter(o => (o.status || "manager_offer_sent") === "manager_offer_sent")
       .map(o => o.shiftId);
   if (tab === "updates")
-    return (_msApplications ?? [])
-      .filter(s => isShiftInUpdatesTab(s))
-      .map(s => s.shiftId);
+    return [
+      ...(_msApplications  ?? []).filter(s => isShiftInUpdatesTab(s)).map(s => s.shiftId),
+      ...(_msCancellations ?? []).map(n => n.noticeId),
+    ];
   if (tab === "approved")
     return (_msApplications ?? [])
       .filter(s => isShiftInActiveTab(s, now))
@@ -302,17 +305,25 @@ async function loadMyShifts() {
 
   try {
     const token = await getToken();
-    const [offersRes, appsRes, briefsRes] = await Promise.all([
-      fetch(`${API_BASE}/shifts/my-offers`,       { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/shifts/my-applications`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/events/my-briefs`,        { headers: { Authorization: `Bearer ${token}` } }),
+    const settled = await Promise.allSettled([
+      fetch(`${API_BASE}/shifts/my-offers`,        { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/shifts/my-applications`,  { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/events/my-briefs`,         { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/events/my-equipment`,      { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/shifts/my-cancellations`, { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
-    _msOffers       = offersRes.ok       ? await offersRes.json()  : [];
-    _msApplications = appsRes.ok         ? await appsRes.json()    : [];
-    _msBriefs       = briefsRes.ok       ? await briefsRes.json()  : [];
+    const _res = (i) => settled[i].status === "fulfilled" ? settled[i].value : null;
+    const [offersRes, appsRes, briefsRes, equipRes, cancelRes] =
+      [0, 1, 2, 3, 4].map(_res);
+
+    _msOffers        = offersRes?.ok  ? await offersRes.json()  : [];
+    _msApplications  = appsRes?.ok    ? await appsRes.json()    : [];
+    _msBriefs        = briefsRes?.ok  ? await briefsRes.json()  : [];
+    _msEquipment     = equipRes?.ok   ? await equipRes.json()   : [];
+    _msCancellations = cancelRes?.ok  ? await cancelRes.json()  : [];
   } catch {
-    _msOffers = _msApplications = _msBriefs = [];
+    _msOffers = _msApplications = _msBriefs = _msEquipment = _msCancellations = [];
   } finally {
     _msLoading = false;
   }
@@ -503,7 +514,9 @@ async function renderUpdatesTab() {
     await _fetchApplications();
   }
 
-  const list = (_msApplications ?? []).filter(s => isShiftInUpdatesTab(s));
+  const statusUpdates  = (_msApplications  ?? []).filter(s => isShiftInUpdatesTab(s));
+  const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem);
+  const list           = [...cancellations, ...statusUpdates];
 
   if (list.length === 0) {
     panel.innerHTML = emptyState("bell", _t("No updates.", "אין עדכונים."), _t("Status changes to your shifts will appear here.", "שינויי סטטוס במשמרות שלך יופיעו כאן."));
@@ -512,6 +525,19 @@ async function renderUpdatesTab() {
 
   panel.innerHTML = list.map(s => renderUpdateCard(s)).join("");
   lucide.createIcons();
+}
+
+// Transforms a ShiftCancellationNotice into the same shape renderUpdateCard expects
+function _cancellationToUpdateItem(n) {
+  return {
+    status:     "manager_approved_canceled",
+    roleName:   n.roleName   ?? "",
+    eventName:  n.eventName  ?? "",
+    eventStart: n.eventStart ?? null,
+    shiftStart: n.shiftStart ?? null,
+    shiftEnd:   n.shiftEnd   ?? null,
+    shiftId:    n.noticeId,
+  };
 }
 
 function renderUpdateCard(s) {
@@ -613,14 +639,22 @@ async function renderNeedsActionTab() {
 async function _fetchApplications() {
   try {
     const token = await getToken();
-    const [appsRes, briefsRes] = await Promise.all([
+    const [appsRes, briefsRes, equipRes, cancelRes] = await Promise.all([
       fetch(`${API_BASE}/shifts/my-applications`, { headers: { Authorization: `Bearer ${token}` } }),
       _msBriefs === null
         ? fetch(`${API_BASE}/events/my-briefs`,   { headers: { Authorization: `Bearer ${token}` } })
         : Promise.resolve(null),
+      _msEquipment === null
+        ? fetch(`${API_BASE}/events/my-equipment`, { headers: { Authorization: `Bearer ${token}` } })
+        : Promise.resolve(null),
+      _msCancellations === null
+        ? fetch(`${API_BASE}/shifts/my-cancellations`, { headers: { Authorization: `Bearer ${token}` } })
+        : Promise.resolve(null),
     ]);
-    if (appsRes.ok)           _msApplications = await appsRes.json();
-    if (briefsRes?.ok)        _msBriefs       = await briefsRes.json();
+    if (appsRes.ok)    _msApplications  = await appsRes.json();
+    if (briefsRes?.ok) _msBriefs        = await briefsRes.json();
+    if (equipRes?.ok)  _msEquipment     = await equipRes.json();
+    if (cancelRes?.ok) _msCancellations = await cancelRes.json();
   } catch { _msApplications = []; }
 }
 
@@ -692,7 +726,9 @@ function renderShiftCard(shift, opts = {}) {
     ? `<span class="ms-approved-badge">✓ ${_t("Approved", "מאושר")}</span>` : "";
 
   // Detail sections
+  const equipment         = getEquipmentForShift(shift);
   const briefsSection     = _renderDetailBriefs(briefs);
+  const equipmentSection  = _renderDetailEquipment(equipment);
   const attendanceSection = hideAttendance ? "" : _renderDetailAttendance(shift);
   const statusSection     = _renderDetailStatus(shift);
 
@@ -730,6 +766,7 @@ function renderShiftCard(shift, opts = {}) {
       </div>
       <div class="ms-card-body" hidden>
         ${briefsSection}
+        ${equipmentSection}
         ${attendanceSection}
         ${statusSection}
       </div>
@@ -747,7 +784,7 @@ function _renderDetailBriefs(briefs) {
             <div class="ms-brief-item-header">
               <span class="ms-brief-item-title">${escHtml(b.title)}</span>
               ${acked
-                ? `<span class="brief-acked-badge">✓ Acknowledged${ackedAt ? ` · ${ackedAt}` : ""}</span>`
+                ? `<span class="brief-acked-badge">✓ ${_t("Acknowledged", "אושר")}${ackedAt ? ` · ${ackedAt}` : ""}</span>`
                 : `<span class="brief-unread-dot"></span>`}
             </div>
             <div class="ms-brief-item-content">${escHtml(b.content)}</div>
@@ -760,6 +797,25 @@ function _renderDetailBriefs(briefs) {
       <div class="ms-detail-section-title">
         <i data-lucide="file-text" style="width:14px;height:14px"></i>
         ${_t("Briefings", "תדריכים")}
+      </div>
+      ${items}
+    </div>`;
+}
+
+function _renderDetailEquipment(equipment) {
+  if (!equipment || equipment.length === 0) return "";
+  const items = equipment.map(eq => `
+    <div class="ms-equip-item">
+      <span class="ms-equip-name">${escHtml(eq.name)}</span>
+      <span class="ms-equip-qty">×${eq.quantity ?? 1}</span>
+      ${eq.notes ? `<span class="ms-equip-notes">${escHtml(eq.notes)}</span>` : ""}
+    </div>`).join("");
+
+  return `
+    <div class="ms-detail-section">
+      <div class="ms-detail-section-title">
+        <i data-lucide="package" style="width:14px;height:14px"></i>
+        ${_t("Equipment", "ציוד")}
       </div>
       ${items}
     </div>`;
@@ -1034,9 +1090,11 @@ function wireShiftCards(panel) {
 
 // Invalidate caches and reload the active tab
 async function _refreshShiftsData() {
-  _msOffers       = null;
-  _msApplications = null;
-  _msBriefs       = null;
+  _msOffers        = null;
+  _msApplications  = null;
+  _msBriefs        = null;
+  _msEquipment     = null;
+  _msCancellations = null;
   await loadMyShifts();
 }
 
@@ -1049,6 +1107,10 @@ function getBriefsForShift(shift) {
     (b.projectId && b.projectId === shift.projectId) ||
     (b.shiftId   && b.shiftId   === shift.shiftId)
   );
+}
+
+function getEquipmentForShift(shift) {
+  return (_msEquipment ?? []).filter(eq => eq.shiftId === shift.shiftId);
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────

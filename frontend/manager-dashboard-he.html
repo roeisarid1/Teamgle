@@ -11,7 +11,7 @@
   <title>Teamgle — לוח מנהל</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/teamgle-192.png" />
-  <link rel="stylesheet" href="css/manager-dashboard.css" />
+  <link rel="stylesheet" href="css/manager-dashboard.css?v=aa-results-v2" />
   <link rel="stylesheet" href="css/chat.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
@@ -1299,11 +1299,11 @@
           <div class="form-row">
             <div class="field">
               <label for="shift-add-start">שעת התחלה <span class="req">*</span></label>
-              <input type="time" id="shift-add-start" step="300" />
+              <input type="datetime-local" id="shift-add-start" step="300" />
             </div>
             <div class="field">
               <label for="shift-add-end">שעת סיום <span class="req">*</span></label>
-              <input type="time" id="shift-add-end" step="300" />
+              <input type="datetime-local" id="shift-add-end" step="300" />
             </div>
           </div>
         </div>
@@ -1666,8 +1666,8 @@
     </div>
   </div>
 
-  <script type="module" src="js/manager-dashboard.js"></script>
-  <script src="js/register-sw.js"></script>
+  <script type="module" src="js/manager-dashboard.js?v=aa-results-v2"></script>
+  <script src="js/register-sw.js?v=aa-results-v2"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>
