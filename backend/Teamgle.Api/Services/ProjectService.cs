@@ -512,9 +512,10 @@ public class ProjectService : IProjectService
     }
 
     public async Task<AutoAssignResult> AutoAssignShiftAsync(string firebaseUid, string shiftId)
-    {
-        return await _projectRepo.AutoAssignShiftAsync(shiftId, firebaseUid);
-    }
+        => await _projectRepo.AutoAssignShiftAsync(shiftId, firebaseUid);
+
+    public async Task<IEnumerable<ShiftCancellationNotice>> GetMyCancellationNoticesAsync(string firebaseUid)
+        => await _projectRepo.GetCancellationNoticesForEmployeeAsync(firebaseUid);
 
     // ── Event-first (standalone events) ───────────────────────────────────
     public async Task<IEnumerable<EventListItemResponse>> GetEventsAsync(string firebaseUid)
@@ -569,5 +570,51 @@ public class ProjectService : IProjectService
     {
         await _projectRepo.SendOfferByEventAsync(eventId, employeeFbUid, request.ShiftIds, firebaseUid);
     }
+
+    // ── Shift Briefs ───────────────────────────────────────────────────────
+    public async Task<IEnumerable<ShiftSummaryItem>?> GetShiftsForEventAsync(string firebaseUid, string eventId)
+        => await _projectRepo.GetShiftsForEventAsync(eventId, firebaseUid);
+
+    public async Task<IEnumerable<BriefItem>?> GetShiftBriefsAsync(string firebaseUid, string shiftId)
+        => await _projectRepo.GetBriefsByShiftIdAsync(shiftId, firebaseUid);
+
+    public async Task<BriefItem?> CreateShiftBriefAsync(string firebaseUid, string shiftId, CreateBriefRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))   throw new ArgumentException("Title is required.");
+        if (string.IsNullOrWhiteSpace(request.Content)) throw new ArgumentException("Content is required.");
+        return await _projectRepo.CreateShiftBriefAsync(shiftId, request, firebaseUid);
+    }
+
+    public async Task<BriefItem?> UpdateShiftBriefAsync(string firebaseUid, string shiftId, string briefId, UpdateBriefRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))   throw new ArgumentException("Title is required.");
+        if (string.IsNullOrWhiteSpace(request.Content)) throw new ArgumentException("Content is required.");
+        return await _projectRepo.UpdateShiftBriefAsync(briefId, shiftId, request, firebaseUid);
+    }
+
+    public async Task<bool?> DeleteShiftBriefAsync(string firebaseUid, string shiftId, string briefId)
+        => await _projectRepo.DeleteShiftBriefAsync(briefId, shiftId, firebaseUid);
+
+    // ── Shift Equipment ────────────────────────────────────────────────────
+    public async Task<IEnumerable<ShiftEquipmentItem>?> GetShiftEquipmentAsync(string firebaseUid, string shiftId)
+        => await _projectRepo.GetShiftEquipmentAsync(shiftId, firebaseUid);
+
+    public async Task<ShiftEquipmentItem?> CreateShiftEquipmentAsync(string firebaseUid, string shiftId, CreateEquipmentRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Equipment name is required.");
+        return await _projectRepo.CreateShiftEquipmentAsync(shiftId, request, firebaseUid);
+    }
+
+    public async Task<ShiftEquipmentItem?> UpdateShiftEquipmentAsync(string firebaseUid, string shiftId, string equipmentId, UpdateEquipmentRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Equipment name is required.");
+        return await _projectRepo.UpdateShiftEquipmentAsync(equipmentId, shiftId, request, firebaseUid);
+    }
+
+    public async Task<bool?> DeleteShiftEquipmentAsync(string firebaseUid, string shiftId, string equipmentId)
+        => await _projectRepo.DeleteShiftEquipmentAsync(equipmentId, shiftId, firebaseUid);
+
+    public async Task<IEnumerable<ShiftEquipmentItem>?> GetMyEquipmentAsync(string firebaseUid)
+        => await _projectRepo.GetEquipmentForEmployeeAsync(firebaseUid);
 
 }

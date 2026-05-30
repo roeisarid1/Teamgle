@@ -11,7 +11,7 @@
   <title>Teamgle — Manager Dashboard</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/teamgle-192.png" />
-  <link rel="stylesheet" href="css/manager-dashboard.css" />
+  <link rel="stylesheet" href="css/manager-dashboard.css?v=aa-results-v2" />
   <link rel="stylesheet" href="css/chat.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
@@ -599,7 +599,7 @@
         <button class="pd-tab" data-etab="workers">Workers</button>
         <button class="pd-tab" data-etab="gantt">Gantt</button>
         <button class="pd-tab" data-etab="tasks">Tasks</button>
-        <button class="pd-tab" data-etab="briefs">Briefs</button>
+        <button class="pd-tab" data-etab="briefs">Briefings &amp; Equipment</button>
         <button class="pd-tab" data-etab="expenses">Expenses</button>
         <button class="pd-tab" data-etab="payroll">Hours &amp; Payroll</button>
         <button class="pd-tab" data-etab="finance">Finance</button>
@@ -672,13 +672,9 @@
           </div>
         </div>
 
-        <!-- Briefs tab -->
+        <!-- Briefings & Equipment tab -->
         <div class="ed-panel" data-etab-panel="briefs" style="display:none">
-          <div class="pd-section-header">
-            <h3 class="pd-section-title">Briefs</h3>
-            <button class="pd-add-btn" id="ed-btn-add-brief">+ Add Brief</button>
-          </div>
-          <div class="pd-brief-list" id="ed-brief-list"></div>
+          <div id="ed-be-root"></div>
         </div>
 
         <!-- Expenses tab -->
@@ -1312,11 +1308,11 @@
           <div class="form-row">
             <div class="field">
               <label for="shift-add-start">Start Time <span class="req">*</span></label>
-              <input type="time" id="shift-add-start" step="300" />
+              <input type="datetime-local" id="shift-add-start" step="300" />
             </div>
             <div class="field">
               <label for="shift-add-end">End Time <span class="req">*</span></label>
-              <input type="time" id="shift-add-end" step="300" />
+              <input type="datetime-local" id="shift-add-end" step="300" />
             </div>
           </div>
         </div>
@@ -1685,8 +1681,8 @@
     </div>
   </div>
 
-  <script type="module" src="js/manager-dashboard.js"></script>
-  <script src="js/register-sw.js"></script>
+  <script type="module" src="js/manager-dashboard.js?v=aa-results-v2"></script>
+  <script src="js/register-sw.js?v=aa-results-v2"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>

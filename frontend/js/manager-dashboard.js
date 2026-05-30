@@ -2461,7 +2461,9 @@ function renderGantt(schedule, container) {
                   data-event-id="${escapeHtml(ev.eventId)}"
                   data-event-date="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).date : ""}"
                   data-event-start-time="${ev.startTime ? _splitIsoToLocalParts(ev.startTime).time : ""}"
-                  data-event-end-time="${ev.endTime ? _splitIsoToLocalParts(ev.endTime).time : ""}">${_t("+ Add Shift", "+ הוסף משמרת")}</button>
+                  data-event-end-time="${ev.endTime ? _splitIsoToLocalParts(ev.endTime).time : ""}"
+                  data-event-start-iso="${escapeHtml(ev.startTime || "")}"
+                  data-event-end-iso="${escapeHtml(ev.endTime || "")}">${_t("+ Add Shift", "+ הוסף משמרת")}</button>
         </div>
       </div>`;
     })
@@ -5059,7 +5061,22 @@ function collectEventFormData() {
 
     if (shtStartDT && shtEndDT && shtEndDT <= shtStartDT) {
       row.querySelector(".field")?.classList.add("has-error");
-      showError("A shift's end time must be after its start time.");
+      showError(_t("A shift's end time must be after its start time.", "שעת סיום המשמרת חייבת להיות לאחר שעת ההתחלה."));
+    }
+
+    if (startDT && shtStartDT && shtStartDT < startDT) {
+      row.querySelector(".field")?.classList.add("has-error");
+      showError(_t(
+        "Shift start time cannot be before the event start time.",
+        "שעת תחילת המשמרת לא יכולה להיות לפני תחילת האירוע.",
+      ));
+    }
+    if (endDT && shtEndDT && shtEndDT > endDT) {
+      row.querySelector(".field")?.classList.add("has-error");
+      showError(_t(
+        "Shift end time cannot be after the event end time.",
+        "שעת סיום המשמרת לא יכולה להיות לאחר סיום האירוע.",
+      ));
     }
 
     shifts.push({
@@ -5165,6 +5182,8 @@ function _handleGanttActionClick(e) {
       addShiftBtn.dataset.eventDate,
       addShiftBtn.dataset.eventStartTime,
       addShiftBtn.dataset.eventEndTime,
+      addShiftBtn.dataset.eventStartIso,
+      addShiftBtn.dataset.eventEndIso,
     );
 }
 
@@ -5244,28 +5263,28 @@ document
     errEl.style.display = "none";
 
     if (!rollId) {
-      errEl.textContent = "Please select a role.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please select a role.", "אנא בחר תפקיד.");
+      errEl.style.display = "block";
       return;
     }
     if (!start) {
-      errEl.textContent = "Please enter a start time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please enter a start time.", "אנא הזן שעת התחלה.");
+      errEl.style.display = "block";
       return;
     }
     if (!end) {
-      errEl.textContent = "Please enter an end time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please enter an end time.", "אנא הזן שעת סיום.");
+      errEl.style.display = "block";
       return;
     }
     if (end <= start) {
-      errEl.textContent = "End time must be after start time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("End time must be after start time.", "שעת הסיום חייבת להיות לאחר שעת ההתחלה.");
+      errEl.style.display = "block";
       return;
     }
     if (!qty || qty < 1) {
-      errEl.textContent = "Quantity must be at least 1.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Quantity must be at least 1.", "כמות חייבת להיות לפחות 1.");
+      errEl.style.display = "block";
       return;
     }
 
@@ -5294,8 +5313,8 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        errEl.textContent = data.error || "Failed to save shift.";
-        errEl.style.display = "";
+        errEl.textContent = data.error || _t("Failed to save shift.", "שמירת המשמרת נכשלה.");
+        errEl.style.display = "block";
         return;
       }
 
@@ -5304,8 +5323,8 @@ document
       if (currentEventId) loadEventSchedule(currentEventId);
       else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      errEl.textContent = "Network error. Please try again.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Network error. Please try again.", "שגיאת רשת. אנא נסה שוב.");
+      errEl.style.display = "block";
     } finally {
       btn.disabled = false;
       btn.innerHTML = `${_ICON.check} Save Changes`;
@@ -5378,17 +5397,25 @@ document
 
 let addingShiftEventId = null;
 let addingShiftEventDate = null;
+let addingShiftEventStartISO = null;
+let addingShiftEventEndISO = null;
 
-async function openShiftAddModal(eventId, eventDate, eventStartTime = "", eventEndTime = "") {
+async function openShiftAddModal(eventId, eventDate, eventStartTime = "", eventEndTime = "", eventStartISO = "", eventEndISO = "") {
   addingShiftEventId = eventId;
   addingShiftEventDate = eventDate;
+  addingShiftEventStartISO = eventStartISO || null;
+  addingShiftEventEndISO   = eventEndISO   || null;
 
   const errEl = document.getElementById("shift-add-error");
   errEl.style.display = "none";
   errEl.textContent = "";
 
-  document.getElementById("shift-add-start").value = eventStartTime || "";
-  document.getElementById("shift-add-end").value = eventEndTime || "";
+  // Pre-fill with full datetime-local values (YYYY-MM-DDTHH:MM)
+  const date = eventDate || new Date().toISOString().slice(0, 10);
+  document.getElementById("shift-add-start").value =
+    eventStartTime ? `${date}T${eventStartTime}` : "";
+  document.getElementById("shift-add-end").value =
+    eventEndTime   ? `${date}T${eventEndTime}`   : "";
   document.getElementById("shift-add-qty").value = 1;
 
   document.getElementById("shift-add-overlay").classList.add("open");
@@ -5420,6 +5447,8 @@ function closeShiftAddModal() {
   document.getElementById("shift-add-overlay").classList.remove("open");
   addingShiftEventId = null;
   addingShiftEventDate = null;
+  addingShiftEventStartISO = null;
+  addingShiftEventEndISO   = null;
 }
 
 document
@@ -5447,35 +5476,58 @@ document
     errEl.style.display = "none";
 
     if (!rollId) {
-      errEl.textContent = "Please select a role.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please select a role.", "אנא בחר תפקיד.");
+      errEl.style.display = "block";
       return;
     }
     if (!start) {
-      errEl.textContent = "Please enter a start time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please enter a start time.", "אנא הזן שעת התחלה.");
+      errEl.style.display = "block";
       return;
     }
     if (!end) {
-      errEl.textContent = "Please enter an end time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Please enter an end time.", "אנא הזן שעת סיום.");
+      errEl.style.display = "block";
       return;
     }
     if (end <= start) {
-      errEl.textContent = "End time must be after start time.";
-      errEl.style.display = "";
+      errEl.textContent = _t("End time must be after start time.", "שעת הסיום חייבת להיות לאחר שעת ההתחלה.");
+      errEl.style.display = "block";
       return;
     }
     if (!qty || qty < 1) {
-      errEl.textContent = "Required quantity must be at least 1.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Required quantity must be at least 1.", "כמות הנדרשת חייבת להיות לפחות 1.");
+      errEl.style.display = "block";
       return;
     }
 
-    // Compose full ISO datetime: use event's date + chosen time
-    const date = addingShiftEventDate || new Date().toISOString().slice(0, 10);
-    const startDt = `${date}T${start}:00`;
-    const endDt = `${date}T${end}:00`;
+    // datetime-local value is already a full ISO datetime (YYYY-MM-DDTHH:MM)
+    const startDt = `${start}:00`;
+    const endDt   = `${end}:00`;
+
+    // Validate shift is within the event's time window
+    if (addingShiftEventStartISO || addingShiftEventEndISO) {
+      const shiftStart  = new Date(startDt);
+      const shiftEnd    = new Date(endDt);
+      const eventStart  = addingShiftEventStartISO ? new Date(addingShiftEventStartISO) : null;
+      const eventEnd    = addingShiftEventEndISO   ? new Date(addingShiftEventEndISO)   : null;
+      if (eventStart && shiftStart < eventStart) {
+        errEl.textContent = _t(
+          "Shift start time cannot be before the event start time.",
+          "שעת תחילת המשמרת לא יכולה להיות לפני תחילת האירוע.",
+        );
+        errEl.style.display = "block";
+        return;
+      }
+      if (eventEnd && shiftEnd > eventEnd) {
+        errEl.textContent = _t(
+          "Shift end time cannot be after the event end time.",
+          "שעת סיום המשמרת לא יכולה להיות לאחר סיום האירוע.",
+        );
+        errEl.style.display = "block";
+        return;
+      }
+    }
 
     const btn = document.getElementById("btn-save-shift-add");
     btn.disabled = true;
@@ -5502,8 +5554,8 @@ document
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        errEl.textContent = data.error || "Error saving shift.";
-        errEl.style.display = "";
+        errEl.textContent = data.error || _t("Error saving shift.", "שגיאה בשמירת המשמרת.");
+        errEl.style.display = "block";
         return;
       }
 
@@ -5514,8 +5566,8 @@ document
       if (currentEventId) loadEventSchedule(currentEventId);
       else if (currentProjectId) loadProjectSchedule(currentProjectId);
     } catch {
-      errEl.textContent = "Network error. Please try again.";
-      errEl.style.display = "";
+      errEl.textContent = _t("Network error. Please try again.", "שגיאת רשת. אנא נסה שוב.");
+      errEl.style.display = "block";
     } finally {
       btn.disabled = false;
       btn.innerHTML = `${_ICON.plus} ${_t("Add Shift", "הוסף משמרת")}`;
@@ -5683,7 +5735,7 @@ function _buildStaffingSection(
   // The Auto-Assign button only appears on the "applicants" section
   const autoAssignBtn =
     key === "applicants"
-      ? `<button class="btn-auto-assign" data-action="auto-assign" data-event-id="${eventId}">⚡ Auto-Assign</button>`
+      ? `<button class="btn-auto-assign" data-action="auto-assign" data-event-id="${eventId}">${_t("⚡ Auto-Assign", "⚡ שיבוץ אוטומטי")}</button>`
       : "";
 
   return `
@@ -6269,9 +6321,10 @@ async function _handleWorkerStatusChange(
 }
 
 function _formatAutoAssignTime(start, end) {
+  const locale = getCurrentLanguage() === "he" ? "he-IL" : "en-US";
   const fmt = (dt) =>
     dt
-      ? new Date(dt).toLocaleTimeString("en-US", {
+      ? new Date(dt).toLocaleTimeString(locale, {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
@@ -6287,6 +6340,38 @@ function _pct(value) {
   return `${Math.round(n * 100)}%`;
 }
 
+function _formatAutoAssignCount(n, enSingular, enPlural, heSingular, hePlural) {
+  const count = Number(n ?? 0);
+  if (getCurrentLanguage() === "he") return `${count} ${count === 1 ? heSingular : hePlural}`;
+  return `${count} ${count === 1 ? enSingular : enPlural}`;
+}
+
+function _autoAssignOpenSlots(result) {
+  return Math.max(0, Number(result.required ?? 0) - Number(result.alreadyApproved ?? 0));
+}
+
+function _translateAutoAssignWarning(warning) {
+  const text = String(warning ?? "");
+  if (!text) return "";
+  if (getCurrentLanguage() !== "he") return text;
+  if (/No applicants found for this shift/i.test(text)) return "לא נמצאו מועמדים למשמרת הזו.";
+  const match = text.match(/Only\s+(\d+)\s+out of\s+(\d+)\s+open slots could be filled/i);
+  if (match) {
+    return `רק ${match[1]} מתוך ${match[2]} תקנים פנויים אוישו. אין מספיק מועמדים זמינים ללא התנגשויות בשיבוץ.`;
+  }
+  return text;
+}
+
+function _autoAssignErrorMessage(err) {
+  const raw = String(err?.message ?? "");
+  if (getCurrentLanguage() !== "he") return raw || "Auto-assign failed.";
+  if (/Valid Firebase token required/i.test(raw)) return "נדרש חיבור מחדש כדי לבצע שיבוץ אוטומטי.";
+  if (/Shift not found|do not have access/i.test(raw)) return "המשמרת לא נמצאה או שאין לך הרשאה לבצע בה שיבוץ.";
+  if (/Server error on shift/i.test(raw)) return "אירעה שגיאת שרת באחת המשמרות.";
+  if (/unexpected error/i.test(raw)) return "אירעה שגיאה לא צפויה בזמן השיבוץ האוטומטי.";
+  return raw || "השיבוץ האוטומטי נכשל.";
+}
+
 function _scoreBar(label, value, title) {
   const n = Math.max(0, Math.min(1, Number(value ?? 0)));
   return `
@@ -6299,65 +6384,161 @@ function _scoreBar(label, value, title) {
     </div>`;
 }
 
+function _buildAutoAssignReasons(decision) {
+  const roleRate = Number(decision.roleExperienceRate ?? 0);
+  const lateAvg = Number(decision.attendanceMinutesLateAvg ?? 0);
+  const commitmentRate = Number(decision.commitmentRate ?? 0);
+  const cost = Number(decision.costPerHour ?? 0);
+  const reasons = [];
+
+  if (getCurrentLanguage() === "he") {
+    reasons.push(
+      roleRate >= 0.7
+        ? "ניסיון חזק בתפקיד"
+        : roleRate >= 0.35
+          ? "ניסיון מסוים בתפקיד"
+          : "מעט היסטוריה בתפקיד הזה",
+    );
+    reasons.push(
+      lateAvg <= 5
+        ? "היסטוריית הגעה אמינה מאוד"
+        : lateAvg <= 15
+          ? "היסטוריית הגעה סבירה"
+          : "ממוצע איחורים גבוה יותר",
+    );
+    reasons.push(
+      commitmentRate >= 0.85
+        ? "שיעור היענות גבוה להצעות"
+        : commitmentRate >= 0.55
+          ? "שיעור היענות בינוני להצעות"
+          : "שיעור היענות נמוך להצעות",
+    );
+    if (cost > 0) reasons.push(`עלות ${cost.toFixed(2)} לשעה`);
+    return reasons;
+  }
+
+  reasons.push(
+    roleRate >= 0.7
+      ? "Strong experience in this role"
+      : roleRate >= 0.35
+        ? "Some experience in this role"
+        : "Limited history in this role",
+  );
+  reasons.push(
+    lateAvg <= 5
+      ? "Very reliable arrival history"
+      : lateAvg <= 15
+        ? "Reasonable arrival history"
+        : "Higher average lateness",
+  );
+  reasons.push(
+    commitmentRate >= 0.85
+      ? "High acceptance rate"
+      : commitmentRate >= 0.55
+        ? "Moderate acceptance rate"
+        : "Lower acceptance rate",
+  );
+  if (cost > 0) reasons.push(`Cost ${cost.toFixed(2)}/hr`);
+  return reasons;
+}
+
 function _buildAutoAssignWorkerCard(decision) {
-  const fullName = `${decision.firstName ?? ""} ${decision.lastName ?? ""}`.trim() || "Worker";
+  const fullName = `${decision.firstName ?? ""} ${decision.lastName ?? ""}`.trim() || _t("Worker", "עובד");
   const initials =
     ((decision.firstName ?? "")[0] ?? "") + ((decision.lastName ?? "")[0] ?? "");
   const status = decision.decision === "assigned" ? "assigned" : "standby";
-  const statusLabel = status === "assigned" ? "Assigned" : "Standby";
-  const attendanceText = `${Number(decision.attendanceMinutesLateAvg ?? 0).toFixed(1)} min avg late`;
+  const statusLabel = status === "assigned" ? _t("Assigned", "שובץ") : _t("Standby", "המתנה");
+  const attendanceText = _t(
+    `${Number(decision.attendanceMinutesLateAvg ?? 0).toFixed(1)} min avg late`,
+    `${Number(decision.attendanceMinutesLateAvg ?? 0).toFixed(1)} דק׳ איחור בממוצע`,
+  );
   const costText =
     Number(decision.costPerHour ?? 0) > 0
-      ? `${Number(decision.costPerHour).toFixed(2)}/hr`
-      : "No cost set";
+      ? _t(`${Number(decision.costPerHour).toFixed(2)}/hr`, `${Number(decision.costPerHour).toFixed(2)} לשעה`)
+      : _t("No cost set", "לא הוגדרה עלות");
+  const reasons = _buildAutoAssignReasons(decision);
 
   return `
-    <article class="aa-worker-card aa-worker-card--${status}">
-      <div class="aa-worker-head">
+    <article class="aa-worker-row aa-worker-row--${status}">
+      <div class="aa-worker-main">
+        <span class="aa-status aa-status--${status}">${statusLabel}</span>
         <div class="ps-avatar">${escapeHtml(initials.toUpperCase())}</div>
         <div class="aa-worker-title">
           <div class="aa-worker-name">${escapeHtml(fullName)}</div>
-          <div class="aa-worker-rank">Rank #${Number(decision.rank ?? 0)} · score ${_pct(decision.totalScore)}</div>
+          <div class="aa-worker-rank">${_t("Rank", "דירוג")} #${Number(decision.rank ?? 0)}</div>
         </div>
-        <span class="aa-status aa-status--${status}">${statusLabel}</span>
       </div>
-      <div class="aa-metrics-grid">
-        ${_scoreBar("Commitment", decision.commitmentScore, `Accepted ${_pct(decision.commitmentRate)} of prior offers`)}
-        ${_scoreBar("Attendance", decision.attendanceScore, attendanceText)}
-        ${_scoreBar("Role fit", decision.roleFitScore, `${_pct(decision.roleExperienceRate)} of approved shifts were in this role`)}
-        ${_scoreBar("Cost", decision.costScore, costText)}
+      <div class="aa-worker-score">
+        <span>${escapeHtml(_t("Score", "ציון"))}</span>
+        <strong>${_pct(decision.totalScore)}</strong>
       </div>
-      <div class="aa-worker-foot">
-        <span><i data-lucide="clock"></i>${escapeHtml(attendanceText)}</span>
-        <span><i data-lucide="badge-dollar-sign"></i>${escapeHtml(costText)}</span>
+      <div class="aa-worker-meta">
+        <span>${escapeHtml(_t("Commitment", "מחויבות"))}: <strong>${_pct(decision.commitmentScore)}</strong></span>
+        <span>${escapeHtml(_t("Attendance", "נוכחות"))}: <strong>${_pct(decision.attendanceScore)}</strong></span>
+        <span>${escapeHtml(_t("Role fit", "התאמה"))}: <strong>${_pct(decision.roleFitScore)}</strong></span>
+        <span>${escapeHtml(_t("Cost", "עלות"))}: <strong>${escapeHtml(costText)}</strong></span>
+      </div>
+      <div class="aa-worker-reasons">
+        ${reasons.slice(0, 3).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}
       </div>
     </article>`;
 }
 
 function _showAutoAssignInsights(results) {
+  const isHe = getCurrentLanguage() === "he";
   const totalAssigned = results.reduce((s, r) => s + (r.assigned ?? 0), 0);
   const totalStandby = results.reduce((s, r) => s + (r.standby ?? 0), 0);
-  const warnings = results.map((r) => r.warning).filter(Boolean);
+  const totalScored = results.reduce((s, r) => s + ((r.decisions ?? []).length), 0);
+  const totalOpenSlots = results.reduce((s, r) => s + _autoAssignOpenSlots(r), 0);
+  const warnings = results.map((r) => _translateAutoAssignWarning(r.warning)).filter(Boolean);
   const shiftBlocks = results
     .map((r) => {
       const decisions = r.decisions ?? [];
+      const assigned = decisions.filter((d) => d.decision === "assigned");
+      const standby = decisions.filter((d) => d.decision !== "assigned");
       const timeText = _formatAutoAssignTime(r.shiftStart, r.shiftEnd);
-      const cards = decisions.length
-        ? decisions.map(_buildAutoAssignWorkerCard).join("")
-        : `<div class="aa-empty">No eligible applicants were scored for this shift.</div>`;
+      const openSlots = _autoAssignOpenSlots(r);
+      const fillPct = openSlots > 0 ? Math.min(100, Math.round((Number(r.assigned ?? 0) / openSlots) * 100)) : 100;
+      const assignedCards = assigned.length
+        ? assigned.map(_buildAutoAssignWorkerCard).join("")
+        : `<div class="aa-empty">${escapeHtml(_t("No applicants were assigned to this shift.", "לא שובצו מועמדים למשמרת הזו."))}</div>`;
+      const standbyCards = standby.length
+        ? standby.map(_buildAutoAssignWorkerCard).join("")
+        : `<div class="aa-empty">${escapeHtml(_t("No applicants moved to standby.", "אין מועמדים שעברו להמתנה."))}</div>`;
       return `
         <section class="aa-shift-block">
           <div class="aa-shift-head">
             <div>
-              <h4>${escapeHtml(r.roleName ?? "Shift")}</h4>
-              <p>${escapeHtml(timeText)} · Required ${r.required ?? 0}, already approved ${r.alreadyApproved ?? 0}</p>
+              <h4>${escapeHtml(r.roleName ?? _t("Shift", "משמרת"))}</h4>
+              <p>${[
+                timeText,
+                _t(`Required ${r.required ?? 0}`, `נדרש ${r.required ?? 0}`),
+                _t(`already approved ${r.alreadyApproved ?? 0}`, `כבר מאושרים ${r.alreadyApproved ?? 0}`),
+                _t(`open slots ${openSlots}`, `תקנים פנויים ${openSlots}`),
+              ].filter(Boolean).map(escapeHtml).join(" · ")}</p>
             </div>
             <div class="aa-shift-counts">
-              <span>${r.assigned ?? 0} assigned</span>
-              <span>${r.standby ?? 0} standby</span>
+              <span class="aa-count-assigned">${_formatAutoAssignCount(r.assigned, "assigned", "assigned", "שובץ", "שובצו")}</span>
+              <span>${_formatAutoAssignCount(r.standby, "standby", "standby", "בהמתנה", "בהמתנה")}</span>
             </div>
           </div>
-          <div class="aa-worker-grid">${cards}</div>
+          <div class="aa-fill">
+            <div class="aa-fill-top">
+              <span>${escapeHtml(_t("Filled this run", "אוישו בהרצה הזו"))}</span>
+              <strong>${Number(r.assigned ?? 0)}/${openSlots}</strong>
+            </div>
+            <div class="aa-fill-bar"><span style="width:${fillPct}%"></span></div>
+          </div>
+          <div class="aa-decision-columns">
+            <div class="aa-decision-group">
+              <h5>${escapeHtml(_t("Assigned now", "שובצו עכשיו"))}</h5>
+              <div class="aa-worker-grid">${assignedCards}</div>
+            </div>
+            <div class="aa-decision-group">
+              <h5>${escapeHtml(_t("Standby / not selected", "המתנה / לא נבחרו"))}</h5>
+              <div class="aa-worker-grid">${standbyCards}</div>
+            </div>
+          </div>
         </section>`;
     })
     .join("");
@@ -6367,27 +6548,29 @@ function _showAutoAssignInsights(results) {
   overlay.className = "modal-overlay open";
   overlay.id = "auto-assign-insights-overlay";
   overlay.innerHTML = `
-    <div class="modal modal-wide auto-assign-modal" role="dialog" aria-modal="true" aria-labelledby="aa-title">
+    <div class="modal modal-wide auto-assign-modal" role="dialog" aria-modal="true" aria-labelledby="aa-title" dir="${isHe ? "rtl" : "ltr"}">
       <div class="modal-header">
         <div class="modal-header-content">
           <div class="modal-header-icon modal-icon-amber"><i data-lucide="sparkles"></i></div>
           <div class="modal-header-text">
-            <h3 id="aa-title">Auto-Assign Results</h3>
+            <h3 id="aa-title">${escapeHtml(_t("Auto-Assign Results", "תוצאות שיבוץ אוטומטי"))}</h3>
+            <p>${escapeHtml(_t("Review who was assigned per shift and who stayed on standby.", "סקירה לפי משמרת: מי שובץ ומי נשאר בהמתנה."))}</p>
           </div>
         </div>
-        <button class="btn-close" data-aa-close aria-label="Close"><i data-lucide="x"></i></button>
+        <button class="btn-close" data-aa-close aria-label="${escapeHtml(_t("Close", "סגור"))}"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body auto-assign-body">
         <div class="aa-summary">
-          <div><span>Assigned</span><strong>${totalAssigned}</strong></div>
-          <div><span>Standby</span><strong>${totalStandby}</strong></div>
-          <div><span>Scored workers</span><strong>${results.reduce((s, r) => s + ((r.decisions ?? []).length), 0)}</strong></div>
+          <div><span>${escapeHtml(_t("Assigned", "שובצו"))}</span><strong>${totalAssigned}</strong></div>
+          <div><span>${escapeHtml(_t("Standby", "המתנה"))}</span><strong>${totalStandby}</strong></div>
+          <div><span>${escapeHtml(_t("Open slots", "תקנים פנויים"))}</span><strong>${totalAssigned}/${totalOpenSlots}</strong></div>
+          <div><span>${escapeHtml(_t("Scored workers", "עובדים שנוקדו"))}</span><strong>${totalScored}</strong></div>
         </div>
-        ${warnings.length ? `<div class="aa-warning"><i data-lucide="alert-triangle"></i><span>${escapeHtml(warnings.join(" "))}</span></div>` : ""}
+        ${warnings.length ? `<div class="aa-warning"><i data-lucide="alert-triangle"></i><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></div>` : ""}
         ${shiftBlocks}
       </div>
       <div class="modal-footer">
-        <button class="btn-primary" data-aa-close>Done</button>
+        <button class="btn-primary" data-aa-close>${escapeHtml(_t("Done", "בוצע"))}</button>
       </div>
     </div>`;
 
@@ -6402,6 +6585,10 @@ function _showAutoAssignInsights(results) {
 async function _handleAutoAssign(eventId, btn) {
   // Find every shift ID that has applicants inside this event's applicants section
   const section = document.getElementById(`ps-section-${eventId}-applicants`);
+  if (!section) {
+    showManagerAlert(_t("Applicants section is not available yet.", "אזור המועמדים עדיין לא זמין."), "warning");
+    return;
+  }
   const shiftIds = [
     ...new Set(
       [...section.querySelectorAll(".ps-row[data-shift-id]")]
@@ -6416,7 +6603,7 @@ async function _handleAutoAssign(eventId, btn) {
   }
 
   btn.disabled = true;
-  btn.textContent = "Assigning…";
+  btn.textContent = _t("Assigning...", "משבץ...");
 
   const token = await getToken();
   const results = [];
@@ -6439,16 +6626,16 @@ async function _handleAutoAssign(eventId, btn) {
 
     // Refresh the workers panel — this re-renders the button so reset it first
     btn.disabled = false;
-    btn.textContent = "⚡ Auto-Assign";
+    btn.textContent = _t("⚡ Auto-Assign", "⚡ שיבוץ אוטומטי");
     const workers = await loadAndRenderEventWorkers(eventId);
     await _syncApprovedWorkersToExistingChats(eventId, workers);
 
     _showAutoAssignInsights(results);
   } catch (err) {
     console.error("Auto-assign failed:", err);
-    showManagerAlert(_t(`Auto-assign failed: ${err.message}`, `השיבוץ האוטומטי נכשל: ${err.message}`));
+    showManagerAlert(_t(`Auto-assign failed: ${_autoAssignErrorMessage(err)}`, `השיבוץ האוטומטי נכשל: ${_autoAssignErrorMessage(err)}`), "error");
     btn.disabled = false;
-    btn.textContent = "⚡ Auto-Assign";
+    btn.textContent = _t("⚡ Auto-Assign", "⚡ שיבוץ אוטומטי");
   }
 }
 
@@ -7049,9 +7236,12 @@ function _toggleSectionPin(hdr) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 let currentEventId = null;
-let _edTasksData = null; // cached tasks for current event
-let _edBriefsData = null; // cached briefs for current event
-let _edExpandedRow = null; // currently expanded task/brief row
+let _edTasksData = null;
+let _edBriefsData = null;       // cached event-level briefs
+let _edShiftsData = null;       // cached shift summaries for current event
+let _edShiftBriefsData = null;  // map shiftId -> BriefItem[]
+let _edShiftEquipData = null;   // map shiftId -> ShiftEquipmentItem[]
+let _edExpandedRow = null;
 let _edTaskFilterPriority = "all";
 const _eventScheduleCache = new Map();
 
@@ -7132,6 +7322,9 @@ async function openEventDetail(eventId, evData) {
   _closeShiftChatMenu();
   _edTasksData = null;
   _edBriefsData = null;
+  _edShiftsData = null;
+  _edShiftBriefsData = null;
+  _edShiftEquipData = null;
   _edExpandedRow = null;
   _edExpensesData = null;
   _edPayrollData = null;
@@ -7669,13 +7862,10 @@ function _edAddNewTaskRow() {
   });
 }
 
-// Wire event detail task/brief add buttons
+// Wire event detail task add button
 document
   .getElementById("ed-btn-add-task")
   .addEventListener("click", () => _edAddNewTaskRow());
-document
-  .getElementById("ed-btn-add-brief")
-  .addEventListener("click", () => _edAddNewBriefRow());
 
 // Priority filters for event tasks
 document
@@ -7694,48 +7884,113 @@ document
 
 // ── BRIEFS TAB ─────────────────────────────────────────────────────────────
 
-async function renderEdBriefsTab() {
-  const list = document.getElementById("ed-brief-list");
-  if (!list) return;
+// ── Briefings & Equipment tab — action-based accordion UX ────────────────
 
-  if (_edBriefsData !== null) {
-    _edRenderBriefList(list);
+async function renderEdBriefsTab() {
+  const root = document.getElementById("ed-be-root");
+  if (!root) return;
+
+  // If data is cached and the skeleton already exists, just refresh lists
+  if (_edBriefsData !== null && _edShiftsData !== null && root.querySelector(".ed-be-topbar")) {
+    _edRefreshEventBriefList();
+    _edRefreshShiftAccordion();
     return;
   }
 
-  list.innerHTML = '<div class="pd-loading">Loading briefs…</div>';
+  const loadMsg = `<div class="pd-loading">${_t("Loading briefings & equipment…", "טוען תדריכים וציוד…")}</div>`;
+  root.innerHTML = `
+    <div class="ed-be-topbar">
+      <button class="ed-be-action-btn" id="ed-btn-add-event-brief">
+        ${_t("Add Event Briefing", "הוסף תדריך לאירוע")}
+      </button>
+      <button class="ed-be-action-btn" id="ed-btn-add-shift-brief">
+        ${_t("Add Shift Briefing", "הוסף תדריך למשמרת")}
+      </button>
+      <button class="ed-be-action-btn" id="ed-btn-assign-shift-equip">
+        ${_t("Assign Shift Equipment", "שייך ציוד למשמרת")}
+      </button>
+    </div>
+    <div id="ed-be-inline-panel" class="ed-be-inline-panel" hidden></div>
+    <div class="ed-be-event-section">
+      <div class="ed-be-section-label">${_t("Event Briefing", "תדריך אירוע")}</div>
+      <div class="pd-brief-list" id="ed-event-brief-list">${loadMsg}</div>
+    </div>
+    <div id="ed-shift-accordion" class="ed-be-accordion">${loadMsg}</div>`;
+
+  document.getElementById("ed-btn-add-event-brief")
+    .addEventListener("click", _edAddNewEventBriefRow);
+  document.getElementById("ed-btn-add-shift-brief")
+    .addEventListener("click", () => _edShowInlinePanel("shift-brief"));
+  document.getElementById("ed-btn-assign-shift-equip")
+    .addEventListener("click", () => _edShowInlinePanel("shift-equip"));
+
   try {
     const token = await getToken();
-    const res = await fetch(
-      `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    if (!res.ok) throw new Error();
-    _edBriefsData = await res.json();
-    _edRenderBriefList(list);
+    const [briefsRes, shiftsRes] = await Promise.all([
+      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
+            { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE}/events/${encodeURIComponent(currentEventId)}/shifts`,
+            { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    if (!briefsRes.ok || !shiftsRes.ok) throw new Error();
+    _edBriefsData  = await briefsRes.json();
+    _edShiftsData  = await shiftsRes.json();
+    _edShiftBriefsData = {};
+    _edShiftEquipData  = {};
+
+    if (_edShiftsData.length > 0) {
+      await Promise.all(_edShiftsData.map(async (shift) => {
+        const [sbRes, seRes] = await Promise.all([
+          fetch(`${API_BASE}/shifts/${encodeURIComponent(shift.shiftId)}/briefs`,
+                { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE}/shifts/${encodeURIComponent(shift.shiftId)}/equipment`,
+                { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        _edShiftBriefsData[shift.shiftId] = sbRes.ok ? await sbRes.json() : [];
+        _edShiftEquipData[shift.shiftId]  = seRes.ok ? await seRes.json() : [];
+      }));
+    }
+
+    _edRefreshEventBriefList();
+    _edRefreshShiftAccordion();
   } catch {
-    list.innerHTML = '<div class="pd-loading">Failed to load briefs.</div>';
+    const errHtml = `<div class="pd-loading">${_t("Failed to load briefings & equipment.", "טעינת תדריכים וציוד נכשלה.")}</div>`;
+    const listEl = document.getElementById("ed-event-brief-list");
+    const accEl  = document.getElementById("ed-shift-accordion");
+    if (listEl) listEl.innerHTML = errHtml;
+    if (accEl)  accEl.innerHTML  = "";
   }
 }
 
-function _edRenderBriefList(list) {
-  list.innerHTML = _edBriefsData.length === 0 ? briefEmptyStateHtml() : "";
-  _edBriefsData.forEach((b) => list.appendChild(_edBuildBriefRow(b)));
+function _edRefreshEventBriefList() {
+  const list = document.getElementById("ed-event-brief-list");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!_edBriefsData || _edBriefsData.length === 0) {
+    list.innerHTML = `<div class="pd-empty-state">${_t(
+      "No event briefing yet. Add one to inform all attendees.",
+      "אין תדריך אירוע עדיין. הוסף אחד כדי ליידע את כל המשתתפים.")}</div>`;
+    return;
+  }
+  _edBriefsData.forEach((b) => list.appendChild(_edBuildBriefRow(b, "event")));
 }
 
-function _edBuildBriefRow(brief) {
+// scope = "event" | "shift"
+// shiftId is required when scope = "shift"
+function _edBuildBriefRow(brief, scope, shiftId) {
   const row = document.createElement("div");
   row.className = "pd-brief-row";
   row.dataset.briefId = brief.briefId;
+  if (scope) row.dataset.briefScope = scope;
+  if (shiftId) row.dataset.shiftId = shiftId;
 
   const authorName = brief.createdByManagerName ?? "Unknown";
   const dateStr = brief.createdAt ? formatBriefDate(brief.createdAt) : "";
   const preview =
-    brief.content.length > 120
+    (brief.content || "").length > 120
       ? brief.content.slice(0, 120) + "…"
-      : brief.content;
+      : (brief.content || "");
 
-  // Acknowledgment summary — always shown, X / Y format
   const ackHtml =
     brief.totalRelevant > 0
       ? `<span class="ed-brief-ack${brief.ackCount >= brief.totalRelevant ? " ed-brief-ack--all" : ""}" title="${brief.ackCount} of ${brief.totalRelevant} acknowledged">&#10003; ${brief.ackCount} / ${brief.totalRelevant}</span>`
@@ -7748,27 +8003,27 @@ function _edBuildBriefRow(brief) {
         <span class="pd-brief-preview-text">${escapeHtml(preview)}</span>
         <span class="pd-brief-author-text">By: ${escapeHtml(authorName)}${dateStr ? ` · ${dateStr}` : ""}${ackHtml}</span>
       </div>
-      <button class="pd-row-delete-btn" title="Delete brief" aria-label="Delete brief">&#10005;</button>
+      <button class="pd-row-delete-btn" title="${_t("Delete brief", "מחק תדריך")}" aria-label="${_t("Delete brief", "מחק תדריך")}">&#10005;</button>
     </div>
     <div class="pd-row-form">
-      <label class="pd-field-label">Title</label>
-      <input type="text" class="pd-form-input" name="title" value="${escapeHtml(brief.title)}" placeholder="Brief title…" maxlength="200">
-      <label class="pd-field-label">Content</label>
-      <textarea class="pd-form-textarea pd-form-textarea--large" name="content" rows="5" placeholder="Brief content…" maxlength="5000">${escapeHtml(brief.content)}</textarea>
+      <label class="pd-field-label">${_t("Title", "כותרת")}</label>
+      <input type="text" class="pd-form-input" name="title" value="${escapeHtml(brief.title)}" placeholder="${_t("Brief title…", "כותרת תדריך…")}" maxlength="200">
+      <label class="pd-field-label">${_t("Content", "תוכן")}</label>
+      <textarea class="pd-form-textarea pd-form-textarea--large" name="content" rows="5" placeholder="${_t("Brief content…", "תוכן התדריך…")}" maxlength="5000">${escapeHtml(brief.content || "")}</textarea>
       <div class="pd-form-actions">
-        <button class="pd-form-save-btn" disabled>Save</button>
-        <button class="pd-form-cancel-btn">Cancel</button>
+        <button class="pd-form-save-btn" disabled>${_t("Save", "שמור")}</button>
+        <button class="pd-form-cancel-btn">${_t("Cancel", "ביטול")}</button>
       </div>
       <div class="ed-ack-section">
-        <div class="ed-ack-header">Acknowledgments</div>
+        <div class="ed-ack-header">${_t("Acknowledgments", "אישורים")}</div>
         <div class="ed-brief-ack-list"></div>
       </div>
     </div>`;
-  _edWireBriefRow(row, brief);
+  _edWireBriefRow(row, brief, scope, shiftId);
   return row;
 }
 
-function _edWireBriefRow(row, brief) {
+function _edWireBriefRow(row, brief, scope, shiftId) {
   const summary = row.querySelector(".pd-row-summary");
   const form = row.querySelector(".pd-row-form");
   const titleIn = row.querySelector('input[name="title"]');
@@ -7776,6 +8031,14 @@ function _edWireBriefRow(row, brief) {
   const saveBtn = row.querySelector(".pd-form-save-btn");
   const cancelBtn = row.querySelector(".pd-form-cancel-btn");
   const deleteBtn = row.querySelector(".pd-row-delete-btn");
+
+  // Build API URLs based on scope
+  const briefUrl = scope === "shift"
+    ? `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/briefs/${encodeURIComponent(brief.briefId)}`
+    : `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`;
+  const acksUrl = scope === "shift"
+    ? `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`
+    : `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`;
 
   summary.addEventListener("click", (e) => {
     if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
@@ -7794,10 +8057,7 @@ function _edWireBriefRow(row, brief) {
     if (ackListEl && ackListEl.innerHTML === "") {
       ackListEl.innerHTML = '<span class="ed-ack-loading">Loading…</span>';
       getToken().then((token) =>
-        fetch(
-          `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}/acknowledgments`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
+        fetch(acksUrl, { headers: { Authorization: `Bearer ${token}` } })
           .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then((acks) => {
             if (acks.length === 0) {
@@ -7814,7 +8074,7 @@ function _edWireBriefRow(row, brief) {
               updateBriefAckSummary(row, readCount, total);
               const headerEl = form.querySelector(".ed-ack-header");
               if (headerEl) {
-                headerEl.textContent = `Acknowledgments — ${readCount} / ${total}`;
+                headerEl.textContent = `${_t("Acknowledgments", "אישורים")} — ${readCount} / ${total}`;
               }
               ackListEl.innerHTML = acks
                 .map(
@@ -7823,8 +8083,8 @@ function _edWireBriefRow(row, brief) {
                 <span class="ed-ack-name">${escapeHtml(a.firstName)} ${escapeHtml(a.lastName)}</span>
                 ${
                   a.isRead
-                    ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : "Acknowledged"}</span>`
-                    : `<span class="ed-ack-pending">Pending</span>`
+                    ? `<span class="ed-ack-badge">&#10003; ${a.readAt ? formatBriefDate(a.readAt) : _t("Acknowledged", "אושר")}</span>`
+                    : `<span class="ed-ack-pending">${_t("Pending", "ממתין")}</span>`
                 }
               </div>`,
                 )
@@ -7833,7 +8093,7 @@ function _edWireBriefRow(row, brief) {
           })
           .catch(() => {
             ackListEl.innerHTML =
-              '<span class="ed-ack-empty">Failed to load.</span>';
+              `<span class="ed-ack-empty">${_t("Failed to load.", "טעינה נכשלה.")}</span>`;
           }),
       );
     }
@@ -7864,35 +8124,38 @@ function _edWireBriefRow(row, brief) {
       return;
     }
     saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
+    saveBtn.textContent = _t("Saving…", "שומר…");
     try {
       const token = await getToken();
-      const res = await fetch(
-        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ title, content }),
+      const res = await fetch(briefUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({ title, content }),
+      });
       if (!res.ok) throw new Error();
       const updated = await res.json();
-      const idx = _edBriefsData.findIndex((b) => b.briefId === brief.briefId);
-      if (idx !== -1) _edBriefsData[idx] = updated;
+      // Update the correct data store
+      if (scope === "shift" && shiftId && _edShiftBriefsData?.[shiftId]) {
+        const idx = _edShiftBriefsData[shiftId].findIndex((b) => b.briefId === brief.briefId);
+        if (idx !== -1) _edShiftBriefsData[shiftId][idx] = updated;
+      } else if (_edBriefsData) {
+        const idx = _edBriefsData.findIndex((b) => b.briefId === brief.briefId);
+        if (idx !== -1) _edBriefsData[idx] = updated;
+      }
       brief.title = updated.title;
       brief.content = updated.content;
       row.querySelector(".pd-brief-title-text").textContent = updated.title;
       const p =
-        updated.content.length > 120
+        (updated.content || "").length > 120
           ? updated.content.slice(0, 120) + "…"
-          : updated.content;
+          : (updated.content || "");
       row.querySelector(".pd-brief-preview-text").textContent = p;
       _edCollapseRow(row);
     } catch {
-      saveBtn.textContent = "Save";
+      saveBtn.textContent = _t("Save", "שמור");
       saveBtn.disabled = false;
     }
   });
@@ -7921,19 +8184,36 @@ function _edWireBriefRow(row, brief) {
         e.stopPropagation();
         try {
           const token = await getToken();
-          const res = await fetch(
-            `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs/${encodeURIComponent(brief.briefId)}`,
-            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
-          );
+          const res = await fetch(briefUrl, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
           if (!res.ok) throw new Error();
-          _edBriefsData = _edBriefsData.filter(
-            (b) => b.briefId !== brief.briefId,
-          );
+          // Remove from the correct data store
+          if (scope === "shift" && shiftId && _edShiftBriefsData?.[shiftId]) {
+            _edShiftBriefsData[shiftId] = _edShiftBriefsData[shiftId].filter(
+              (b) => b.briefId !== brief.briefId,
+            );
+          } else if (_edBriefsData) {
+            _edBriefsData = _edBriefsData.filter(
+              (b) => b.briefId !== brief.briefId,
+            );
+          }
           if (_edExpandedRow === row) _edExpandedRow = null;
+          const parentList = row.parentElement;
           row.remove();
-          const list = document.getElementById("ed-brief-list");
-          if (list && _edBriefsData.length === 0)
-            list.innerHTML = briefEmptyStateHtml();
+          if (parentList && !parentList.querySelector(".pd-brief-row")) {
+            if (scope === "shift") {
+              parentList.innerHTML = `<div class="pd-empty-state">${_t(
+                "No shift briefings for this shift.",
+                "אין תדריכי משמרות למשמרת זו.")}</div>`;
+            } else {
+              parentList.innerHTML = `<div class="pd-empty-state">${_t(
+                "No event briefing yet. Add one to inform all attendees.",
+                "אין תדריך אירוע עדיין. הוסף אחד כדי ליידע את כל המשתתפים.")}</div>`;
+            }
+          }
+          if (scope === "shift" && shiftId) _edUpdateShiftBadgeCounts(shiftId);
         } catch {
           row.classList.remove("pd-row--deleting");
           confirm.remove();
@@ -7942,80 +8222,62 @@ function _edWireBriefRow(row, brief) {
   });
 }
 
-function _edAddNewBriefRow() {
-  const list = document.getElementById("ed-brief-list");
-  if (!list) return;
+// ── Generic "add new brief" helper (used for both event and shift briefs) ─────
+function _edAddNewBriefToList(list, apiUrl, scope, shiftId, dataStore, onCreated) {
   if (list.querySelector('[data-new="true"]')) return;
 
-  const tempBrief = {
-    briefId: "",
-    title: "",
-    content: "",
-    createdAt: null,
-    createdByManagerName: null,
-  };
-  const row = _edBuildBriefRow(tempBrief);
+  const tempBrief = { briefId: "", title: "", content: "", createdAt: null, createdByManagerName: null };
+  const row = _edBuildBriefRow(tempBrief, scope, shiftId);
   row.dataset.new = "true";
 
-  const form = row.querySelector(".pd-row-form");
+  const form    = row.querySelector(".pd-row-form");
   const titleIn = row.querySelector('input[name="title"]');
   const contentIn = row.querySelector('textarea[name="content"]');
   const saveBtn = row.querySelector(".pd-form-save-btn");
   const cancelBtn = row.querySelector(".pd-form-cancel-btn");
 
+  const emptyMsg = scope === "shift"
+    ? `<div class="pd-empty-state">${_t("No shift briefings yet.", "אין תדריכי משמרות עדיין.")}</div>`
+    : `<div class="pd-empty-state">${_t(
+        "No event briefing yet. Add one to inform all attendees.",
+        "אין תדריך אירוע עדיין. הוסף אחד כדי ליידע את כל המשתתפים.")}</div>`;
+
   cancelBtn.addEventListener("click", () => {
     if (_edExpandedRow === row) _edExpandedRow = null;
     row.remove();
-    if (_edBriefsData !== null && _edBriefsData.length === 0)
-      list.innerHTML = briefEmptyStateHtml();
+    if (dataStore !== null && dataStore.length === 0) list.innerHTML = emptyMsg;
   });
 
   const newSaveBtn = saveBtn.cloneNode(true);
   saveBtn.replaceWith(newSaveBtn);
   newSaveBtn.disabled = true;
-  const canSave = () =>
-    titleIn.value.trim() !== "" && contentIn.value.trim() !== "";
+  const canSave = () => titleIn.value.trim() !== "" && contentIn.value.trim() !== "";
   [titleIn, contentIn].forEach((el) =>
-    el.addEventListener("input", () => {
-      newSaveBtn.disabled = !canSave();
-    }),
+    el.addEventListener("input", () => { newSaveBtn.disabled = !canSave(); }),
   );
 
   newSaveBtn.addEventListener("click", async () => {
-    const title = titleIn.value.trim();
+    const title   = titleIn.value.trim();
     const content = contentIn.value.trim();
-    if (!title) {
-      titleIn.focus();
-      return;
-    }
-    if (!content) {
-      contentIn.focus();
-      return;
-    }
+    if (!title)   { titleIn.focus();   return; }
+    if (!content) { contentIn.focus(); return; }
     newSaveBtn.disabled = true;
-    newSaveBtn.textContent = "Saving…";
+    newSaveBtn.textContent = _t("Saving…", "שומר…");
     try {
       const token = await getToken();
-      const res = await fetch(
-        `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ title, content }),
-        },
-      );
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content }),
+      });
       if (!res.ok) throw new Error();
       const created = await res.json();
-      if (_edBriefsData === null) _edBriefsData = [];
-      _edBriefsData.push(created);
+      onCreated(created);
       const emptyEl = list.querySelector(".pd-empty-state");
       if (emptyEl) emptyEl.remove();
       if (_edExpandedRow === row) _edExpandedRow = null;
       row.remove();
-      list.appendChild(_edBuildBriefRow(created));
+      list.appendChild(_edBuildBriefRow(created, scope, shiftId));
     } catch {
       newSaveBtn.textContent = _t("Save", "שמור");
       newSaveBtn.disabled = false;
@@ -8031,6 +8293,530 @@ function _edAddNewBriefRow() {
     form.classList.add("expanded");
     row.classList.add("pd-row--expanded");
     titleIn.focus();
+  });
+}
+
+function _edAddNewEventBriefRow() {
+  const list = document.getElementById("ed-event-brief-list");
+  if (!list) return;
+  _edAddNewBriefToList(
+    list,
+    `${API_BASE}/events/${encodeURIComponent(currentEventId)}/briefs`,
+    "event",
+    null,
+    _edBriefsData ?? [],
+    (created) => {
+      if (_edBriefsData === null) _edBriefsData = [];
+      _edBriefsData.push(created);
+    },
+  );
+}
+
+function _edAddNewShiftBriefRow(shiftId, listEl) {
+  _edAddNewBriefToList(
+    listEl,
+    `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/briefs`,
+    "shift",
+    shiftId,
+    _edShiftBriefsData?.[shiftId] ?? [],
+    (created) => {
+      if (!_edShiftBriefsData) _edShiftBriefsData = {};
+      if (!_edShiftBriefsData[shiftId]) _edShiftBriefsData[shiftId] = [];
+      _edShiftBriefsData[shiftId].push(created);
+    },
+  );
+}
+
+// ── Shift label helper ────────────────────────────────────────────────────────
+
+function _edShiftLabel(shift) {
+  const role  = shift.roleName  || _t("Unknown role", "תפקיד לא ידוע");
+  const start = shift.startTime ? formatBriefDate(shift.startTime) : "";
+  return start ? `${role} · ${start}` : role;
+}
+
+// ── Shift accordion ───────────────────────────────────────────────────────────
+
+function _edRefreshShiftAccordion() {
+  const root = document.getElementById("ed-shift-accordion");
+  if (!root) return;
+
+  // Remember which items were open before re-render
+  const openIds = new Set(
+    [...root.querySelectorAll(".ed-be-shift-item--open")].map((el) => el.dataset.shiftId),
+  );
+
+  root.innerHTML = "";
+
+  if (!_edShiftsData || _edShiftsData.length === 0) {
+    root.innerHTML = `<div class="pd-empty-state">${_t(
+      "No shifts in this event yet.",
+      "אין משמרות באירוע זה עדיין.")}</div>`;
+    return;
+  }
+
+  _edShiftsData.forEach((shift) =>
+    root.appendChild(_edBuildShiftAccordionItem(shift, openIds.has(shift.shiftId))),
+  );
+}
+
+function _edBuildShiftAccordionItem(shift, isOpen = false) {
+  const briefs = (_edShiftBriefsData || {})[shift.shiftId] || [];
+  const equip  = (_edShiftEquipData  || {})[shift.shiftId] || [];
+
+  const item = document.createElement("div");
+  item.className = `ed-be-shift-item${isOpen ? " ed-be-shift-item--open" : ""}`;
+  item.dataset.shiftId = shift.shiftId;
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  const header = document.createElement("div");
+  header.className = "ed-be-shift-header";
+  header.innerHTML = `
+    <span class="ed-be-shift-chevron" aria-hidden="true">&#8250;</span>
+    <span class="ed-be-shift-name">${escapeHtml(_edShiftLabel(shift))}</span>
+    <span class="ed-be-count-badge" title="${_t("Briefings", "תדריכים")}">
+      ${_t("Briefings", "תדריכים")}: <strong class="ed-be-brief-count">${briefs.length}</strong>
+    </span>
+    <span class="ed-be-count-badge" title="${_t("Equipment", "ציוד")}">
+      ${_t("Equipment", "ציוד")}: <strong class="ed-be-equip-count">${equip.length}</strong>
+    </span>`;
+
+  // ── Body ──────────────────────────────────────────────────────────────────
+  const body = document.createElement("div");
+  body.className = "ed-be-shift-body";
+
+  const briefsTitle = document.createElement("div");
+  briefsTitle.className = "ed-be-subsection-title";
+  briefsTitle.textContent = _t("Briefings", "תדריכים");
+
+  const briefList = document.createElement("div");
+  briefList.className = "pd-brief-list ed-be-shift-brief-list";
+  if (briefs.length === 0) {
+    briefList.innerHTML = `<div class="pd-empty-state">${_t(
+      "No shift briefings for this shift.",
+      "אין תדריכי משמרות למשמרת זו.")}</div>`;
+  } else {
+    briefs.forEach((b) => briefList.appendChild(_edBuildBriefRow(b, "shift", shift.shiftId)));
+  }
+
+  const equipTitle = document.createElement("div");
+  equipTitle.className = "ed-be-subsection-title";
+  equipTitle.textContent = _t("Equipment", "ציוד");
+
+  const equipList = document.createElement("div");
+  equipList.className = "ed-equip-list ed-be-shift-equip-list";
+  if (equip.length === 0) {
+    equipList.innerHTML = `<div class="pd-empty-state">${_t(
+      "No equipment assigned for this shift.",
+      "לא שויך ציוד למשמרת זו.")}</div>`;
+  } else {
+    equip.forEach((eq) => equipList.appendChild(_edBuildEquipRow(eq, shift.shiftId)));
+  }
+
+  body.appendChild(briefsTitle);
+  body.appendChild(briefList);
+  body.appendChild(equipTitle);
+  body.appendChild(equipList);
+
+  header.addEventListener("click", () => item.classList.toggle("ed-be-shift-item--open"));
+
+  item.appendChild(header);
+  item.appendChild(body);
+  return item;
+}
+
+// Rebuild a single accordion item in-place (used after add / delete via inline panel)
+function _edUpdateShiftAccordionItem(shiftId) {
+  const root = document.getElementById("ed-shift-accordion");
+  if (!root) return;
+  const shift = (_edShiftsData || []).find((s) => s.shiftId === shiftId);
+  if (!shift) return;
+  const existing = root.querySelector(`[data-shift-id="${CSS.escape(shiftId)}"]`);
+  const wasOpen  = existing?.classList.contains("ed-be-shift-item--open") ?? true;
+  const newItem  = _edBuildShiftAccordionItem(shift, wasOpen);
+  if (existing) root.replaceChild(newItem, existing);
+}
+
+// Update only the count badges (cheaper than a full rebuild — used after delete)
+function _edUpdateShiftBadgeCounts(shiftId) {
+  const item = document.querySelector(`#ed-shift-accordion [data-shift-id="${CSS.escape(shiftId)}"]`);
+  if (!item) return;
+  const briefs = (_edShiftBriefsData || {})[shiftId] || [];
+  const equip  = (_edShiftEquipData  || {})[shiftId] || [];
+  const briefEl = item.querySelector(".ed-be-brief-count");
+  const equipEl = item.querySelector(".ed-be-equip-count");
+  if (briefEl) briefEl.textContent = briefs.length;
+  if (equipEl) equipEl.textContent = equip.length;
+}
+
+// ── Inline action panel (Add Shift Briefing / Assign Shift Equipment) ─────────
+
+function _edShowInlinePanel(mode) {
+  const panelEl = document.getElementById("ed-be-inline-panel");
+  if (!panelEl) return;
+
+  // Toggle off if same mode is already open
+  if (!panelEl.hidden && panelEl.dataset.mode === mode) {
+    _edCloseInlinePanel();
+    return;
+  }
+
+  panelEl.dataset.mode = mode;
+  panelEl.hidden = false;
+
+  const isEquip = mode === "shift-equip";
+  const title   = isEquip
+    ? _t("Assign Shift Equipment", "שייך ציוד למשמרת")
+    : _t("Add Shift Briefing",    "הוסף תדריך למשמרת");
+
+  const shiftOptions = (_edShiftsData || [])
+    .map((s) => `<option value="${escapeHtml(s.shiftId)}">${escapeHtml(_edShiftLabel(s))}</option>`)
+    .join("");
+
+  const formFields = isEquip
+    ? `<label class="pd-field-label">${_t("Equipment name…", "שם הציוד…")}</label>
+       <input type="text"   class="pd-form-input" id="ed-be-ip-name" placeholder="${_t("Equipment name…", "שם הציוד…")}" maxlength="255">
+       <label class="pd-field-label">${_t("Quantity", "כמות")}</label>
+       <input type="number" class="pd-form-input" id="ed-be-ip-qty"  value="1" min="1" max="9999">
+       <label class="pd-field-label">${_t("Notes (optional)", "הערות (אופציונלי)")}</label>
+       <textarea class="pd-form-textarea" id="ed-be-ip-notes" rows="2" maxlength="2000"></textarea>`
+    : `<label class="pd-field-label">${_t("Title", "כותרת")}</label>
+       <input type="text" class="pd-form-input" id="ed-be-ip-title" placeholder="${_t("Brief title…", "כותרת תדריך…")}" maxlength="200">
+       <label class="pd-field-label">${_t("Content", "תוכן")}</label>
+       <textarea class="pd-form-textarea pd-form-textarea--large" id="ed-be-ip-content" rows="4" maxlength="5000"></textarea>`;
+
+  panelEl.innerHTML = `
+    <div class="ed-be-ip-header">
+      <span class="ed-be-ip-title">${escapeHtml(title)}</span>
+      <button class="ed-be-ip-close" aria-label="${_t("Close", "סגור")}">&#10005;</button>
+    </div>
+    <label class="pd-field-label">${_t("Select Shift", "בחר משמרת")}</label>
+    <select class="pd-form-input" id="ed-be-ip-shift">
+      <option value="">— ${_t("Select Shift", "בחר משמרת")} —</option>
+      ${shiftOptions}
+    </select>
+    <div id="ed-be-ip-fields-area" hidden>
+      ${formFields}
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn"   id="ed-be-ip-save">${_t("Save", "שמור")}</button>
+        <button class="pd-form-cancel-btn" id="ed-be-ip-cancel">${_t("Cancel", "ביטול")}</button>
+      </div>
+    </div>`;
+
+  const closeBtn   = panelEl.querySelector(".ed-be-ip-close");
+  const cancelBtn  = panelEl.querySelector("#ed-be-ip-cancel");
+  const shiftSel   = panelEl.querySelector("#ed-be-ip-shift");
+  const fieldsArea = panelEl.querySelector("#ed-be-ip-fields-area");
+  const saveBtn    = panelEl.querySelector("#ed-be-ip-save");
+
+  closeBtn.addEventListener("click",  _edCloseInlinePanel);
+  cancelBtn.addEventListener("click", _edCloseInlinePanel);
+
+  shiftSel.addEventListener("change", () => {
+    fieldsArea.hidden = !shiftSel.value;
+    if (shiftSel.value) {
+      const first = fieldsArea.querySelector("input, textarea");
+      if (first) first.focus();
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const shiftId = shiftSel.value;
+    if (!shiftId) { shiftSel.focus(); return; }
+
+    let body;
+    if (isEquip) {
+      const name     = panelEl.querySelector("#ed-be-ip-name").value.trim();
+      const quantity = Math.max(1, parseInt(panelEl.querySelector("#ed-be-ip-qty").value, 10) || 1);
+      const notes    = panelEl.querySelector("#ed-be-ip-notes").value.trim();
+      if (!name) { panelEl.querySelector("#ed-be-ip-name").focus(); return; }
+      body = { name, quantity, notes: notes || null };
+    } else {
+      const title   = panelEl.querySelector("#ed-be-ip-title").value.trim();
+      const content = panelEl.querySelector("#ed-be-ip-content").value.trim();
+      if (!title)   { panelEl.querySelector("#ed-be-ip-title").focus();   return; }
+      if (!content) { panelEl.querySelector("#ed-be-ip-content").focus(); return; }
+      body = { title, content };
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = _t("Saving…", "שומר…");
+
+    try {
+      const token = await getToken();
+      const url = isEquip
+        ? `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/equipment`
+        : `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/briefs`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+
+      if (isEquip) {
+        if (!_edShiftEquipData)              _edShiftEquipData = {};
+        if (!_edShiftEquipData[shiftId])     _edShiftEquipData[shiftId] = [];
+        _edShiftEquipData[shiftId].push(created);
+      } else {
+        if (!_edShiftBriefsData)             _edShiftBriefsData = {};
+        if (!_edShiftBriefsData[shiftId])    _edShiftBriefsData[shiftId] = [];
+        _edShiftBriefsData[shiftId].push(created);
+      }
+
+      // Rebuild the accordion item and ensure it's open so the user sees the new item
+      _edUpdateShiftAccordionItem(shiftId);
+      const shiftItem = document.querySelector(
+        `#ed-shift-accordion [data-shift-id="${CSS.escape(shiftId)}"]`,
+      );
+      if (shiftItem) {
+        shiftItem.classList.add("ed-be-shift-item--open");
+        shiftItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      _edCloseInlinePanel();
+    } catch {
+      saveBtn.disabled = false;
+      saveBtn.textContent = _t("Save", "שמור");
+    }
+  });
+
+  shiftSel.focus();
+}
+
+function _edCloseInlinePanel() {
+  const panelEl = document.getElementById("ed-be-inline-panel");
+  if (!panelEl) return;
+  panelEl.hidden = true;
+  panelEl.innerHTML = "";
+  delete panelEl.dataset.mode;
+}
+
+// ── Equipment row builder & wiring ────────────────────────────────────────────
+
+function _edBuildEquipRow(eq, shiftId) {
+  const row = document.createElement("div");
+  row.className = "pd-brief-row ed-equip-row";
+  row.dataset.equipmentId = eq.equipmentId;
+  row.dataset.shiftId     = shiftId;
+
+  const qty      = eq.quantity ?? 1;
+  const notes    = eq.notes ?? "";
+  const preview  = notes.length > 80 ? notes.slice(0, 80) + "…" : notes;
+
+  row.innerHTML = `
+    <div class="pd-row-summary">
+      <div class="pd-brief-summary">
+        <span class="pd-brief-title-text">${escapeHtml(eq.name)}</span>
+        <span class="pd-brief-preview-text">${_t("Qty", "כמות")}: ${qty}${preview ? ` · ${escapeHtml(preview)}` : ""}</span>
+      </div>
+      <button class="pd-row-delete-btn" title="${_t("Delete equipment", "מחק ציוד")}" aria-label="${_t("Delete equipment", "מחק ציוד")}">&#10005;</button>
+    </div>
+    <div class="pd-row-form">
+      <label class="pd-field-label">${_t("Equipment name…", "שם הציוד…")}</label>
+      <input type="text" class="pd-form-input" name="name" value="${escapeHtml(eq.name)}" placeholder="${_t("Equipment name…", "שם הציוד…")}" maxlength="255">
+      <label class="pd-field-label">${_t("Quantity", "כמות")}</label>
+      <input type="number" class="pd-form-input" name="quantity" value="${qty}" min="1" max="9999">
+      <label class="pd-field-label">${_t("Notes (optional)", "הערות (אופציונלי)")}</label>
+      <textarea class="pd-form-textarea" name="notes" rows="3" placeholder="${_t("Notes (optional)", "הערות (אופציונלי)")}" maxlength="2000">${escapeHtml(notes)}</textarea>
+      <div class="pd-form-actions">
+        <button class="pd-form-save-btn" disabled>${_t("Save", "שמור")}</button>
+        <button class="pd-form-cancel-btn">${_t("Cancel", "ביטול")}</button>
+      </div>
+    </div>`;
+  _edWireEquipRow(row, eq, shiftId);
+  return row;
+}
+
+function _edWireEquipRow(row, eq, shiftId) {
+  const summary   = row.querySelector(".pd-row-summary");
+  const form      = row.querySelector(".pd-row-form");
+  const nameIn    = row.querySelector('input[name="name"]');
+  const qtyIn     = row.querySelector('input[name="quantity"]');
+  const notesIn   = row.querySelector('textarea[name="notes"]');
+  const saveBtn   = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+  const deleteBtn = row.querySelector(".pd-row-delete-btn");
+
+  summary.addEventListener("click", (e) => {
+    if (e.target === deleteBtn || deleteBtn.contains(e.target)) return;
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow === row) { _edCollapseRow(row); return; }
+    if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+    _edExpandedRow = row;
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+  });
+
+  const isDirty = () =>
+    nameIn.value.trim() !== eq.name ||
+    parseInt(qtyIn.value, 10) !== (eq.quantity ?? 1) ||
+    notesIn.value.trim() !== (eq.notes ?? "");
+
+  [nameIn, qtyIn, notesIn].forEach((el) =>
+    el.addEventListener("input", () => { saveBtn.disabled = !isDirty(); }),
+  );
+
+  cancelBtn.addEventListener("click", () => _edCollapseRow(row));
+
+  saveBtn.addEventListener("click", async () => {
+    if (!isDirty()) return;
+    const name     = nameIn.value.trim();
+    const quantity = Math.max(1, parseInt(qtyIn.value, 10) || 1);
+    const notes    = notesIn.value.trim();
+    if (!name) { nameIn.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = _t("Saving…", "שומר…");
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/equipment/${encodeURIComponent(eq.equipmentId)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name, quantity, notes: notes || null }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      if (_edShiftEquipData?.[shiftId]) {
+        const idx = _edShiftEquipData[shiftId].findIndex((e) => e.equipmentId === eq.equipmentId);
+        if (idx !== -1) _edShiftEquipData[shiftId][idx] = updated;
+      }
+      eq.name = updated.name; eq.quantity = updated.quantity; eq.notes = updated.notes;
+      row.querySelector(".pd-brief-title-text").textContent = updated.name;
+      const q = updated.quantity ?? 1;
+      const n = updated.notes ?? "";
+      const np = n.length > 80 ? n.slice(0, 80) + "…" : n;
+      row.querySelector(".pd-brief-preview-text").textContent =
+        `${_t("Qty", "כמות")}: ${q}${np ? ` · ${np}` : ""}`;
+      _edCollapseRow(row);
+    } catch {
+      saveBtn.textContent = _t("Save", "שמור");
+      saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (row.classList.contains("pd-row--deleting")) return;
+    if (_edExpandedRow && _edExpandedRow !== row) _edCollapseRow(_edExpandedRow);
+    if (_edExpandedRow === row) _edCollapseRow(row);
+    row.classList.add("pd-row--deleting");
+    const confirm = document.createElement("div");
+    confirm.className = "pd-delete-confirm";
+    confirm.innerHTML = `<span>${_t("Delete this equipment item?", "למחוק פריט ציוד זה?")}</span>
+      <button class="btn-confirm-yes">${_t("Delete", "מחק")}</button>
+      <button class="btn-confirm-no">${_t("Cancel", "ביטול")}</button>`;
+    row.querySelector(".pd-row-summary").appendChild(confirm);
+    confirm.querySelector(".btn-confirm-no").addEventListener("click", (e) => {
+      e.stopPropagation();
+      row.classList.remove("pd-row--deleting");
+      confirm.remove();
+    });
+    confirm.querySelector(".btn-confirm-yes").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/equipment/${encodeURIComponent(eq.equipmentId)}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) throw new Error();
+        if (_edShiftEquipData?.[shiftId]) {
+          _edShiftEquipData[shiftId] = _edShiftEquipData[shiftId].filter(
+            (e) => e.equipmentId !== eq.equipmentId,
+          );
+        }
+        if (_edExpandedRow === row) _edExpandedRow = null;
+        const parentList = row.parentElement;
+        row.remove();
+        if (parentList && !parentList.querySelector(".ed-equip-row")) {
+          parentList.innerHTML = `<div class="pd-empty-state">${_t(
+            "No equipment assigned for this shift.",
+            "לא שויך ציוד למשמרת זו.")}</div>`;
+        }
+        _edUpdateShiftBadgeCounts(shiftId);
+      } catch {
+        row.classList.remove("pd-row--deleting");
+        confirm.remove();
+      }
+    });
+  });
+}
+
+function _edAddNewEquipRow(shiftId, listEl) {
+  if (listEl.querySelector('[data-new="true"]')) return;
+
+  const tempEq = { equipmentId: "", name: "", quantity: 1, notes: "" };
+  const row = _edBuildEquipRow(tempEq, shiftId);
+  row.dataset.new = "true";
+
+  const form    = row.querySelector(".pd-row-form");
+  const nameIn  = row.querySelector('input[name="name"]');
+  const qtyIn   = row.querySelector('input[name="quantity"]');
+  const notesIn = row.querySelector('textarea[name="notes"]');
+  const saveBtn = row.querySelector(".pd-form-save-btn");
+  const cancelBtn = row.querySelector(".pd-form-cancel-btn");
+
+  cancelBtn.addEventListener("click", () => {
+    if (_edExpandedRow === row) _edExpandedRow = null;
+    row.remove();
+    const remaining = listEl.querySelectorAll(".ed-equip-row:not([data-new])");
+    if (!remaining.length && !listEl.querySelector(".pd-empty-state")) {
+      listEl.innerHTML = `<div class="pd-empty-state">${_t("No equipment items added yet.", "לא נוסף ציוד עדיין.")}</div>`;
+    }
+  });
+
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.replaceWith(newSaveBtn);
+  newSaveBtn.disabled = true;
+  nameIn.addEventListener("input", () => { newSaveBtn.disabled = !nameIn.value.trim(); });
+
+  newSaveBtn.addEventListener("click", async () => {
+    const name     = nameIn.value.trim();
+    const quantity = Math.max(1, parseInt(qtyIn.value, 10) || 1);
+    const notes    = notesIn.value.trim();
+    if (!name) { nameIn.focus(); return; }
+    newSaveBtn.disabled = true;
+    newSaveBtn.textContent = _t("Saving…", "שומר…");
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_BASE}/shifts/${encodeURIComponent(shiftId)}/equipment`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name, quantity, notes: notes || null }),
+        },
+      );
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      if (!_edShiftEquipData) _edShiftEquipData = {};
+      if (!_edShiftEquipData[shiftId]) _edShiftEquipData[shiftId] = [];
+      _edShiftEquipData[shiftId].push(created);
+      const emptyEl = listEl.querySelector(".pd-empty-state");
+      if (emptyEl) emptyEl.remove();
+      if (_edExpandedRow === row) _edExpandedRow = null;
+      row.remove();
+      listEl.appendChild(_edBuildEquipRow(created, shiftId));
+    } catch {
+      newSaveBtn.textContent = _t("Save", "שמור");
+      newSaveBtn.disabled = false;
+    }
+  });
+
+  if (_edExpandedRow) _edCollapseRow(_edExpandedRow);
+  const emptyEl = listEl.querySelector(".pd-empty-state");
+  if (emptyEl) emptyEl.remove();
+  listEl.prepend(row);
+  _edExpandedRow = row;
+  requestAnimationFrame(() => {
+    form.classList.add("expanded");
+    row.classList.add("pd-row--expanded");
+    nameIn.focus();
   });
 }
 

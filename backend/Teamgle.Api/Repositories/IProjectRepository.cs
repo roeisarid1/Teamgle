@@ -82,11 +82,28 @@ public interface IProjectRepository
     Task<bool>         SetShiftBulkHoursAsync(string shiftId, BulkShiftHoursRequest request, string firebaseUid);
     Task<PayrollItem?> SetEmployeeHoursOverrideAsync(string shiftId, string employeeUserId, string eventId, ManagerOverrideHoursRequest request, string firebaseUid);
 
+    // ── Shift Briefs ───────────────────────────────────────────────────────
+    Task<IEnumerable<ShiftSummaryItem>?> GetShiftsForEventAsync(string eventId, string firebaseUid);
+    Task<IEnumerable<BriefItem>?> GetBriefsByShiftIdAsync(string shiftId, string firebaseUid);
+    Task<BriefItem?> CreateShiftBriefAsync(string shiftId, CreateBriefRequest request, string firebaseUid);
+    Task<BriefItem?> UpdateShiftBriefAsync(string briefId, string shiftId, UpdateBriefRequest request, string firebaseUid);
+    Task<bool?> DeleteShiftBriefAsync(string briefId, string shiftId, string firebaseUid);
+
+    // ── Shift Equipment ────────────────────────────────────────────────────
+    Task<IEnumerable<ShiftEquipmentItem>?> GetShiftEquipmentAsync(string shiftId, string firebaseUid);
+    Task<ShiftEquipmentItem?> CreateShiftEquipmentAsync(string shiftId, CreateEquipmentRequest request, string firebaseUid);
+    Task<ShiftEquipmentItem?> UpdateShiftEquipmentAsync(string equipmentId, string shiftId, UpdateEquipmentRequest request, string firebaseUid);
+    Task<bool?> DeleteShiftEquipmentAsync(string equipmentId, string shiftId, string firebaseUid);
+    Task<IEnumerable<ShiftEquipmentItem>?> GetEquipmentForEmployeeAsync(string firebaseUid);
+
     // ── Brief Acknowledgment ───────────────────────────────────────────────
     Task<IEnumerable<AcknowledgmentItem>?> GetBriefAcknowledgmentsAsync(string briefId, string firebaseUid);
     Task<IEnumerable<AcknowledgmentItem>?> GetProjectBriefAcknowledgmentsAsync(string projId, string briefId, string firebaseUid);
     Task<bool> AcknowledgeBriefAsync(string briefId, string firebaseUid);
     Task<IEnumerable<EmployeeBriefItem>?> GetBriefsForEmployeeAsync(string firebaseUid);
+
+    // ── Shift Cancellation Notices ─────────────────────────────────────────
+    Task<IEnumerable<ShiftCancellationNotice>> GetCancellationNoticesForEmployeeAsync(string firebaseUid);
 
     // ── Auto-Assign ────────────────────────────────────────────────────────
     Task<AutoAssignResult> AutoAssignShiftAsync(string shiftId, string managerFbUid);

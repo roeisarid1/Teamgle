@@ -1307,6 +1307,9 @@ public class ProjectRepository : IProjectRepository
     private static DateTime Utc(SqlDataReader r, int ord) =>
         DateTime.SpecifyKind(r.GetDateTime(ord), DateTimeKind.Utc);
 
+    private static DateTime LocalWallTime(SqlDataReader r, int ord) =>
+        DateTime.SpecifyKind(r.GetDateTime(ord), DateTimeKind.Unspecified);
+
     private static PayrollItem ReadPayrollItem(SqlDataReader reader) => new()
     {
         EmployeeUserId          = reader.IsDBNull(reader.GetOrdinal("EmployeeUserId"))         ? "" : reader.GetString(reader.GetOrdinal("EmployeeUserId")),
@@ -1315,14 +1318,14 @@ public class ProjectRepository : IProjectRepository
         LastName                = reader.IsDBNull(reader.GetOrdinal("LastName"))               ? "" : reader.GetString(reader.GetOrdinal("LastName")),
         ShiftId                 = reader.IsDBNull(reader.GetOrdinal("ShiftId"))                ? "" : reader.GetString(reader.GetOrdinal("ShiftId")),
         RoleName                = reader.IsDBNull(reader.GetOrdinal("RoleName"))               ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
-        ShiftStart              = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))             ? null : Utc(reader, reader.GetOrdinal("ShiftStart")),
-        ShiftEnd                = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))               ? null : Utc(reader, reader.GetOrdinal("ShiftEnd")),
+        ShiftStart              = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))             ? null : LocalWallTime(reader, reader.GetOrdinal("ShiftStart")),
+        ShiftEnd                = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))               ? null : LocalWallTime(reader, reader.GetOrdinal("ShiftEnd")),
         ActualStart             = reader.IsDBNull(reader.GetOrdinal("ActualStart"))            ? null : Utc(reader, reader.GetOrdinal("ActualStart")),
         ActualEnd               = reader.IsDBNull(reader.GetOrdinal("ActualEnd"))              ? null : Utc(reader, reader.GetOrdinal("ActualEnd")),
-        ShiftBulkStart          = reader.IsDBNull(reader.GetOrdinal("ShiftBulkStart"))         ? null : Utc(reader, reader.GetOrdinal("ShiftBulkStart")),
-        ShiftBulkEnd            = reader.IsDBNull(reader.GetOrdinal("ShiftBulkEnd"))           ? null : Utc(reader, reader.GetOrdinal("ShiftBulkEnd")),
-        ManagerOverrideStart    = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideStart"))   ? null : Utc(reader, reader.GetOrdinal("ManagerOverrideStart")),
-        ManagerOverrideEnd      = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideEnd"))     ? null : Utc(reader, reader.GetOrdinal("ManagerOverrideEnd")),
+        ShiftBulkStart          = reader.IsDBNull(reader.GetOrdinal("ShiftBulkStart"))         ? null : LocalWallTime(reader, reader.GetOrdinal("ShiftBulkStart")),
+        ShiftBulkEnd            = reader.IsDBNull(reader.GetOrdinal("ShiftBulkEnd"))           ? null : LocalWallTime(reader, reader.GetOrdinal("ShiftBulkEnd")),
+        ManagerOverrideStart    = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideStart"))   ? null : LocalWallTime(reader, reader.GetOrdinal("ManagerOverrideStart")),
+        ManagerOverrideEnd      = reader.IsDBNull(reader.GetOrdinal("ManagerOverrideEnd"))     ? null : LocalWallTime(reader, reader.GetOrdinal("ManagerOverrideEnd")),
         HoursSource             = reader.IsDBNull(reader.GetOrdinal("HoursSource"))            ? "none" : reader.GetString(reader.GetOrdinal("HoursSource")),
         ApprovedRegularHours    = reader.IsDBNull(reader.GetOrdinal("ApprovedRegularHours"))   ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedRegularHours")),
         ApprovedOvertimeHours   = reader.IsDBNull(reader.GetOrdinal("ApprovedOvertimeHours"))  ? null : reader.GetDecimal(reader.GetOrdinal("ApprovedOvertimeHours")),
@@ -1992,6 +1995,31 @@ public class ProjectRepository : IProjectRepository
         return workers.Values.ToList();
     }
 
+    // ── Shift Cancellation Notices ────────────────────────────────────────
+    public async Task<IEnumerable<ShiftCancellationNotice>> GetCancellationNoticesForEmployeeAsync(string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_GetCancellationNoticesForEmployee", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@fbUid", firebaseUid);
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var list = new List<ShiftCancellationNotice>();
+        while (await reader.ReadAsync())
+            list.Add(new ShiftCancellationNotice
+            {
+                NoticeId   = reader.GetString(reader.GetOrdinal("NoticeId")),
+                EventName  = reader.IsDBNull(reader.GetOrdinal("EventName"))   ? null : reader.GetString(reader.GetOrdinal("EventName")),
+                RoleName   = reader.IsDBNull(reader.GetOrdinal("RoleName"))    ? null : reader.GetString(reader.GetOrdinal("RoleName")),
+                ShiftStart = reader.IsDBNull(reader.GetOrdinal("ShiftStart"))  ? null : reader.GetDateTime(reader.GetOrdinal("ShiftStart")),
+                ShiftEnd   = reader.IsDBNull(reader.GetOrdinal("ShiftEnd"))    ? null : reader.GetDateTime(reader.GetOrdinal("ShiftEnd")),
+                EventStart = reader.IsDBNull(reader.GetOrdinal("EventStart"))  ? null : reader.GetDateTime(reader.GetOrdinal("EventStart")),
+                CancelledAt = reader.GetDateTime(reader.GetOrdinal("CancelledAt")),
+            });
+        return list;
+    }
+
     // ── Send offer to employee for an event (no projId needed) ───────────
     public async Task SendOfferByEventAsync(
         string eventId, string employeeFbUid, List<string> shiftIds, string firebaseUid)
@@ -2022,6 +2050,213 @@ public class ProjectRepository : IProjectRepository
         {
             throw new ArgumentException("One or more shift IDs do not belong to this event.", ex);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  SHIFT BRIEFS & EQUIPMENT
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── Helper: verify manager has access to a shift (returns eventId or null) ──
+    private async Task<string?> CheckShiftAccessAsync(SqlConnection conn, string shiftId, string firebaseUid)
+    {
+        await using var cmd = new SqlCommand("sp_CheckShiftAccess", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@shiftId", shiftId);
+        cmd.Parameters.AddWithValue("@fbUid",   firebaseUid);
+        return (await cmd.ExecuteScalarAsync()) as string;
+    }
+
+    // ── Helper: read ShiftEquipmentItem from open SqlDataReader ───────────
+    private static ShiftEquipmentItem ReadShiftEquipmentItem(SqlDataReader r) => new()
+    {
+        EquipmentId          = r.GetString(r.GetOrdinal("equipment_ID")),
+        ShiftId              = r.GetString(r.GetOrdinal("shift_ID")),
+        Name                 = r.IsDBNull(r.GetOrdinal("name"))             ? "" : r.GetString(r.GetOrdinal("name")),
+        Quantity             = r.IsDBNull(r.GetOrdinal("quantity"))         ? 1  : r.GetInt32(r.GetOrdinal("quantity")),
+        Notes                = r.IsDBNull(r.GetOrdinal("notes"))            ? null : r.GetString(r.GetOrdinal("notes")),
+        CreatedAt            = r.IsDBNull(r.GetOrdinal("created_at"))       ? null : r.GetDateTime(r.GetOrdinal("created_at")),
+        CreatedByManagerName = r.IsDBNull(r.GetOrdinal("created_by_manager_name")) ? null : r.GetString(r.GetOrdinal("created_by_manager_name")),
+    };
+
+    public async Task<IEnumerable<ShiftSummaryItem>?> GetShiftsForEventAsync(string eventId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckEventAccessAsync(conn, eventId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_GetEventShifts", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@eventId", eventId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var list = new List<ShiftSummaryItem>();
+        while (await reader.ReadAsync())
+            list.Add(new ShiftSummaryItem
+            {
+                ShiftId   = reader.GetString(reader.GetOrdinal("ShiftId")),
+                RoleName  = reader.IsDBNull(reader.GetOrdinal("RoleName")) ? "" : reader.GetString(reader.GetOrdinal("RoleName")),
+                StartTime = reader.IsDBNull(reader.GetOrdinal("StartTime")) ? null : reader.GetDateTime(reader.GetOrdinal("StartTime")),
+                EndTime   = reader.IsDBNull(reader.GetOrdinal("EndTime"))   ? null : reader.GetDateTime(reader.GetOrdinal("EndTime")),
+            });
+        return list;
+    }
+
+    public async Task<IEnumerable<BriefItem>?> GetBriefsByShiftIdAsync(string shiftId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_GetShiftBriefs", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@shiftId", shiftId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var list = new List<BriefItem>();
+        while (await reader.ReadAsync()) list.Add(ReadBriefItem(reader));
+        return list;
+    }
+
+    public async Task<BriefItem?> CreateShiftBriefAsync(string shiftId, CreateBriefRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        var newId = Guid.NewGuid().ToString();
+        await using var cmd = new SqlCommand("sp_CreateShiftBrief", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@briefId",     newId);
+        cmd.Parameters.AddWithValue("@title",       request.Title);
+        cmd.Parameters.AddWithValue("@content",     request.Content);
+        cmd.Parameters.AddWithValue("@createdAt",   DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("@firebaseUid", firebaseUid);
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return ReadBriefItem(reader);
+    }
+
+    public async Task<BriefItem?> UpdateShiftBriefAsync(string briefId, string shiftId, UpdateBriefRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_UpdateShiftBrief", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@briefId",  briefId);
+        cmd.Parameters.AddWithValue("@title",    request.Title);
+        cmd.Parameters.AddWithValue("@content",  request.Content);
+        cmd.Parameters.AddWithValue("@shiftId",  shiftId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return null;
+        return ReadBriefItem(reader);
+    }
+
+    public async Task<bool?> DeleteShiftBriefAsync(string briefId, string shiftId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_DeleteShiftBrief", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@briefId", briefId);
+        cmd.Parameters.AddWithValue("@shiftId", shiftId);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+    }
+
+    public async Task<IEnumerable<ShiftEquipmentItem>?> GetShiftEquipmentAsync(string shiftId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_GetShiftEquipment", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@shiftId", shiftId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var list = new List<ShiftEquipmentItem>();
+        while (await reader.ReadAsync()) list.Add(ReadShiftEquipmentItem(reader));
+        return list;
+    }
+
+    public async Task<ShiftEquipmentItem?> CreateShiftEquipmentAsync(string shiftId, CreateEquipmentRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        var newId = Guid.NewGuid().ToString();
+        await using var cmd = new SqlCommand("sp_CreateShiftEquipment", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@equipmentId", newId);
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        cmd.Parameters.AddWithValue("@name",         request.Name.Trim());
+        cmd.Parameters.AddWithValue("@quantity",     request.Quantity > 0 ? request.Quantity : 1);
+        cmd.Parameters.AddWithValue("@notes",        (object?)request.Notes ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@firebaseUid",  firebaseUid);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return ReadShiftEquipmentItem(reader);
+    }
+
+    public async Task<ShiftEquipmentItem?> UpdateShiftEquipmentAsync(string equipmentId, string shiftId, UpdateEquipmentRequest request, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_UpdateShiftEquipment", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@equipmentId", equipmentId);
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        cmd.Parameters.AddWithValue("@name",        request.Name.Trim());
+        cmd.Parameters.AddWithValue("@quantity",    request.Quantity > 0 ? request.Quantity : 1);
+        cmd.Parameters.AddWithValue("@notes",       (object?)request.Notes ?? DBNull.Value);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return null;
+        return ReadShiftEquipmentItem(reader);
+    }
+
+    public async Task<bool?> DeleteShiftEquipmentAsync(string equipmentId, string shiftId, string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        if (await CheckShiftAccessAsync(conn, shiftId, firebaseUid) == null) return null;
+
+        await using var cmd = new SqlCommand("sp_DeleteShiftEquipment", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@equipmentId", equipmentId);
+        cmd.Parameters.AddWithValue("@shiftId",     shiftId);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+    }
+
+    public async Task<IEnumerable<ShiftEquipmentItem>?> GetEquipmentForEmployeeAsync(string firebaseUid)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await using var cmd  = new SqlCommand("sp_GetEquipmentForEmployee", conn)
+            { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@fbUid", firebaseUid);
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var list = new List<ShiftEquipmentItem>();
+        while (await reader.ReadAsync())
+            list.Add(new ShiftEquipmentItem
+            {
+                EquipmentId = reader.GetString(reader.GetOrdinal("equipment_ID")),
+                ShiftId     = reader.GetString(reader.GetOrdinal("shift_ID")),
+                Name        = reader.IsDBNull(reader.GetOrdinal("name"))       ? "" : reader.GetString(reader.GetOrdinal("name")),
+                Quantity    = reader.IsDBNull(reader.GetOrdinal("quantity"))   ? 1  : reader.GetInt32(reader.GetOrdinal("quantity")),
+                Notes       = reader.IsDBNull(reader.GetOrdinal("notes"))      ? null : reader.GetString(reader.GetOrdinal("notes")),
+                CreatedAt   = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
+                EventId     = reader.IsDBNull(reader.GetOrdinal("event_ID"))   ? null : reader.GetString(reader.GetOrdinal("event_ID")),
+                ProjectId   = reader.IsDBNull(reader.GetOrdinal("project_ID")) ? null : reader.GetString(reader.GetOrdinal("project_ID")),
+            });
+        return list;
     }
 
 }

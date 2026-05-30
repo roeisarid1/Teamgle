@@ -418,6 +418,43 @@ public class EventsController : ControllerBase
     //  BRIEF ACKNOWLEDGMENT (Employee route)
     // ══════════════════════════════════════════════════════════════════════
 
+    // GET /api/events/{eventId}/shifts  (lightweight list for briefings tab)
+    [HttpGet("{eventId}/shifts")]
+    public async Task<IActionResult> GetEventShifts(string eventId)
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var shifts = await _projectService.GetShiftsForEventAsync(uid, eventId);
+            if (shifts == null) return NotFound(new { error = "Event not found." });
+            return Ok(shifts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching shifts for event {EventId}", eventId);
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
+    // GET /api/events/my-equipment  (employee: get all equipment for their approved shifts)
+    [HttpGet("my-equipment")]
+    public async Task<IActionResult> GetMyEquipment()
+    {
+        var uid = await GetFirebaseUidAsync();
+        if (uid == null) return Unauthorized(new { error = "Valid Firebase token required." });
+        try
+        {
+            var items = await _projectService.GetMyEquipmentAsync(uid);
+            return Ok(items ?? []);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching equipment for employee");
+            return StatusCode(500, new { error = "Unexpected error." });
+        }
+    }
+
     // GET /api/events/my-briefs  (employee: get all relevant briefs)
     [HttpGet("my-briefs")]
     public async Task<IActionResult> GetMyBriefs()
