@@ -78,6 +78,15 @@ function getActiveSectionName() {
   return active?.dataset.section ?? null;
 }
 
+function refreshLucideIcons(retries = 20) {
+  if (window.lucide?.createIcons) {
+    window.lucide.createIcons();
+    return;
+  }
+  if (retries <= 0) return;
+  window.setTimeout(() => refreshLucideIcons(retries - 1), 150);
+}
+
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
   btnSidebarReopen.classList.toggle("visible", !open);
@@ -471,6 +480,7 @@ function renderEmployees(employees) {
   `,
     )
     .join("");
+  refreshLucideIcons();
 }
 
 // ── Table action delegation ────────────────────────────────────────────────
@@ -2472,7 +2482,7 @@ function renderGantt(schedule, container) {
   container.innerHTML = sectionsHtml;
 
   // Re-initialize Lucide icons for newly rendered elements
-  if (window.lucide) lucide.createIcons();
+  refreshLucideIcons();
 }
 
 // ── ADD TASK / ADD BRIEF buttons ────────────────────────────────────────────
@@ -3467,7 +3477,7 @@ function renderCustomers(customers) {
   `,
     )
     .join("");
-  if (window.lucide) lucide.createIcons();
+  refreshLucideIcons();
 }
 
 document
