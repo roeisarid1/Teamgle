@@ -215,6 +215,7 @@ const HE_BY_EN = {
   "This will permanently remove this contact person. This action cannot be undone.": "פעולה זו תסיר לצמיתות את איש הקשר הזה. לא ניתן לבטל פעולה זו.",
   "Delete Shift": "מחיקת משמרת",
   "Are you sure you want to delete this shift?": "האם אתה בטוח שברצונך למחוק את המשמרת הזו?",
+  "Deleting this shift will send a cancellation notice to every approved worker assigned to it. This action cannot be undone.": "מחיקת המשמרת תשלח הודעת ביטול לכל העובדים המאושרים למשמרת. לא ניתן לבטל פעולה זו.",
   "This action cannot be undone.": "לא ניתן לבטל פעולה זו.",
   "👥 Employees": "👥 עובדים",
   "🏢 Customers": "🏢 לקוחות",
