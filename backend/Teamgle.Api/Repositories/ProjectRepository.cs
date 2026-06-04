@@ -454,9 +454,20 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@endTime",          request.EndTime);
 
         await conn.OpenAsync();
-        var rows = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        if (rows == 0)
-            throw new KeyNotFoundException("Shift not found.");
+        try
+        {
+            var rows = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            if (rows == 0)
+                throw new KeyNotFoundException("Shift not found.");
+        }
+        catch (SqlException ex) when (ex.Message.StartsWith("APPROVED_EXCEEDS_REQUIRED:"))
+        {
+            var parts = ex.Message.Split(':');
+            var approved = parts.ElementAtOrDefault(1) ?? "?";
+            var requested = parts.ElementAtOrDefault(2) ?? "?";
+            throw new InvalidOperationException(
+                $"Cannot reduce required quantity to {requested} — {approved} employee(s) are already approved. Cancel employees via the staffing tab first.");
+        }
     }
 
     // ── Delete a shift (ownership-validated) ──────────────────────────────
@@ -738,6 +749,7 @@ public class ProjectRepository : IProjectRepository
             {
                 ShiftId          = reader["shift_ID"].ToString()!,
                 Status           = reader["status"].ToString()!,
+                StatusUpdatedAt  = reader["status_updated_at"] == DBNull.Value ? null : (DateTime?)reader["status_updated_at"],
                 PayRatePerHour   = reader["pay_rate_per_hour"] == DBNull.Value ? null : (decimal?)reader["pay_rate_per_hour"],
                 Notes            = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
                 PlannedStartTime = reader["planned_start_time"] == DBNull.Value ? null : (DateTime?)reader["planned_start_time"],
@@ -976,7 +988,9 @@ public class ProjectRepository : IProjectRepository
         cmd.Parameters.AddWithValue("@managerFbUid",  managerFbUid);
 
         await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
+        var rowsAffected = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        if (rowsAffected == 0)
+            throw new KeyNotFoundException("No matching assignment found for this shift.");
     }
 
     // ── Employee's own applications (all active statuses except hold/offer) ─

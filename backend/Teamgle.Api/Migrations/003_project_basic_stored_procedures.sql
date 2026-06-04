@@ -250,6 +250,17 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- Block if approved employee count exceeds the new required quantity
+    DECLARE @approvedCount INT;
+    SELECT @approvedCount = COUNT(*)
+    FROM Employee_Shift
+    WHERE shift_ID = @shiftId
+      AND status = 'manager_approved'
+      AND ISNULL(canceled, 0) = 0;
+
+    IF @approvedCount > @requiredQuantity
+        RAISERROR('APPROVED_EXCEEDS_REQUIRED:%d:%d', 16, 1, @approvedCount, @requiredQuantity);
+
     UPDATE Shift
     SET roll_ID = @rollId,
         required_quantity = @requiredQuantity,

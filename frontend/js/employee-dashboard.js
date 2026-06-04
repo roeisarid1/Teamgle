@@ -406,7 +406,10 @@ function renderOffersTab() {
     lucide.createIcons(); return;
   }
 
-  panel.innerHTML = _msOffers.map(o => renderOfferCard(o)).join("");
+  const sortedOffers = [..._msOffers].sort((a, b) =>
+    new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0)
+  );
+  panel.innerHTML = sortedOffers.map(o => renderOfferCard(o)).join("");
   lucide.createIcons();
 
   panel.querySelectorAll(".offer-card[data-shift-id]").forEach(card => {
@@ -515,7 +518,8 @@ async function renderUpdatesTab() {
   }
 
   const statusUpdates  = (_msApplications  ?? []).filter(s => isShiftInUpdatesTab(s));
-  const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem);
+  const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem)
+    .sort((a, b) => new Date(b.cancelledAt ?? 0) - new Date(a.cancelledAt ?? 0));
   const list           = [...cancellations, ...statusUpdates];
 
   if (list.length === 0) {
@@ -530,13 +534,14 @@ async function renderUpdatesTab() {
 // Transforms a ShiftCancellationNotice into the same shape renderUpdateCard expects
 function _cancellationToUpdateItem(n) {
   return {
-    status:     "manager_approved_canceled",
-    roleName:   n.roleName   ?? "",
-    eventName:  n.eventName  ?? "",
-    eventStart: n.eventStart ?? null,
-    shiftStart: n.shiftStart ?? null,
-    shiftEnd:   n.shiftEnd   ?? null,
-    shiftId:    n.noticeId,
+    status:      "manager_approved_canceled",
+    roleName:    n.roleName    ?? "",
+    eventName:   n.eventName   ?? "",
+    eventStart:  n.eventStart  ?? null,
+    shiftStart:  n.shiftStart  ?? null,
+    shiftEnd:    n.shiftEnd    ?? null,
+    shiftId:     n.noticeId,
+    cancelledAt: n.cancelledAt ?? null,
   };
 }
 

@@ -357,9 +357,10 @@ BEGIN
         )
             RAISERROR('Employee not found or access denied.', 16, 2);
 
-        DELETE FROM Brief_Acknowledgment WHERE employee_user_ID = @userId;
-        DELETE FROM Employee_Shift        WHERE employee_user_ID = @userId;
-        DELETE FROM Employee_Roll         WHERE employee_user_ID = @userId;
+        DELETE FROM Brief_Acknowledgment    WHERE employee_user_ID = @userId;
+        DELETE FROM Shift_Cancellation_Notice WHERE employee_user_ID = @userId;
+        DELETE FROM Employee_Shift          WHERE employee_user_ID = @userId;
+        DELETE FROM Employee_Roll           WHERE employee_user_ID = @userId;
         DELETE FROM Employee              WHERE user_ID          = @userId;
         DELETE FROM [User]
         WHERE  user_ID    = @userId

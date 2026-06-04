@@ -14,6 +14,7 @@ BEGIN
         es.notes,
         es.planned_start_time,
         es.planned_end_time,
+        es.status_updated_at,
         s.start_time AS shift_start_time,
         s.end_time AS shift_end_time,
         r.Roll_name,
@@ -122,14 +123,15 @@ END
 GO
 
 CREATE OR ALTER PROCEDURE sp_UpdateWorkerStatus
-    @newStatus NVARCHAR(64),
-    @shiftId NVARCHAR(64),
+    @newStatus     NVARCHAR(64),
+    @shiftId       NVARCHAR(64),
     @employeeFbUid NVARCHAR(256),
-    @eventId NVARCHAR(64),
-    @managerFbUid NVARCHAR(256)
+    @eventId       NVARCHAR(64),
+    @managerFbUid  NVARCHAR(256)
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
     IF @newStatus = 'manager_approved'
     BEGIN
@@ -175,54 +177,229 @@ BEGIN
         END
     END
 
-    UPDATE Employee_Shift
-    SET status = @newStatus,
-        status_updated_at = GETUTCDATE()
-    WHERE shift_ID = @shiftId
-      AND employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
-      AND shift_ID IN (
-          SELECT s.Shift_ID
-          FROM Shift s
-          INNER JOIN [Event] e ON e.event_ID = s.event_ID
-          INNER JOIN Project p ON p.Proj_ID = e.project_ID
-          WHERE e.event_ID = @eventId
-            AND p.Proj_ID IN (
-                SELECT mp.project_ID
-                FROM Manager_Project mp
-                INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
-                WHERE mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
-            )
-      );
+    DECLARE @employeeUserId NVARCHAR(64);
+    SELECT @employeeUserId = user_ID FROM [User] WHERE FBUID = @employeeFbUid;
 
-    SELECT @@ROWCOUNT AS RowsAffected;
+    -- Capture previous status before modifying (needed for cancellation notice)
+    DECLARE @prevStatus NVARCHAR(64);
+    SELECT @prevStatus = status FROM Employee_Shift
+    WHERE shift_ID = @shiftId AND employee_user_ID = @employeeUserId;
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        UPDATE Employee_Shift
+        SET status = @newStatus,
+            status_updated_at = GETUTCDATE()
+        WHERE shift_ID = @shiftId
+          AND employee_user_ID = @employeeUserId
+          AND shift_ID IN (
+              SELECT s.Shift_ID FROM Shift s
+              INNER JOIN [Event] e ON e.event_ID = s.event_ID
+              INNER JOIN Project p ON p.Proj_ID = e.project_ID
+              WHERE e.event_ID = @eventId
+                AND p.Proj_ID IN (
+                    SELECT mp.project_ID FROM Manager_Project mp
+                    INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                    WHERE mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)));
+
+        DECLARE @RowsAffected INT = @@ROWCOUNT;
+
+        IF @RowsAffected > 0 AND @newStatus IN ('manager_reject', 'manager_approved_canceled')
+        BEGIN
+            -- Clear all payroll and hours data
+            UPDATE Employee_Shift
+            SET actual_start_time           = NULL,
+                actual_end_time             = NULL,
+                manager_actual_start_time   = NULL,
+                manager_actual_end_time     = NULL,
+                is_manager_hours_override   = 0,
+                approved_regular_hours      = NULL,
+                approved_overtime_hours     = NULL,
+                approved_at                 = NULL,
+                approved_by_manager_user_ID = NULL,
+                pay_rate_per_hour           = NULL,
+                overtime_rate_per_hour      = NULL,
+                travel_refund               = NULL,
+                bonus_amount                = NULL,
+                penalty_amount              = NULL,
+                payment_status              = 'pending'
+            WHERE shift_ID = @shiftId AND employee_user_ID = @employeeUserId;
+
+            -- Cancellation notice only when employee was previously approved
+            IF @prevStatus = 'manager_approved'
+            BEGIN
+                DECLARE @roleName   NVARCHAR(255), @shiftStart DATETIME2, @shiftEnd DATETIME2;
+                DECLARE @eventName  NVARCHAR(255), @eventStart DATETIME2;
+                SELECT @roleName = r.Roll_name, @shiftStart = s.start_time,
+                       @shiftEnd = s.end_time, @eventName = e.name, @eventStart = e.start_time
+                FROM Shift s
+                INNER JOIN [Event] e ON e.event_ID = s.event_ID
+                LEFT  JOIN Roll r   ON r.Roll_ID   = s.roll_ID
+                WHERE s.Shift_ID = @shiftId;
+
+                INSERT INTO Shift_Cancellation_Notice
+                       (notice_ID, employee_user_ID, event_name, role_name,
+                        shift_start, shift_end, event_start, cancelled_at)
+                VALUES (NEWID(), @employeeUserId, @eventName, @roleName,
+                        @shiftStart, @shiftEnd, @eventStart, GETUTCDATE());
+            END
+
+            -- Shift-level brief acks
+            DELETE FROM Brief_Acknowledgment
+            WHERE employee_user_ID = @employeeUserId
+              AND brief_ID IN (SELECT brief_ID FROM Brief WHERE shift_ID = @shiftId);
+
+            DECLARE @projectId NVARCHAR(64);
+            SELECT @projectId = project_ID FROM [Event] WHERE event_ID = @eventId;
+
+            -- Event-level brief acks: remove only if no more approved active shifts in this event
+            IF NOT EXISTS (
+                SELECT 1 FROM Employee_Shift es2
+                INNER JOIN Shift s2 ON s2.Shift_ID = es2.shift_ID
+                WHERE es2.employee_user_ID = @employeeUserId
+                  AND s2.event_ID = @eventId
+                  AND es2.shift_ID <> @shiftId
+                  AND es2.status IN ('approved', 'manager_approved')
+                  AND (es2.canceled IS NULL OR es2.canceled = 0))
+            BEGIN
+                DELETE FROM Brief_Acknowledgment
+                WHERE employee_user_ID = @employeeUserId
+                  AND brief_ID IN (
+                      SELECT brief_ID FROM Brief WHERE event_ID = @eventId AND shift_ID IS NULL);
+            END
+
+            -- Project-level brief acks: remove only if no more approved active shifts in whole project
+            IF NOT EXISTS (
+                SELECT 1 FROM Employee_Shift es2
+                INNER JOIN Shift s2   ON s2.Shift_ID  = es2.shift_ID
+                INNER JOIN [Event] e2 ON e2.event_ID  = s2.event_ID
+                WHERE es2.employee_user_ID = @employeeUserId
+                  AND e2.project_ID = @projectId
+                  AND es2.status IN ('approved', 'manager_approved')
+                  AND (es2.canceled IS NULL OR es2.canceled = 0))
+            BEGIN
+                DELETE FROM Brief_Acknowledgment
+                WHERE employee_user_ID = @employeeUserId
+                  AND brief_ID IN (
+                      SELECT brief_ID FROM Brief
+                      WHERE project_ID = @projectId AND shift_ID IS NULL AND event_ID IS NULL);
+            END
+        END
+
+        COMMIT TRANSACTION;
+        SELECT @RowsAffected AS RowsAffected;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
 END
 GO
 
 CREATE OR ALTER PROCEDURE sp_DeleteWorkerAssignment
-    @shiftId NVARCHAR(64),
+    @shiftId       NVARCHAR(64),
     @employeeFbUid NVARCHAR(256),
-    @eventId NVARCHAR(64),
-    @managerFbUid NVARCHAR(256)
+    @eventId       NVARCHAR(64),
+    @managerFbUid  NVARCHAR(256)
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
-    DELETE FROM Employee_Shift
-    WHERE shift_ID = @shiftId
-      AND employee_user_ID = (SELECT user_ID FROM [User] WHERE FBUID = @employeeFbUid)
-      AND shift_ID IN (
-          SELECT s.Shift_ID
-          FROM Shift s
-          INNER JOIN [Event] e ON e.event_ID = s.event_ID
-          INNER JOIN Project p ON p.Proj_ID = e.project_ID
-          WHERE e.event_ID = @eventId
-            AND p.Proj_ID IN (
-                SELECT mp.project_ID
-                FROM Manager_Project mp
-                INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
-                WHERE mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)
-            )
-      );
+    DECLARE @employeeUserId NVARCHAR(64);
+    SELECT @employeeUserId = user_ID FROM [User] WHERE FBUID = @employeeFbUid;
+
+    -- Capture previous status before deleting
+    DECLARE @prevStatusDel NVARCHAR(64);
+    SELECT @prevStatusDel = status FROM Employee_Shift
+    WHERE shift_ID = @shiftId AND employee_user_ID = @employeeUserId;
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        DELETE FROM Employee_Shift
+        WHERE shift_ID = @shiftId
+          AND employee_user_ID = @employeeUserId
+          AND shift_ID IN (
+              SELECT s.Shift_ID FROM Shift s
+              INNER JOIN [Event] e ON e.event_ID = s.event_ID
+              INNER JOIN Project p ON p.Proj_ID = e.project_ID
+              WHERE e.event_ID = @eventId
+                AND p.Proj_ID IN (
+                    SELECT mp.project_ID FROM Manager_Project mp
+                    INNER JOIN [User] mu ON mu.user_ID = mp.manager_user_ID
+                    WHERE mu.company_ID = (SELECT company_ID FROM [User] WHERE FBUID = @managerFbUid)));
+
+        DECLARE @RowsAffectedDel INT = @@ROWCOUNT;
+
+        IF @RowsAffectedDel > 0
+        BEGIN
+            -- Cancellation notice only if employee was previously approved
+            IF @prevStatusDel = 'manager_approved'
+            BEGIN
+                DECLARE @roleNameD   NVARCHAR(255), @shiftStartD DATETIME2, @shiftEndD DATETIME2;
+                DECLARE @eventNameD  NVARCHAR(255), @eventStartD DATETIME2;
+                SELECT @roleNameD = r.Roll_name, @shiftStartD = s.start_time,
+                       @shiftEndD = s.end_time, @eventNameD = e.name, @eventStartD = e.start_time
+                FROM Shift s
+                INNER JOIN [Event] e ON e.event_ID = s.event_ID
+                LEFT  JOIN Roll r   ON r.Roll_ID   = s.roll_ID
+                WHERE s.Shift_ID = @shiftId;
+
+                INSERT INTO Shift_Cancellation_Notice
+                       (notice_ID, employee_user_ID, event_name, role_name,
+                        shift_start, shift_end, event_start, cancelled_at)
+                VALUES (NEWID(), @employeeUserId, @eventNameD, @roleNameD,
+                        @shiftStartD, @shiftEndD, @eventStartD, GETUTCDATE());
+            END
+
+            -- Shift-level brief acks
+            DELETE FROM Brief_Acknowledgment
+            WHERE employee_user_ID = @employeeUserId
+              AND brief_ID IN (SELECT brief_ID FROM Brief WHERE shift_ID = @shiftId);
+
+            DECLARE @projectIdDel NVARCHAR(64);
+            SELECT @projectIdDel = project_ID FROM [Event] WHERE event_ID = @eventId;
+
+            -- Event-level brief acks: remove only if no more approved active shifts in event
+            IF NOT EXISTS (
+                SELECT 1 FROM Employee_Shift es2
+                INNER JOIN Shift s2 ON s2.Shift_ID = es2.shift_ID
+                WHERE es2.employee_user_ID = @employeeUserId
+                  AND s2.event_ID = @eventId
+                  AND es2.status IN ('approved', 'manager_approved')
+                  AND (es2.canceled IS NULL OR es2.canceled = 0))
+            BEGIN
+                DELETE FROM Brief_Acknowledgment
+                WHERE employee_user_ID = @employeeUserId
+                  AND brief_ID IN (
+                      SELECT brief_ID FROM Brief WHERE event_ID = @eventId AND shift_ID IS NULL);
+            END
+
+            -- Project-level brief acks: remove only if no more approved active shifts in project
+            IF NOT EXISTS (
+                SELECT 1 FROM Employee_Shift es2
+                INNER JOIN Shift s2   ON s2.Shift_ID  = es2.shift_ID
+                INNER JOIN [Event] e2 ON e2.event_ID  = s2.event_ID
+                WHERE es2.employee_user_ID = @employeeUserId
+                  AND e2.project_ID = @projectIdDel
+                  AND es2.status IN ('approved', 'manager_approved')
+                  AND (es2.canceled IS NULL OR es2.canceled = 0))
+            BEGIN
+                DELETE FROM Brief_Acknowledgment
+                WHERE employee_user_ID = @employeeUserId
+                  AND brief_ID IN (
+                      SELECT brief_ID FROM Brief
+                      WHERE project_ID = @projectIdDel AND shift_ID IS NULL AND event_ID IS NULL);
+            END
+        END
+
+        COMMIT TRANSACTION;
+        SELECT @RowsAffectedDel AS RowsAffected;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
 END
 GO
 

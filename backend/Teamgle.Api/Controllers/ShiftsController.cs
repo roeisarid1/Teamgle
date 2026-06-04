@@ -95,6 +95,10 @@ public class ShiftsController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating shift {ShiftId}", shiftId);

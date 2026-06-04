@@ -2391,7 +2391,8 @@ function renderGantt(schedule, container) {
                             data-role-id="${escapeHtml(shift.roleId)}"
                             data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
                             data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
-                            data-qty="${shift.requiredQuantity}">
+                            data-qty="${shift.requiredQuantity}"
+                            data-staffed="${shift.staffedCount ?? 0}">
                       <i data-lucide="pencil" style="width:11px;height:11px"></i>
                     </button>
                     <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="Delete shift"
@@ -2428,7 +2429,8 @@ function renderGantt(schedule, container) {
                           data-role-id="${escapeHtml(shift.roleId)}"
                           data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
                           data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
-                          data-qty="${shift.requiredQuantity}">
+                          data-qty="${shift.requiredQuantity}"
+                          data-staffed="${shift.staffedCount ?? 0}">
                     <i data-lucide="pencil" style="width:14px;height:14px"></i>
                   </button>
                   <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="${_t("Delete shift", "מחק משמרת")}"
@@ -5177,6 +5179,7 @@ function escapeHtml(str) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 let editingShiftId = null;
+let editingShiftApproved = 0;
 let deletingShiftId = null;
 
 // ── Event delegation on gantt containers ───────────────────────────────────
@@ -5204,6 +5207,7 @@ document.getElementById("ed-gantt-container")?.addEventListener("click", _handle
 
 async function openShiftEditModal(btn) {
   editingShiftId = btn.dataset.shiftId;
+  editingShiftApproved = parseInt(btn.dataset.staffed ?? "0", 10);
   const roleId = btn.dataset.roleId;
   const startVal = btn.dataset.start; // already YYYY-MM-DDTHH:MM
   const endVal = btn.dataset.end;
@@ -5294,6 +5298,15 @@ document
     }
     if (!qty || qty < 1) {
       errEl.textContent = _t("Quantity must be at least 1.", "כמות חייבת להיות לפחות 1.");
+      errEl.style.display = "block";
+      return;
+    }
+    if (qty < editingShiftApproved) {
+      const diff = editingShiftApproved - qty;
+      errEl.textContent = _t(
+        `Cannot reduce to ${qty} — ${editingShiftApproved} employee(s) are already approved. Please cancel ${diff} employee(s) via the staffing tab first.`,
+        `למשמרת מאושרים כרגע ${editingShiftApproved} עובדים. כדי להקטין את הדרישה ל-${qty}, יש לבטל תחילה ${diff} עובד${diff > 1 ? "ים" : ""} דרך ממשק שיבוץ העובדים.`
+      );
       errEl.style.display = "block";
       return;
     }
@@ -8373,22 +8386,36 @@ function _edRefreshShiftAccordion() {
 function _edBuildShiftAccordionItem(shift, isOpen = false) {
   const briefs = (_edShiftBriefsData || {})[shift.shiftId] || [];
   const equip  = (_edShiftEquipData  || {})[shift.shiftId] || [];
+  const role   = shift.roleName || _t("Unknown role", "תפקיד לא ידוע");
+  const start  = shift.startTime ? formatBriefDate(shift.startTime) : "";
 
   const item = document.createElement("div");
   item.className = `ed-be-shift-item${isOpen ? " ed-be-shift-item--open" : ""}`;
   item.dataset.shiftId = shift.shiftId;
 
   // ── Header ────────────────────────────────────────────────────────────────
-  const header = document.createElement("div");
+  const header = document.createElement("button");
+  header.type = "button";
   header.className = "ed-be-shift-header";
+  header.setAttribute("aria-expanded", String(isOpen));
   header.innerHTML = `
-    <span class="ed-be-shift-chevron" aria-hidden="true">&#8250;</span>
-    <span class="ed-be-shift-name">${escapeHtml(_edShiftLabel(shift))}</span>
-    <span class="ed-be-count-badge" title="${_t("Briefings", "תדריכים")}">
-      ${_t("Briefings", "תדריכים")}: <strong class="ed-be-brief-count">${briefs.length}</strong>
+    <span class="ed-be-shift-main">
+      <span class="ed-be-shift-marker" aria-hidden="true"></span>
+      <span class="ed-be-shift-copy">
+        <span class="ed-be-shift-name">${escapeHtml(role)}</span>
+        ${start ? `<span class="ed-be-shift-date">${escapeHtml(start)}</span>` : ""}
+      </span>
     </span>
-    <span class="ed-be-count-badge" title="${_t("Equipment", "ציוד")}">
-      ${_t("Equipment", "ציוד")}: <strong class="ed-be-equip-count">${equip.length}</strong>
+    <span class="ed-be-shift-stats">
+      <span class="ed-be-count-badge ed-be-count-badge--briefs" title="${_t("Briefings", "תדריכים")}">
+        <span class="ed-be-count-label">${_t("Briefings", "תדריכים")}</span>
+        <strong class="ed-be-brief-count">${briefs.length}</strong>
+      </span>
+      <span class="ed-be-count-badge ed-be-count-badge--equip" title="${_t("Equipment", "ציוד")}">
+        <span class="ed-be-count-label">${_t("Equipment", "ציוד")}</span>
+        <strong class="ed-be-equip-count">${equip.length}</strong>
+      </span>
+      <span class="ed-be-shift-chevron" aria-hidden="true">&#8250;</span>
     </span>`;
 
   // ── Body ──────────────────────────────────────────────────────────────────
@@ -8428,7 +8455,10 @@ function _edBuildShiftAccordionItem(shift, isOpen = false) {
   body.appendChild(equipTitle);
   body.appendChild(equipList);
 
-  header.addEventListener("click", () => item.classList.toggle("ed-be-shift-item--open"));
+  header.addEventListener("click", () => {
+    const open = item.classList.toggle("ed-be-shift-item--open");
+    header.setAttribute("aria-expanded", String(open));
+  });
 
   item.appendChild(header);
   item.appendChild(body);
@@ -9557,6 +9587,15 @@ function _edWirePayrollSaveBtns() {
       const header  = btn.closest(".ed-pr-shift-header");
       const bulkStart = header.querySelector("[name='bulkStart']")?.value;
       const bulkEnd   = header.querySelector("[name='bulkEnd']")?.value;
+      const paidEmployees = _edPayrollData
+        .filter(item => item.shiftId === shiftId && item.paymentStatus === "paid")
+        .map(item => `${item.firstName} ${item.lastName}`);
+      if (paidEmployees.length > 0) {
+        showManagerAlert(_t(
+          `The following employees are already paid and their hours will not be updated:\n${paidEmployees.join(", ")}`,
+          `לעובדים הבאים סטטוס "שולם" — שעותיהם לא יתעדכנו:\n${paidEmployees.join(", ")}`
+        ));
+      }
       btn.disabled = true;
       btn.textContent = _t("Saving…", "שומר…");
       try {
@@ -9632,17 +9671,6 @@ function _edWirePayrollSaveBtns() {
         .map((item, idx) => ({ item, idx }))
         .filter(({ item }) => item.shiftId === shiftId);
 
-      if (newStatus !== "pending") {
-        const missing = shiftItems.filter(({ item }) => item.approvedRegularHours == null);
-        if (missing.length > 0) {
-          const names = missing.map(({ item }) => `${item.firstName} ${item.lastName}`).join(", ");
-          showManagerAlert(_t(
-            `Cannot set status — these employees have no approved hours:\n${names}`,
-            `לא ניתן לשנות סטטוס ל"${newStatus === "approved" ? "מאושר" : "שולם"}" — לעובדים הבאים אין שעות באישור מנהל:\n${names}`
-          ));
-          return;
-        }
-      }
 
       btn.disabled = true;
       btn.textContent = _t("Saving…", "שומר…");
