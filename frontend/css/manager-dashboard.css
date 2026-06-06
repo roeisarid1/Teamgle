@@ -1907,6 +1907,10 @@ tr.expanded-row > td {
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .event-meta {
@@ -6208,6 +6212,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 10px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .ms-shift-details {
   display: flex;

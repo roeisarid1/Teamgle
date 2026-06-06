@@ -519,9 +519,9 @@ async function renderUpdatesTab() {
   }
 
   const statusUpdates  = (_msApplications  ?? []).filter(s => isShiftInUpdatesTab(s));
-  const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem)
-    .sort((a, b) => new Date(b.cancelledAt ?? 0) - new Date(a.cancelledAt ?? 0));
-  const list           = [...cancellations, ...statusUpdates];
+  const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem);
+  const list           = [...cancellations, ...statusUpdates]
+    .sort((a, b) => new Date(b.cancelledAt ?? b.statusUpdatedAt ?? 0) - new Date(a.cancelledAt ?? a.statusUpdatedAt ?? 0));
 
   if (list.length === 0) {
     panel.innerHTML = emptyState("bell", _t("No updates.", "אין עדכונים."), _t("Status changes to your shifts will appear here.", "שינויי סטטוס במשמרות שלך יופיעו כאן."));
@@ -605,7 +605,9 @@ async function renderApprovedTab() {
   }
 
   const now = new Date();
-  const approved = (_msApplications ?? []).filter(s => isShiftInActiveTab(s, now));
+  const approved = (_msApplications ?? [])
+    .filter(s => isShiftInActiveTab(s, now))
+    .sort((a, b) => new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0));
 
   if (approved.length === 0) {
     panel.innerHTML = emptyState("calendar", _t("No upcoming shifts.", "אין משמרות קרובות."), _t("Your confirmed upcoming shifts will appear here.", "המשמרות המאושרות הקרובות שלך יופיעו כאן."));
@@ -680,7 +682,9 @@ async function renderHistoryTab() {
   const now = new Date();
 
   // Approved shifts leave the active tab after clock-out or 3 hours after planned end.
-  const past = (_msApplications ?? []).filter(s => isShiftInHistoryTab(s, now));
+  const past = (_msApplications ?? [])
+    .filter(s => isShiftInHistoryTab(s, now))
+    .sort((a, b) => new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0));
 
   if (past.length === 0) {
     panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here.", "משמרות שעברו יופיעו כאן."));

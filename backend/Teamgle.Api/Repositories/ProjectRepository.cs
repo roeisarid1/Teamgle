@@ -1024,6 +1024,7 @@ public class ProjectRepository : IProjectRepository
         var ordApprovedRegular       = reader.GetOrdinal("ApprovedRegularHours");
         var ordApprovedOvertime      = reader.GetOrdinal("ApprovedOvertimeHours");
         var ordPaymentStatus         = reader.GetOrdinal("PaymentStatus");
+        var ordStatusUpdatedAt       = reader.GetOrdinal("StatusUpdatedAt");
 
         while (await reader.ReadAsync())
         {
@@ -1047,6 +1048,7 @@ public class ProjectRepository : IProjectRepository
                 ApprovedRegularHours  = reader.IsDBNull(ordApprovedRegular)  ? null : reader.GetDecimal(ordApprovedRegular),
                 ApprovedOvertimeHours = reader.IsDBNull(ordApprovedOvertime) ? null : reader.GetDecimal(ordApprovedOvertime),
                 PaymentStatus         = reader.IsDBNull(ordPaymentStatus)    ? "" : reader.GetString(ordPaymentStatus),
+                StatusUpdatedAt       = reader.IsDBNull(ordStatusUpdatedAt)  ? null : reader.GetDateTime(ordStatusUpdatedAt),
             });
         }
 

@@ -427,7 +427,8 @@ BEGIN
         es.pay_rate_per_hour AS PayRatePerHour,
         es.approved_regular_hours AS ApprovedRegularHours,
         es.approved_overtime_hours AS ApprovedOvertimeHours,
-        ISNULL(es.payment_status, '') AS PaymentStatus
+        ISNULL(es.payment_status, '') AS PaymentStatus,
+        es.status_updated_at AS StatusUpdatedAt
     FROM Employee_Shift es
     INNER JOIN [User] u ON u.user_ID = es.employee_user_ID
     INNER JOIN Shift s ON s.Shift_ID = es.shift_ID
@@ -442,7 +443,7 @@ BEGIN
           'manager_reject',
           'manager_approved_canceled'
       )
-    ORDER BY COALESCE(e.start_time, s.start_time) DESC;
+    ORDER BY es.status_updated_at DESC;
 END
 GO
 

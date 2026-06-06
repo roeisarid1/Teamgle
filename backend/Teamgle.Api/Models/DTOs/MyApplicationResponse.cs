@@ -20,6 +20,7 @@ public class MyApplicationResponse
     public decimal?  ApprovedRegularHours  { get; set; }
     public decimal?  ApprovedOvertimeHours { get; set; }
     public string    PaymentStatus         { get; set; } = "";
+    public DateTime? StatusUpdatedAt       { get; set; }
 }
 
 public class ReportHoursRequest
