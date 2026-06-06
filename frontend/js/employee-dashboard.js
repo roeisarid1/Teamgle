@@ -70,6 +70,7 @@ function getActiveSectionName() {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
+  sidebar.classList.toggle("is-open", open);
   btnSidebarReopen.classList.toggle("visible", !open);
   if (sidebarBackdrop)
     sidebarBackdrop.classList.toggle("visible", open && window.innerWidth <= MOBILE_BREAKPOINT);
