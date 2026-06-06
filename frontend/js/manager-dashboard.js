@@ -89,6 +89,7 @@ function refreshLucideIcons(retries = 20) {
 
 function setSidebarOpen(open) {
   sidebar.classList.toggle("collapsed", !open);
+  sidebar.classList.toggle("is-open", open);
   btnSidebarReopen.classList.toggle("visible", !open);
   // Show backdrop only on mobile when sidebar is open
   if (sidebarBackdrop) {
