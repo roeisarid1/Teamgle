@@ -14,6 +14,7 @@ public class InvoiceService : IInvoiceService
 
     private static readonly HashSet<string> ValidStatuses =
         ["draft", "sent", "partial", "paid", "overdue", "cancelled"];
+    // Status is managed internally; not exposed to the user.
 
     private async Task EnsureManagerAsync(string firebaseUid)
     {
@@ -46,8 +47,6 @@ public class InvoiceService : IInvoiceService
             string.IsNullOrWhiteSpace(request.ProjectId) &&
             string.IsNullOrWhiteSpace(request.CustomerId))
             throw new ArgumentException("At least one of event, project, or customer must be specified.");
-        if (!ValidStatuses.Contains(request.PaymentStatus))
-            request.PaymentStatus = "draft";
 
         await EnsureManagerAsync(firebaseUid);
 
@@ -63,8 +62,6 @@ public class InvoiceService : IInvoiceService
             throw new ArgumentException("Invoice amount must be greater than zero.");
         if (request.DueDate < request.InvoiceDate)
             throw new ArgumentException("Due date cannot be before invoice date.");
-        if (!ValidStatuses.Contains(request.PaymentStatus))
-            throw new ArgumentException($"Invalid payment status '{request.PaymentStatus}'.");
 
         await EnsureManagerAsync(firebaseUid);
         return await _repo.UpdateInvoiceAsync(invoiceId, request, firebaseUid);

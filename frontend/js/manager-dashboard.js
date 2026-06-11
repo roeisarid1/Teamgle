@@ -3000,18 +3000,7 @@ async function renderProjectFinanceTab() {
         </table>
       </div>`;
 
-    // Append invoice block
-    const projId   = currentProjectDetail?.projId;
-    const invoices = projId ? await _invFetchForProject(projId) : [];
-    root.innerHTML += _invBuildFinanceBlock(invoices, { createBtnId: "pd-inv-create-btn", context: "project" });
     lucide.createIcons();
-
-    document.getElementById("pd-inv-create-btn")?.addEventListener("click", () => {
-      openInvoiceModal({
-        prefillProjectId:  projId,
-        prefillCustomerId: currentProjectDetail?.customerId,
-      });
-    });
   } catch {
     root.innerHTML = `<div class="pd-loading">${_t("Failed to load finance data.", "טעינת נתוני כספים נכשלה.")}</div>`;
   }
@@ -5434,12 +5423,8 @@ async function openShiftAddModal(eventId, eventDate, eventStartTime = "", eventE
   errEl.style.display = "none";
   errEl.textContent = "";
 
-  // Pre-fill with full datetime-local values (YYYY-MM-DDTHH:MM)
-  const date = eventDate || new Date().toISOString().slice(0, 10);
-  document.getElementById("shift-add-start").value =
-    eventStartTime ? `${date}T${eventStartTime}` : "";
-  document.getElementById("shift-add-end").value =
-    eventEndTime   ? `${date}T${eventEndTime}`   : "";
+  document.getElementById("shift-add-start").value = _toDatetimeLocal(eventStartISO);
+  document.getElementById("shift-add-end").value   = _toDatetimeLocal(eventEndISO);
   document.getElementById("shift-add-qty").value = 1;
 
   document.getElementById("shift-add-overlay").classList.add("open");
@@ -9353,6 +9338,22 @@ function _shiftBulkPayStatus(rows) {
   return "pending";
 }
 
+function _payrollPaymentStatusLabel(status) {
+  const labels = {
+    pending: _t("Pending", "ממתין"),
+    approved: _t("Approved for payroll", "מאושר לשכר"),
+    paid: _t("Paid", "שולם"),
+  };
+  return labels[status] || status;
+}
+
+function _payrollFinanceHint() {
+  return _t(
+    "Approved for payroll or paid hours appear in Finance.",
+    "שעות בסטטוס מאושר לשכר או שולם יופיעו בכספים.",
+  );
+}
+
 function _edBuildShiftGroupHTML(shiftId, { meta, rows }) {
   const plannedStart = _fmtTimeOnly(meta.shiftStart);
   const plannedEnd   = _fmtTimeOnly(meta.shiftEnd);
@@ -9403,9 +9404,10 @@ function _edBuildShiftGroupHTML(shiftId, { meta, rows }) {
                   name="bulkPayStatus"
                   data-shift-id="${escapeHtml(shiftId)}">
             ${["pending","approved","paid"].map(s =>
-              `<option value="${s}"${bulkPayStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`
+              `<option value="${s}"${bulkPayStatus === s ? " selected" : ""}>${escapeHtml(_payrollPaymentStatusLabel(s))}</option>`
             ).join("")}
           </select>
+          <span class="ed-pr-payroll-hint">${escapeHtml(_payrollFinanceHint())}</span>
           <button class="ed-pr-bulk-pay-save-btn" data-action="bulk-pay-save"
                   data-shift-id="${escapeHtml(shiftId)}">
             ${_t("Save Payroll", "שמור שכר")}
@@ -9455,7 +9457,7 @@ function _edBuildPayrollRowHTML(item, idx) {
   // Payment status badge
   let payLabel, payCls;
   if (payStatus === "paid")     { payLabel = _t("Paid", "שולם");    payCls = "ed-badge--paid"; }
-  else if (payStatus === "approved") { payLabel = _t("Approved", "מאושר"); payCls = "ed-badge--approved"; }
+  else if (payStatus === "approved") { payLabel = _t("Approved for payroll", "מאושר לשכר"); payCls = "ed-badge--approved"; }
   else                          { payLabel = _t("Pending", "ממתין"); payCls = "ed-badge--unpaid"; }
 
   const reportedHtml = hasEffective
@@ -9553,9 +9555,10 @@ function _edBuildPayrollRowHTML(item, idx) {
               <select class="ed-pr-input ed-pr-select" name="paymentStatus">
                 ${["pending", "approved", "paid"]
                   .map((s) =>
-                    `<option value="${s}"${payStatus === s ? " selected" : ""}>${_t(s, s === "pending" ? "ממתין" : s === "approved" ? "מאושר" : "שולם")}</option>`
+                    `<option value="${s}"${payStatus === s ? " selected" : ""}>${escapeHtml(_payrollPaymentStatusLabel(s))}</option>`
                   ).join("")}
               </select>
+              <span class="ed-pr-payroll-hint">${escapeHtml(_payrollFinanceHint())}</span>
             </div>
           </div>
           <button class="ed-pr-save-btn" data-action="save" data-idx="${idx}">${_t("Save Payroll", "שמור שכר")}</button>
@@ -9699,6 +9702,12 @@ function _edWirePayrollSaveBtns() {
           _edPayrollData[idx] = await res.json();
         }
         await renderEdPayrollTab();
+        if (newStatus === "approved" || newStatus === "paid") {
+          showManagerNotice(_t(
+            "Payroll saved. Approved or paid hours now appear in Finance.",
+            "השכר נשמר. שעות שאושרו לשכר או שולמו יופיעו בכספים.",
+          ), "success");
+        }
       } catch (err) {
         btn.disabled = false;
         btn.textContent = _t("Save Payroll", "שמור שכר");
@@ -9773,6 +9782,12 @@ function _edWirePayrollSaveBtns() {
         newRow.querySelector(".ed-pr-review-btn").textContent = _t("Close", "סגור");
         row.replaceWith(newRow);
       }
+      if (action === "save" && (body.paymentStatus === "approved" || body.paymentStatus === "paid")) {
+        showManagerNotice(_t(
+          "Payroll saved. This worker's approved hours now appear in Finance.",
+          "השכר נשמר. השעות המאושרות של העובד יופיעו בכספים.",
+        ), "success");
+      }
     } catch (err) {
       const labels = { "approve": _t("Approve Hours", "אשר שעות"), "save": _t("Save Payroll", "שמור שכר") };
       actionBtn.textContent = err?.message || labels[action] || _t("Retry", "נסה שוב");
@@ -9805,22 +9820,9 @@ async function renderEdFinanceTab() {
     if (!payrollRes.ok || !expensesRes.ok) throw new Error();
     const payroll  = await payrollRes.json();
     const expenses = await expensesRes.json();
-    const invoices = await _invFetchForEvent(currentEventId);
-
-    root.innerHTML = _edBuildFinanceHTML(payroll, expenses) +
-      _invBuildFinanceBlock(invoices, { createBtnId: "ed-inv-create-btn", context: "event" });
+    root.innerHTML = _edBuildFinanceHTML(payroll, expenses);
 
     lucide.createIcons();
-
-    document.getElementById("ed-inv-create-btn")?.addEventListener("click", () => {
-      const ev = _getCurrentEventData();
-      openInvoiceModal({
-        prefillEventId:    currentEventId,
-        prefillProjectId:  ev?.projectId || null,
-        prefillCustomerId: ev?.customerId || null,
-        prefillAmount:     ev?.expectedRevenue || "",
-      });
-    });
   } catch {
     root.innerHTML =
       '<div class="pd-loading">Failed to load finance data.</div>';
@@ -9962,26 +9964,6 @@ let _paymentInvoiceId = null;
 const _fmtMoney = (n) =>
   `₪${(n || 0).toLocaleString("en-IL", { minimumFractionDigits: 2 })}`;
 
-const _invStatusLabel = {
-  draft: "Draft", sent: "Sent", partial: "Partial",
-  paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
-};
-
-function _invStatusText(status) {
-  const he = {
-    draft: "טיוטה",
-    sent: "נשלח",
-    partial: "חלקי",
-    paid: "שולם",
-    overdue: "באיחור",
-    cancelled: "בוטל",
-  };
-  return _t(_invStatusLabel[status] || status, he[status] || status);
-}
-
-function _invStatusBadge(status) {
-  return `<span class="inv-badge inv-badge--${status}">${_invStatusText(status)}</span>`;
-}
 
 function _suggestInvoiceNumber() {
   const d = new Date();
@@ -9993,7 +9975,7 @@ function _suggestInvoiceNumber() {
 async function loadInvoices() {
   const tbody = document.getElementById("inv-tbody");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Loading…</td></tr>`;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/invoices`, { headers: { Authorization: `Bearer ${token}` } });
@@ -10002,33 +9984,25 @@ async function loadInvoices() {
     _renderInvoiceTable();
     _renderInvoiceSummaryCards();
   } catch {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_t("Failed to load payment requests.", "טעינת דרישות תשלום נכשלה.")}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${_t("Failed to load payment requests.", "טעינת דרישות תשלום נכשלה.")}</td></tr>`;
   }
 }
 
 function _renderInvoiceSummaryCards() {
   const visible = _filteredInvoices();
-  const total = visible.reduce((s, i) => s + (i.invoiceAmount || 0), 0);
-  const paid  = visible.reduce((s, i) => s + (i.paidAmount    || 0), 0);
-  const outstanding = visible
-    .filter((i) => i.paymentStatus !== "cancelled" && i.paymentStatus !== "paid")
-    .reduce((s, i) => s + ((i.invoiceAmount || 0) - (i.paidAmount || 0)), 0);
-  const overdue = visible
-    .filter((i) => i.paymentStatus === "overdue")
-    .reduce((s, i) => s + ((i.invoiceAmount || 0) - (i.paidAmount || 0)), 0);
+  const total       = visible.reduce((s, i) => s + (i.invoiceAmount || 0), 0);
+  const paid        = visible.reduce((s, i) => s + (i.paidAmount    || 0), 0);
+  const outstanding = total - paid;
 
   const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   setEl("inv-stat-total",       _fmtMoney(total));
   setEl("inv-stat-paid",        _fmtMoney(paid));
   setEl("inv-stat-outstanding", _fmtMoney(outstanding));
-  setEl("inv-stat-overdue",     _fmtMoney(overdue));
 }
 
 function _filteredInvoices() {
   const search = (document.getElementById("inv-search")?.value || "").toLowerCase();
-  const status = document.getElementById("inv-filter-status")?.value || "";
   return _allInvoices.filter((inv) => {
-    if (status && inv.paymentStatus !== status) return false;
     if (search) {
       const hay = [inv.invoiceNumber, inv.customerCompanyName, inv.eventName]
         .filter(Boolean).join(" ").toLowerCase();
@@ -10043,7 +10017,7 @@ function _renderInvoiceTable() {
   if (!tbody) return;
   const list = _filteredInvoices();
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_t("No payment requests found.", "לא נמצאו דרישות תשלום.")}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${_t("No payment requests found.", "לא נמצאו דרישות תשלום.")}</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map((inv) => {
@@ -10056,10 +10030,9 @@ function _renderInvoiceTable() {
       <td>${_fmtDate(inv.dueDate)}</td>
       <td>${_fmtMoney(inv.invoiceAmount)}</td>
       <td>${_fmtMoney(inv.paidAmount)}</td>
-      <td>${_invStatusBadge(inv.paymentStatus)}</td>
       <td class="inv-actions">
         <button class="btn-icon-sm" title="${_t("Record Payment", "רישום תשלום")}" data-inv-pay="${escapeHtml(inv.invoiceId)}"><i data-lucide="banknote"></i></button>
-        <button class="btn-icon-sm" title="${_t("View", "צפה")}" data-inv-view="${escapeHtml(inv.invoiceId)}"><i data-lucide="eye"></i></button>
+        <button class="btn-icon-sm" title="${_t("Edit", "ערוך")}" data-inv-edit="${escapeHtml(inv.invoiceId)}"><i data-lucide="pencil"></i></button>
         <button class="btn-icon-sm" title="${_t("Download PDF", "הורד PDF")}" data-inv-pdf="${escapeHtml(inv.invoiceId)}" data-inv-num="${escapeHtml(inv.invoiceNumber)}"><i data-lucide="file-down"></i></button>
         <button class="btn-icon-sm btn-icon-danger" title="${_t("Delete", "מחיקה")}" data-inv-cancel="${escapeHtml(inv.invoiceId)}"><i data-lucide="trash-2"></i></button>
       </td>
@@ -10074,8 +10047,8 @@ function _wireInvoiceTableActions() {
   if (!tbody) return;
   tbody.querySelectorAll("[data-inv-pay]").forEach((btn) =>
     btn.addEventListener("click", () => openRecordPaymentModal(btn.dataset.invPay)));
-  tbody.querySelectorAll("[data-inv-view]").forEach((btn) =>
-    btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invView })));
+  tbody.querySelectorAll("[data-inv-edit]").forEach((btn) =>
+    btn.addEventListener("click", () => openInvoiceModal({ invoiceId: btn.dataset.invEdit })));
   tbody.querySelectorAll("[data-inv-pdf]").forEach((btn) =>
     btn.addEventListener("click", () => _downloadInvoicePdf(btn.dataset.invPdf, btn.dataset.invNum)));
   tbody.querySelectorAll("[data-inv-cancel]").forEach((btn) =>
@@ -10126,56 +10099,38 @@ async function _cancelInvoice(invoiceId) {
 document.getElementById("inv-search")?.addEventListener("input", () => {
   _renderInvoiceTable(); _renderInvoiceSummaryCards();
 });
-document.getElementById("inv-filter-status")?.addEventListener("change", () => {
-  _renderInvoiceTable(); _renderInvoiceSummaryCards();
-});
 document.getElementById("btn-create-invoice")?.addEventListener("click", () => openInvoiceModal({}));
 
-function _setInvoiceModalViewMode(isViewMode) {
-  const fieldIds = [
-    "inv-customer",
-    "inv-project",
-    "inv-event",
-    "inv-number",
-    "inv-status",
-    "inv-date",
-    "inv-due-date",
-    "inv-amount",
-    "inv-notes",
-  ];
-
-  fieldIds.forEach((id) => {
+function _setInvoiceEditableFields(editingExisting) {
+  // When editing an existing request: lock customer/event/number, allow dates & amount only.
+  // When creating new: all fields editable.
+  const lockedWhenEditing = ["inv-customer", "inv-project", "inv-event", "inv-number", "inv-notes"];
+  lockedWhenEditing.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.disabled = isViewMode;
-    if ("readOnly" in el) el.readOnly = isViewMode;
+    el.disabled = editingExisting;
+    if ("readOnly" in el) el.readOnly = editingExisting;
   });
-
-  const saveBtn = document.getElementById("inv-modal-save");
-  if (saveBtn) saveBtn.style.display = isViewMode ? "none" : "";
-
-  const cancelBtn = document.getElementById("inv-modal-cancel");
-  if (cancelBtn) cancelBtn.textContent = isViewMode ? _t("Close", "סגור") : _t("Cancel", "ביטול");
 }
 
-// ── Create / View Invoice Modal ────────────────────────────────────────────
+// ── Create / Edit Invoice Modal ────────────────────────────────────────────
 async function openInvoiceModal(opts = {}) {
   _editingInvoiceId = opts.invoiceId || null;
-  const isViewMode = Boolean(_editingInvoiceId);
+  const isEditing = Boolean(_editingInvoiceId);
   const overlay = document.getElementById("inv-modal-overlay");
   document.getElementById("inv-modal-title").textContent =
-    isViewMode ? _t("Payment Request Details", "פרטי דרישת תשלום") : _t("New Payment Request", "דרישת תשלום חדשה");
+    isEditing ? _t("Edit Payment Request", "עריכת דרישת תשלום") : _t("New Payment Request", "דרישת תשלום חדשה");
   const subtitleEl = document.getElementById("inv-modal-subtitle");
   if (subtitleEl) {
-    subtitleEl.textContent = isViewMode
-      ? _t("View payment request details", "צפייה בפרטי דרישת התשלום")
+    subtitleEl.textContent = isEditing
+      ? _t("Edit dates and amount", "ערוך תאריכים וסכום")
       : _t("Fill in the payment request details below", "מלא את פרטי דרישת התשלום");
   }
   document.getElementById("inv-modal-save-label").textContent =
-    _t("Save Request", "שמור דרישה");
+    isEditing ? _t("Save Changes", "שמור שינויים") : _t("Save Request", "שמור דרישה");
   const errEl = document.getElementById("inv-modal-error");
   if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-  _setInvoiceModalViewMode(false);
+  _setInvoiceEditableFields(false);
 
   await _invLoadCustomerDropdown(opts.prefillCustomerId || null);
 
@@ -10188,24 +10143,21 @@ async function openInvoiceModal(opts = {}) {
       _setVal("inv-customer", inv.customerId);
       await _invLoadEventDropdownForCustomer(inv.customerId, inv.eventId);
       _setVal("inv-number",   inv.invoiceNumber);
-      _setVal("inv-status",   inv.paymentStatus);
       _setVal("inv-date",     inv.invoiceDate ? inv.invoiceDate.slice(0, 10) : today);
       _setVal("inv-due-date", inv.dueDate     ? inv.dueDate.slice(0, 10)     : due30);
       _setVal("inv-amount",   inv.invoiceAmount);
       _setVal("inv-notes",    inv.notes || "");
-      _setInvoiceModalViewMode(true);
+      _setInvoiceEditableFields(true);
     }
   } else {
     _setVal("inv-customer",  opts.prefillCustomerId || "");
     _setVal("inv-project",   opts.prefillProjectId  || "");
     _setVal("inv-number",    _suggestInvoiceNumber());
-    _setVal("inv-status",    "draft");
     _setVal("inv-date",      today);
     _setVal("inv-due-date",  due30);
     _setVal("inv-amount",    opts.prefillAmount || "");
     _setVal("inv-notes",     "");
-    if (opts.prefillCustomerId) await _invLoadEventDropdownForCustomer(opts.prefillCustomerId, opts.prefillEventId || null);
-    else _setVal("inv-event", "");
+    await _invLoadEventDropdownForCustomer(opts.prefillCustomerId || null, opts.prefillEventId || null);
   }
 
   overlay.style.display = "flex";
@@ -10234,7 +10186,12 @@ async function _invLoadCustomerDropdown(selectedId) {
       sel.appendChild(opt);
     });
   } catch { /* silent */ }
-  sel.onchange = async () => { await _invLoadEventDropdownForCustomer(sel.value, null); };
+  sel.onchange = async () => {
+    // Keep the chosen event if it's still valid for the new customer;
+    // events linked to a different customer get filtered out (selection drops).
+    const currentEventId = document.getElementById("inv-event")?.value || null;
+    await _invLoadEventDropdownForCustomer(sel.value, currentEventId);
+  };
   if (selectedId) await _invLoadEventDropdownForCustomer(selectedId, null);
 }
 
@@ -10244,20 +10201,23 @@ async function _invLoadEventDropdownForCustomer(customerId, selectedEventId) {
   if (projectSel) projectSel.innerHTML = `<option value="">— technical wrapper —</option>`;
   if (!eventSel) return;
   eventSel.innerHTML = `<option value="">${_t("— select event —", "— בחר אירוע —")}</option>`;
-  if (!customerId) return;
   try {
     const token = await getToken();
     const res = await fetch(`${API_BASE}/events`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return;
     const events = await res.json();
-    const matchingEvents = events
-      .filter((ev) => !ev.customerId || ev.customerId === customerId);
-    const autoSelectedEventId = selectedEventId || (matchingEvents.length === 1 ? matchingEvents[0].eventId : null);
+    // With a customer chosen: that customer's events + unassigned ones.
+    // Without a customer: all events — picking one auto-fills its customer.
+    const matchingEvents = customerId
+      ? events.filter((ev) => !ev.customerId || ev.customerId === customerId)
+      : events;
+    const autoSelectedEventId = selectedEventId || (customerId && matchingEvents.length === 1 ? matchingEvents[0].eventId : null);
     matchingEvents.forEach((ev) => {
         const opt = document.createElement("option");
         opt.value = ev.eventId;
         opt.textContent = ev.name;
         opt.dataset.revenue = ev.expectedRevenue || "";
+        opt.dataset.customerId = ev.customerId || "";
         if (ev.eventId === autoSelectedEventId) opt.selected = true;
         eventSel.appendChild(opt);
       });
@@ -10270,6 +10230,12 @@ async function _invLoadEventDropdownForCustomer(customerId, selectedEventId) {
   eventSel.onchange = () => {
     const chosen = eventSel.options[eventSel.selectedIndex];
     if (chosen?.dataset?.revenue) _setVal("inv-amount", chosen.dataset.revenue);
+    // Event linked to a customer → auto-fill the customer field
+    const evCustomerId = chosen?.dataset?.customerId;
+    const customerSel = document.getElementById("inv-customer");
+    if (evCustomerId && customerSel && customerSel.value !== evCustomerId) {
+      customerSel.value = evCustomerId;
+    }
   };
 }
 
@@ -10328,22 +10294,16 @@ document.getElementById("inv-modal-overlay")?.addEventListener("click", (e) => {
 function _closeInvoiceModal() {
   document.getElementById("inv-modal-overlay").style.display = "none";
   _editingInvoiceId = null;
-  _setInvoiceModalViewMode(false);
+  _setInvoiceEditableFields(false);
 }
 
 document.getElementById("inv-modal-save")?.addEventListener("click", async () => {
-  if (_editingInvoiceId) {
-    _closeInvoiceModal();
-    return;
-  }
-
   const errEl   = document.getElementById("inv-modal-error");
   const saveBtn = document.getElementById("inv-modal-save");
   const customerId = document.getElementById("inv-customer")?.value?.trim();
   const projectId  = document.getElementById("inv-project")?.value?.trim() || null;
   const eventId    = document.getElementById("inv-event")?.value?.trim()   || null;
   const number     = document.getElementById("inv-number")?.value?.trim();
-  const status     = document.getElementById("inv-status")?.value;
   const date       = document.getElementById("inv-date")?.value;
   const dueDate    = document.getElementById("inv-due-date")?.value;
   const amount     = parseFloat(document.getElementById("inv-amount")?.value);
@@ -10355,6 +10315,16 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
   if (!dueDate)                  { _showInvError(errEl, _t("Due date is required.", "תאריך יעד הוא שדה חובה.")); return; }
   if (isNaN(amount) || amount <= 0) { _showInvError(errEl, _t("Amount must be greater than 0.", "הסכום חייב להיות גדול מ-0.")); return; }
 
+  // Block pairing an event with a customer it doesn't belong to
+  if (eventId) {
+    const eventSel = document.getElementById("inv-event");
+    const evCustomerId = eventSel?.options[eventSel.selectedIndex]?.dataset?.customerId || "";
+    if (evCustomerId && evCustomerId !== customerId) {
+      _showInvError(errEl, _t("This event belongs to a different customer.", "האירוע שנבחר משויך ללקוח אחר."));
+      return;
+    }
+  }
+
   saveBtn.disabled = true;
   if (errEl) errEl.style.display = "none";
   try {
@@ -10363,14 +10333,14 @@ document.getElementById("inv-modal-save")?.addEventListener("click", async () =>
       const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(_editingInvoiceId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
+        body: JSON.stringify({ invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, notes }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Update failed.", "עדכון הדרישה נכשל.")); }
     } else {
       const res = await fetch(`${API_BASE}/invoices`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ customerId, projectId, eventId, invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, paymentStatus: status, notes }),
+        body: JSON.stringify({ customerId, projectId, eventId, invoiceNumber: number, invoiceDate: date, dueDate, invoiceAmount: amount, notes }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Create failed.", "יצירת הדרישה נכשלה.")); }
     }
@@ -10438,9 +10408,8 @@ function _closePaymentModal() {
 document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
   const errEl   = document.getElementById("inv-pay-error");
   const saveBtn = document.getElementById("inv-pay-save");
-  const paidAmount    = parseFloat(document.getElementById("inv-pay-amount")?.value);
-  const paymentDate   = document.getElementById("inv-pay-date")?.value || null;
-  const paymentStatus = document.getElementById("inv-pay-status")?.value || null;
+  const paidAmount  = parseFloat(document.getElementById("inv-pay-amount")?.value);
+  const paymentDate = document.getElementById("inv-pay-date")?.value || null;
 
   if (isNaN(paidAmount) || paidAmount < 0) { _showInvError(errEl, _t("Paid amount must be 0 or greater.", "הסכום ששולם חייב להיות 0 או יותר.")); return; }
 
@@ -10451,7 +10420,7 @@ document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
     const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(_paymentInvoiceId)}/payment`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ paidAmount, paymentDate, paymentStatus: paymentStatus || null }),
+      body: JSON.stringify({ paidAmount, paymentDate, paymentStatus: null }),
     });
     if (!res.ok) { const d = await res.json(); throw new Error(d.error || _t("Payment save failed.", "שמירת התשלום נכשלה.")); }
     _closePaymentModal();
@@ -10462,73 +10431,6 @@ document.getElementById("inv-pay-save")?.addEventListener("click", async () => {
     saveBtn.disabled = false;
   }
 });
-
-// ── Finance tab integration helpers (used by event/project finance tabs) ───
-async function _invFetchForEvent(eventId) {
-  try {
-    const token = await getToken();
-    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}/invoices`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.ok ? await res.json() : [];
-  } catch { return []; }
-}
-
-async function _invFetchForProject(projectId) {
-  try {
-    const token = await getToken();
-    const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/invoices`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.ok ? await res.json() : [];
-  } catch { return []; }
-}
-
-function _invBuildFinanceBlock(invoices, opts = {}) {
-  const fmt = _fmtMoney;
-  const total = invoices.reduce((s, i) => s + (i.invoiceAmount || 0), 0);
-  const paid  = invoices.reduce((s, i) => s + (i.paidAmount    || 0), 0);
-  const outstanding = total - paid;
-
-  const rows = invoices.map((inv) =>
-    `<tr>
-      <td>${escapeHtml(inv.invoiceNumber)}</td>
-      <td>${_invStatusBadge(inv.paymentStatus)}</td>
-      <td>${_fmtDate(inv.invoiceDate)}</td>
-      <td>${_fmtDate(inv.dueDate)}</td>
-      <td>${fmt(inv.invoiceAmount)}</td>
-      <td>${fmt(inv.paidAmount)}</td>
-      <td>${fmt(inv.invoiceAmount - inv.paidAmount)}</td>
-    </tr>`
-  ).join("");
-
-  return `
-  <div class="ed-finance-section inv-finance-block">
-    <div class="inv-finance-header">
-      <h4 class="ed-finance-section-title">${_t("Payment Requests", "דרישות תשלום")}</h4>
-      <button class="btn-primary btn-sm btn-with-icon" id="${opts.createBtnId || "inv-finance-create-btn"}">
-        <i data-lucide="plus"></i> ${_t("New Payment Request", "דרישת תשלום חדשה")}
-      </button>
-    </div>
-    ${invoices.length > 0 ? `
-      <div class="ed-finance-cards" style="margin-bottom:12px">
-        <div class="ed-finance-card"><div class="ed-finance-card-label">${_t("Requested", "נדרש")}</div><div class="ed-finance-card-value">${fmt(total)}</div></div>
-        <div class="ed-finance-card ed-finance-card--profit"><div class="ed-finance-card-label">${_t("Collected", "נגבה")}</div><div class="ed-finance-card-value">${fmt(paid)}</div></div>
-        <div class="ed-finance-card ${outstanding > 0 ? "ed-finance-card--loss" : ""}">
-          <div class="ed-finance-card-label">${_t("Outstanding", "יתרה לתשלום")}</div><div class="ed-finance-card-value">${fmt(outstanding)}</div>
-        </div>
-      </div>
-      <table class="ed-worker-table ed-finance-invoice-table">
-        <thead><tr><th>${_t("Request #", "מספר דרישה")}</th><th>${_t("Status", "סטטוס")}</th><th>${_t("Date", "תאריך")}</th><th>${_t("Due", "לתשלום עד")}</th><th>${_t("Amount", "סכום")}</th><th>${_t("Paid", "שולם")}</th><th>${_t("Balance", "יתרה")}</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>` : `<p class="pd-empty-state" style="padding:12px 0">${opts.context === "event"
-        ? _t("No payment requests yet for this event.", "אין עדיין דרישות תשלום לאירוע הזה.")
-        : _t("No payment requests yet for this item.", "אין עדיין דרישות תשלום לפריט הזה.")
-      }</p>`}
-  </div>`;
-}
-
-
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PROJECT EDIT / DELETE

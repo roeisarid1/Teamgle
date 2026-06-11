@@ -213,25 +213,12 @@
           <div class="inv-card-label">Outstanding</div>
           <div class="inv-card-value" id="inv-stat-outstanding">—</div>
         </div>
-        <div class="inv-card inv-card--overdue">
-          <div class="inv-card-label">Overdue</div>
-          <div class="inv-card-value" id="inv-stat-overdue">—</div>
-        </div>
       </div>
 
       <!-- Filter bar -->
       <div class="inv-filter-bar">
         <input type="search" class="search-input" id="inv-search"
           placeholder="Search by request #, customer, event…" autocomplete="off" />
-        <select class="emp-filter-select" id="inv-filter-status">
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="partial">Partial</option>
-          <option value="paid">Paid</option>
-          <option value="overdue">Overdue</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
       </div>
 
       <!-- Table -->
@@ -246,12 +233,11 @@
               <th>Due Date</th>
               <th>Amount</th>
               <th>Paid</th>
-              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="inv-tbody">
-            <tr><td colspan="9" class="empty-state">Select "Payment Requests" to load.</td></tr>
+            <tr><td colspan="8" class="empty-state">Select "Payment Requests" to load.</td></tr>
           </tbody>
         </table>
       </div>
@@ -597,7 +583,7 @@
       <div class="pd-tabs" id="event-detail-tabs">
         <button class="pd-tab active" data-etab="staffing">Staffing</button>
         <button class="pd-tab" data-etab="workers">Workers</button>
-        <button class="pd-tab" data-etab="gantt">Gantt</button>
+        <button class="pd-tab" data-etab="gantt">Shifts</button>
         <button class="pd-tab" data-etab="tasks">Tasks</button>
         <button class="pd-tab" data-etab="briefs">Briefings &amp; Equipment</button>
         <button class="pd-tab" data-etab="expenses">Expenses</button>
@@ -1369,22 +1355,9 @@
 
         <div class="form-group">
           <p class="form-group-title">Payment Request Details</p>
-          <div class="form-row">
-            <div class="field">
-              <label for="inv-number">Request # <span class="req">*</span></label>
-              <input type="text" id="inv-number" placeholder="e.g. REQ-2026-001" />
-            </div>
-            <div class="field">
-              <label for="inv-status">Status</label>
-              <select id="inv-status">
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="partial">Partial</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+          <div class="field">
+            <label for="inv-number">Request # <span class="req">*</span></label>
+            <input type="text" id="inv-number" placeholder="e.g. REQ-2026-001" />
           </div>
           <div class="form-row">
             <div class="field">
@@ -1454,18 +1427,6 @@
               <label for="inv-pay-date">Payment Date</label>
               <input type="date" id="inv-pay-date" />
             </div>
-          </div>
-          <div class="field">
-            <label for="inv-pay-status">Status (auto-calculated if blank)</label>
-            <select id="inv-pay-status">
-              <option value="">Auto</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
           </div>
         </div>
         <div id="inv-pay-error" class="msg-error" role="alert" style="display:none"></div>

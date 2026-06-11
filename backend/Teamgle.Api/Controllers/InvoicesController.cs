@@ -1,3 +1,4 @@
+using System.Globalization;
 using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Mvc;
 using QuestPDF.Fluent;
@@ -166,123 +167,178 @@ public class InvoicesController : ControllerBase
 
     private static byte[] GenerateInvoicePdf(InvoiceResponse inv, bool isHebrew)
     {
-        string Fmt(DateTime? d) => d.HasValue ? d.Value.ToString("dd MMM yyyy") : "—";
-        string FmtMoney(decimal m) => $"₪{m:N2}";
-        string StatusLabel(string s) => s switch
-        {
-            "draft"     => isHebrew ? "טיוטה" : "Draft",
-            "sent"      => isHebrew ? "נשלח" : "Sent",
-            "partial"   => isHebrew ? "חלקי" : "Partial",
-            "paid"      => isHebrew ? "שולם" : "Paid",
-            "overdue"   => isHebrew ? "באיחור" : "Overdue",
-            "cancelled" => isHebrew ? "בוטל" : "Cancelled",
-            _           => s,
-        };
         string T(string en, string he) => isHebrew ? he : en;
+        string FmtDate(DateTime? d) => !d.HasValue ? "—"
+            : d.Value.ToString(isHebrew ? "dd/MM/yyyy" : "dd MMM yyyy", CultureInfo.InvariantCulture);
+        string Money(decimal m) => "₪" + m.ToString("N2", CultureInfo.InvariantCulture);
+        var balance = inv.InvoiceAmount - inv.PaidAmount;
+
+        const string Brand     = "#4F6EF7";
+        const string BrandSoft = "#eef2ff";
+        const string BrandPale = "#c7d2fe";
+        const string Ink       = "#1e293b";
+        const string Muted     = "#475569";
+        const string Faint     = "#94a3b8";
+        const string Line      = "#e2e8f0";
+        const string Soft      = "#f8fafc";
+        const string Green     = "#16a34a";
+        const string Red       = "#dc2626";
 
         return Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(40);
-                page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Arial"));
+                page.Margin(0);
+                page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Arial").FontColor(Ink));
 
                 page.Content().Column(col =>
                 {
-                    // Header
-                    col.Item().Row(row =>
+                    // ── Brand header band ─────────────────────────────────
+                    // Teamgle pinned to the left edge, title to the right edge —
+                    // valid in both directions, avoids the center-collision issue.
+                    col.Item().Background(Brand).PaddingVertical(30).PaddingHorizontal(40).Row(row =>
                     {
+                        row.RelativeItem().AlignMiddle().Column(c =>
+                        {
+                            c.Item().Text("Teamgle").FontSize(26).Bold().FontColor(Colors.White);
+                            c.Item().Text(T("Workforce Management", "ניהול כוח אדם")).FontSize(9).FontColor(BrandPale);
+                        });
+                        row.RelativeItem().AlignMiddle().Column(c =>
+                        {
+                            c.Item().AlignRight().Text(T("PAYMENT REQUEST", "דרישת תשלום")).FontSize(20).Bold().FontColor(Colors.White);
+                            c.Item().AlignRight().Text($"#{inv.InvoiceNumber}").FontSize(11).FontColor(BrandPale);
+                        });
+                    });
+
+                    // ── Customer & dates ──────────────────────────────────
+                    col.Item().PaddingHorizontal(40).PaddingTop(28).Row(row =>
+                    {
+                        void BillToBlock(ColumnDescriptor c, bool alignRight)
+                        {
+                            IContainer I() { var i = c.Item(); return alignRight ? i.AlignRight() : i; }
+                            I().Text(T("BILL TO", "לכבוד")).FontSize(8.5f).FontColor(Faint);
+                            I().PaddingTop(2).Text(inv.CustomerCompanyName ?? "—").FontSize(15).Bold();
+                            if (!string.IsNullOrWhiteSpace(inv.EventName))
+                                I().PaddingTop(3).Text($"{T("Event", "אירוע")}: {inv.EventName}").FontSize(10).FontColor(Muted);
+                        }
+
+                        void DatesBlock(ColumnDescriptor c, bool alignRight)
+                        {
+                            IContainer I() { var i = c.Item(); return alignRight ? i.AlignRight() : i; }
+                            I().Text(T("REQUEST DATE", "תאריך דרישה")).FontSize(8.5f).FontColor(Faint);
+                            I().PaddingTop(2).Text(FmtDate(inv.InvoiceDate)).Bold();
+                            I().PaddingTop(10).Text(T("DUE DATE", "תאריך יעד")).FontSize(8.5f).FontColor(Faint);
+                            I().PaddingTop(2).Text(FmtDate(inv.DueDate)).Bold();
+                        }
+
                         if (isHebrew)
                         {
-                            row.RelativeItem().AlignRight().Column(c =>
-                            {
-                                c.Item().Text(T("PAYMENT REQUEST", "דרישת תשלום")).FontSize(22).Bold().FontColor("#1e293b");
-                                c.Item().Text($"# {inv.InvoiceNumber}").FontSize(12).FontColor("#64748b");
-                            });
-                            row.RelativeItem().AlignLeft().Text("Teamgle")
-                                .FontSize(26).Bold().FontColor("#4F6EF7");
+                            row.RelativeItem().Column(c => DatesBlock(c, false));
+                            row.RelativeItem().Column(c => BillToBlock(c, true));
                         }
                         else
                         {
-                            row.RelativeItem().Text("Teamgle")
-                                .FontSize(26).Bold().FontColor("#4F6EF7");
-                            row.RelativeItem().AlignRight().Column(c =>
-                            {
-                                c.Item().Text("PAYMENT REQUEST").FontSize(22).Bold().FontColor("#1e293b");
-                                c.Item().Text($"# {inv.InvoiceNumber}").FontSize(12).FontColor("#64748b");
-                            });
+                            row.RelativeItem().Column(c => BillToBlock(c, false));
+                            row.RelativeItem().Column(c => DatesBlock(c, true));
                         }
                     });
 
-                    col.Item().PaddingVertical(12).LineHorizontal(1).LineColor("#e2e8f0");
-
-                    // Dates & status
-                    col.Item().Row(row =>
+                    // ── Amounts table ─────────────────────────────────────
+                    col.Item().PaddingHorizontal(40).PaddingTop(28).Table(table =>
                     {
-                        row.RelativeItem().Column(c =>
+                        IContainer BodyCell() =>
+                            table.Cell().BorderBottom(1).BorderColor(Line).Padding(8);
+
+                        if (isHebrew)
                         {
-                            c.Item().Text(T("Request Date", "תאריך דרישה")).FontSize(9).FontColor("#94a3b8");
-                            c.Item().Text(Fmt(inv.InvoiceDate)).Bold();
-                        });
-                        row.RelativeItem().Column(c =>
+                            // RTL: amount column on the physical left, description on the right
+                            table.ColumnsDefinition(c => { c.RelativeColumn(1); c.RelativeColumn(3); });
+
+                            table.Header(h =>
+                            {
+                                h.Cell().Background(Soft).BorderBottom(1).BorderColor(Line).Padding(8)
+                                    .Text("סכום").FontSize(9).Bold().FontColor(Muted);
+                                h.Cell().Background(Soft).BorderBottom(1).BorderColor(Line).Padding(8)
+                                    .AlignRight().Text("תיאור").FontSize(9).Bold().FontColor(Muted);
+                            });
+
+                            BodyCell().Text(Money(inv.InvoiceAmount));
+                            BodyCell().AlignRight().Text("סכום דרישת התשלום");
+
+                            BodyCell().Text(Money(inv.PaidAmount)).FontColor(Green);
+                            BodyCell().AlignRight().Text("שולם עד כה");
+                        }
+                        else
                         {
-                            c.Item().Text(T("Due Date", "תאריך יעד")).FontSize(9).FontColor("#94a3b8");
-                            c.Item().Text(Fmt(inv.DueDate)).Bold();
-                        });
-                        row.RelativeItem().Column(c =>
-                        {
-                            c.Item().Text(T("Status", "סטטוס")).FontSize(9).FontColor("#94a3b8");
-                            c.Item().Text(StatusLabel(inv.PaymentStatus)).Bold();
-                        });
+                            table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(1); });
+
+                            table.Header(h =>
+                            {
+                                h.Cell().Background(Soft).BorderBottom(1).BorderColor(Line).Padding(8)
+                                    .Text("Description").FontSize(9).Bold().FontColor(Muted);
+                                h.Cell().Background(Soft).BorderBottom(1).BorderColor(Line).Padding(8)
+                                    .AlignRight().Text("Amount").FontSize(9).Bold().FontColor(Muted);
+                            });
+
+                            BodyCell().Text("Payment request amount");
+                            BodyCell().AlignRight().Text(Money(inv.InvoiceAmount));
+
+                            BodyCell().Text("Paid to date");
+                            BodyCell().AlignRight().Text(Money(inv.PaidAmount)).FontColor(Green);
+                        }
                     });
 
-                    col.Item().PaddingTop(20).AlignRight().Text(T("Bill To", "לקוח")).FontSize(9).FontColor("#94a3b8");
-                    col.Item().AlignRight().Text(inv.CustomerCompanyName ?? "—").Bold().FontSize(13);
-
-                    if (!string.IsNullOrWhiteSpace(inv.EventName))
-                        col.Item().PaddingTop(4).AlignRight().Text($"{T("Event", "אירוע")}: {inv.EventName}").FontColor("#475569");
-
-                    col.Item().PaddingVertical(20).LineHorizontal(1).LineColor("#e2e8f0");
-
-                    // Amount table
-                    col.Item().Table(table =>
+                    // ── Balance highlight ─────────────────────────────────
+                    col.Item().PaddingHorizontal(40).PaddingTop(16)
+                       .Background(BrandSoft).Padding(16).Row(row =>
                     {
-                        table.ColumnsDefinition(c =>
+                        var balanceColor = balance > 0 ? Red : Green;
+                        if (isHebrew)
                         {
-                            c.RelativeColumn(3);
-                            c.RelativeColumn(1);
-                        });
-
-                        table.Header(h =>
+                            row.RelativeItem().AlignMiddle().Text(Money(balance)).FontSize(17).Bold().FontColor(balanceColor);
+                            row.RelativeItem().AlignMiddle().AlignRight().Text("יתרה לתשלום").FontSize(13).Bold();
+                        }
+                        else
                         {
-                            h.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text(T("Description", "תיאור")).Bold();
-                            h.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text(T("Amount", "סכום")).Bold();
-                        });
-
-                        table.Cell().Padding(6).AlignRight().Text(T("Payment Request Amount", "סכום דרישת התשלום"));
-                        table.Cell().Padding(6).AlignRight().Text(FmtMoney(inv.InvoiceAmount));
-
-                        table.Cell().Padding(6).AlignRight().Text(T("Paid", "שולם"));
-                        table.Cell().Padding(6).AlignRight().Text(FmtMoney(inv.PaidAmount)).FontColor("#16a34a");
-
-                        var balance = inv.InvoiceAmount - inv.PaidAmount;
-                        table.Cell().Background("#f8fafc").Padding(6).AlignRight().Text(T("Balance Due", "יתרה לתשלום")).Bold();
-                        table.Cell().Background("#f8fafc").Padding(6).AlignRight()
-                            .Text(FmtMoney(balance)).Bold()
-                            .FontColor(balance > 0 ? "#dc2626" : "#16a34a");
+                            row.RelativeItem().AlignMiddle().Text("Balance Due").FontSize(13).Bold();
+                            row.RelativeItem().AlignMiddle().AlignRight().Text(Money(balance)).FontSize(17).Bold().FontColor(balanceColor);
+                        }
                     });
 
+                    if (inv.PaidAmount > 0 && inv.PaymentDate.HasValue)
+                    {
+                        var paidLine = col.Item().PaddingHorizontal(40).PaddingTop(8);
+                        (isHebrew ? paidLine.AlignRight() : paidLine)
+                            .Text($"{T("Last payment", "תשלום אחרון")}: {FmtDate(inv.PaymentDate)}")
+                            .FontSize(9).FontColor(Faint);
+                    }
+
+                    // ── Notes ─────────────────────────────────────────────
                     if (!string.IsNullOrWhiteSpace(inv.Notes))
                     {
-                        col.Item().PaddingTop(20).AlignRight().Text(T("Notes", "הערות")).FontSize(9).FontColor("#94a3b8");
-                        col.Item().AlignRight().Text(inv.Notes).FontColor("#475569");
+                        col.Item().PaddingHorizontal(40).PaddingTop(24)
+                           .Background(Soft).Padding(12).Column(c =>
+                        {
+                            IContainer I() { var i = c.Item(); return isHebrew ? i.AlignRight() : i; }
+                            I().Text(T("NOTES", "הערות")).FontSize(8.5f).FontColor(Faint);
+                            I().PaddingTop(4).Text(inv.Notes).FontSize(10).FontColor(Muted);
+                        });
                     }
                 });
 
-                page.Footer().AlignCenter()
-                    .Text($"{T("Generated by Teamgle", "הופק על ידי Teamgle")} · {DateTime.UtcNow:dd MMM yyyy}")
-                    .FontSize(9).FontColor("#94a3b8");
+                // ── Footer ────────────────────────────────────────────────
+                page.Footer().PaddingHorizontal(40).PaddingBottom(28).Column(c =>
+                {
+                    c.Item().LineHorizontal(1).LineColor(Line);
+                    c.Item().PaddingTop(10).AlignCenter().Text(t =>
+                    {
+                        t.Span(T("Generated by ", "הופק על ידי ")).FontSize(9).FontColor(Faint);
+                        t.Span("Teamgle").FontSize(9).Bold().FontColor(Brand);
+                        t.Span($" · {DateTime.UtcNow.ToString(isHebrew ? "dd/MM/yyyy" : "dd MMM yyyy", CultureInfo.InvariantCulture)}")
+                            .FontSize(9).FontColor(Faint);
+                    });
+                });
             });
         }).GeneratePdf();
     }

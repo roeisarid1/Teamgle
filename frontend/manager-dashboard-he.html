@@ -212,25 +212,12 @@
           <div class="inv-card-label">יתרה</div>
           <div class="inv-card-value" id="inv-stat-outstanding">—</div>
         </div>
-        <div class="inv-card inv-card--overdue">
-          <div class="inv-card-label">באיחור</div>
-          <div class="inv-card-value" id="inv-stat-overdue">—</div>
-        </div>
       </div>
 
       <!-- Filter bar -->
       <div class="inv-filter-bar">
         <input type="search" class="search-input" id="inv-search"
           placeholder="חפש לפי מס' דרישה, לקוח, אירוע…" autocomplete="off" />
-        <select class="emp-filter-select" id="inv-filter-status">
-          <option value="">כל הסטטוסים</option>
-          <option value="draft">טיוטה</option>
-          <option value="sent">נשלח</option>
-          <option value="partial">חלקי</option>
-          <option value="paid">שולם</option>
-          <option value="overdue">באיחור</option>
-          <option value="cancelled">בוטל</option>
-        </select>
       </div>
 
       <!-- Table -->
@@ -245,12 +232,11 @@
               <th>תאריך פירעון</th>
               <th>סכום</th>
               <th>שולם</th>
-              <th>סטטוס</th>
               <th>פעולות</th>
             </tr>
           </thead>
           <tbody id="inv-tbody">
-            <tr><td colspan="9" class="empty-state">בחר "דרישות תשלום" לטעינה.</td></tr>
+            <tr><td colspan="8" class="empty-state">בחר "דרישות תשלום" לטעינה.</td></tr>
           </tbody>
         </table>
       </div>
@@ -589,7 +575,7 @@
       <div class="pd-tabs" id="event-detail-tabs">
         <button class="pd-tab active" data-etab="staffing">שיבוץ עובדים</button>
         <button class="pd-tab" data-etab="workers">עובדים</button>
-        <button class="pd-tab" data-etab="gantt">גאנט</button>
+        <button class="pd-tab" data-etab="gantt">משמרות</button>
         <button class="pd-tab" data-etab="tasks">משימות</button>
         <button class="pd-tab" data-etab="briefs">תדריכים</button>
         <button class="pd-tab" data-etab="expenses">הוצאות</button>
@@ -1360,22 +1346,9 @@
 
         <div class="form-group">
           <p class="form-group-title">פרטי דרישת התשלום</p>
-          <div class="form-row">
-            <div class="field">
-              <label for="inv-number">מס' דרישה <span class="req">*</span></label>
-              <input type="text" id="inv-number" placeholder="לדוגמה: INV-2026-001" />
-            </div>
-            <div class="field">
-              <label for="inv-status">סטטוס</label>
-              <select id="inv-status">
-                <option value="draft">טיוטה</option>
-                <option value="sent">נשלח</option>
-                <option value="partial">חלקי</option>
-                <option value="paid">שולם</option>
-                <option value="overdue">באיחור</option>
-                <option value="cancelled">בוטל</option>
-              </select>
-            </div>
+          <div class="field">
+            <label for="inv-number">מס' דרישה <span class="req">*</span></label>
+            <input type="text" id="inv-number" placeholder="לדוגמה: INV-2026-001" />
           </div>
           <div class="form-row">
             <div class="field">
@@ -1445,18 +1418,6 @@
               <label for="inv-pay-date">תאריך תשלום</label>
               <input type="date" id="inv-pay-date" />
             </div>
-          </div>
-          <div class="field">
-            <label for="inv-pay-status">סטטוס (חישוב אוטומטי אם ריק)</label>
-            <select id="inv-pay-status">
-              <option value="">אוטומטי</option>
-              <option value="draft">טיוטה</option>
-              <option value="sent">נשלח</option>
-              <option value="partial">חלקי</option>
-              <option value="paid">שולם</option>
-              <option value="overdue">באיחור</option>
-              <option value="cancelled">בוטל</option>
-            </select>
           </div>
         </div>
         <div id="inv-pay-error" class="msg-error" role="alert" style="display:none"></div>

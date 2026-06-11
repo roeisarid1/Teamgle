@@ -280,7 +280,7 @@ CREATE OR ALTER PROCEDURE sp_UpdateInvoice
     @invoiceDate   DATE,
     @dueDate       DATE,
     @invoiceAmount DECIMAL(18,2),
-    @paymentStatus NVARCHAR(50),
+    @paymentStatus NVARCHAR(50) = NULL,
     @notes         NVARCHAR(MAX) = NULL
 AS
 BEGIN
@@ -295,12 +295,6 @@ BEGIN
     IF @companyId IS NULL
     BEGIN
         RAISERROR('User is not a registered manager.', 16, 1);
-        RETURN;
-    END
-
-    IF @paymentStatus NOT IN ('draft','sent','partial','paid','overdue','cancelled')
-    BEGIN
-        RAISERROR('Invalid payment status.', 16, 1);
         RETURN;
     END
 
@@ -322,7 +316,7 @@ BEGIN
         invoice_date   = @invoiceDate,
         due_date       = @dueDate,
         invoice_amount = @invoiceAmount,
-        payment_status = @paymentStatus,
+        payment_status = ISNULL(@paymentStatus, payment_status),
         notes          = @notes
     WHERE invoice_ID = @invoiceId;
 

@@ -29,7 +29,6 @@ public class CreateInvoiceRequest
     public DateTime  InvoiceDate   { get; set; }
     public DateTime  DueDate       { get; set; }
     public decimal   InvoiceAmount { get; set; }
-    public string    PaymentStatus { get; set; } = "draft";
     public string?   Notes         { get; set; }
 }
 
@@ -39,7 +38,6 @@ public class UpdateInvoiceRequest
     public DateTime  InvoiceDate   { get; set; }
     public DateTime  DueDate       { get; set; }
     public decimal   InvoiceAmount { get; set; }
-    public string    PaymentStatus { get; set; } = "draft";
     public string?   Notes         { get; set; }
 }
 

@@ -118,7 +118,7 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@invoiceDate",   request.InvoiceDate);
         cmd.Parameters.AddWithValue("@dueDate",       request.DueDate);
         cmd.Parameters.AddWithValue("@invoiceAmount", request.InvoiceAmount);
-        cmd.Parameters.AddWithValue("@paymentStatus", request.PaymentStatus);
+        cmd.Parameters.AddWithValue("@paymentStatus", "draft");
         cmd.Parameters.AddWithValue("@notes",         (object?)request.Notes ?? DBNull.Value);
 
         await conn.OpenAsync();
@@ -144,7 +144,7 @@ public class InvoiceRepository : IInvoiceRepository
         cmd.Parameters.AddWithValue("@invoiceDate",   request.InvoiceDate);
         cmd.Parameters.AddWithValue("@dueDate",       request.DueDate);
         cmd.Parameters.AddWithValue("@invoiceAmount", request.InvoiceAmount);
-        cmd.Parameters.AddWithValue("@paymentStatus", request.PaymentStatus);
+        cmd.Parameters.AddWithValue("@paymentStatus", DBNull.Value);
         cmd.Parameters.AddWithValue("@notes",         (object?)request.Notes ?? DBNull.Value);
 
         await conn.OpenAsync();
