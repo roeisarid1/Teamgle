@@ -1,6 +1,7 @@
 const CACHE_NAME = "teamgle-pwa-v6";
 
 const APP_SHELL = [
+  "./index.html",
   "./auth.html",
   "./employee-dashboard.html",
   "./manager-dashboard.html",

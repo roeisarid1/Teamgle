@@ -15,9 +15,11 @@ var serviceAccountPath = builder.Configuration["Firebase:ServiceAccountPath"]
         "Firebase:ServiceAccountPath is not configured. " +
         "Set it in appsettings.Development.json pointing to your service account JSON file.");
 
+// Under IIS in-process hosting, Directory.GetCurrentDirectory() points to
+// C:\Windows\System32\inetsrv — resolve relative paths against the app root instead.
 var fullPath = Path.IsPathRooted(serviceAccountPath)
     ? serviceAccountPath
-    : Path.Combine(Directory.GetCurrentDirectory(), serviceAccountPath);
+    : Path.Combine(builder.Environment.ContentRootPath, serviceAccountPath);
 
 if (!File.Exists(fullPath))
     throw new FileNotFoundException(
