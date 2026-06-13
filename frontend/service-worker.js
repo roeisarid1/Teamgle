@@ -1,4 +1,4 @@
-const CACHE_NAME = "teamgle-pwa-v6";
+const CACHE_NAME = "teamgle-pwa-v7";
 
 const APP_SHELL = [
   "./index.html",
@@ -47,6 +47,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   const requestUrl = new URL(event.request.url);
+
+  // Never cache API calls — they are per-user and authenticated. In production the
+  // API shares an origin with the frontend, so without this guard the SW would
+  // serve one user's cached data to the next user (stale-while-revalidate).
+  if (requestUrl.pathname.includes("/api/")) {
+    return;
+  }
 
   if (requestUrl.origin !== self.location.origin) {
     return;

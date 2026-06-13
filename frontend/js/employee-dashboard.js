@@ -1170,3 +1170,12 @@ btnLogout.addEventListener("click", async () => {
   sessionStorage.removeItem("userProfile");
   window.location.href = "auth.html";
 });
+
+// ── bfcache guard ───────────────────────────────────────────────────────────────
+// When the browser restores this page from its back-forward cache (e.g. after a
+// logout → login as a different user), the DOM is shown exactly as it was frozen,
+// with the previous user's data, and onAuthStateChanged does NOT re-fire. Force a
+// fresh load so the auth gate re-runs against the currently signed-in user.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) window.location.reload();
+});

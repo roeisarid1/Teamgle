@@ -1592,6 +1592,15 @@ btnLogout.addEventListener("click", async () => {
   window.location.href = "auth.html";
 });
 
+// ── bfcache guard ────────────────────────────────────────────────────────────
+// When the browser restores this page from its back-forward cache (e.g. after a
+// logout → login as a different user), the DOM is shown exactly as it was frozen,
+// with the previous user's data, and onAuthStateChanged does NOT re-fire. Force a
+// fresh load so the auth gate re-runs against the currently signed-in user.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) window.location.reload();
+});
+
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 // Inline SVG snippets for btn icon restoration after loading state
@@ -10713,6 +10722,10 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
       customerId:   updated.customerId   ?? (customerId  || null),
       customerName: updated.customerName ?? null,
     };
+    // Keep the project-detail kanban cache in sync so the event card isn't stale
+    // when the user navigates back without re-opening the project.
+    const _evIdx = (currentProjectDetail?.events ?? []).findIndex((e) => e.eventId === currentEventId);
+    if (_evIdx !== -1) currentProjectDetail.events[_evIdx] = { ...currentProjectDetail.events[_evIdx], ..._currentEventData };
     _closeEventEditModal();
     document.getElementById("event-detail-title").textContent = updated.name ?? name;
     document.getElementById("event-detail-subtitle").textContent = _edFormatSubtitle(_currentEventData);
