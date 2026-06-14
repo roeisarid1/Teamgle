@@ -2189,7 +2189,7 @@ function renderDashboardTab() {
             }
             <div class="ev-meta-row">
               <span class="material-symbols-outlined ev-meta-icon">calendar_today</span>
-              <span>${fmtDate(ev.startTime)}</span>
+              <span>${fmtDate(ev.startTime)}${ev.endTime && fmtDate(ev.endTime) !== fmtDate(ev.startTime) ? ` – ${fmtDate(ev.endTime)}` : ""}</span>
             </div>
             <div class="ev-meta-row">
               <span class="material-symbols-outlined ev-meta-icon">schedule</span>
@@ -4449,6 +4449,22 @@ function _splitIsoToLocalParts(iso) {
   };
 }
 
+// ── Wall-clock datetime helpers ─────────────────────────────────────────────
+// Event/shift times are stored as naive local wall-clock (SQL DATETIME2) and the
+// whole app reads them back as wall-clock. So when SENDING user-entered times we
+// must NOT call toISOString() — that shifts to UTC (e.g. 20:00 → 17:00 in Israel
+// summer). Send the datetime-local value as-is, normalized to include seconds.
+// This matches the convention already used by shift add/edit and event edit.
+function _wallClockFromInput(val) {
+  if (!val) return null;
+  return val.length === 16 ? `${val}:00` : val; // "YYYY-MM-DDTHH:MM" → add :00
+}
+function _wallClockNow() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 function _prefillShiftRowFromStandaloneEvent(row, { force = false } = {}) {
   const start = _splitDateTimeLocal(document.getElementById("ev-start-time")?.value || "");
   const end   = _splitDateTimeLocal(document.getElementById("ev-end-time")?.value   || "");
@@ -4517,8 +4533,8 @@ document
         },
         body: JSON.stringify({
           name,
-          startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
-          endTime:   endTime   ? new Date(endTime).toISOString()   : new Date().toISOString(),
+          startTime: startTime ? _wallClockFromInput(startTime) : _wallClockNow(),
+          endTime:   endTime   ? _wallClockFromInput(endTime)   : _wallClockNow(),
           customerId,
           status: "draft",
           shifts: [],
@@ -5093,8 +5109,8 @@ function collectEventFormData() {
     shifts.push({
       rollId,
       requiredQuantity: qty,
-      startTime: shtStartDT ? shtStartDT.toISOString() : null,
-      endTime:   shtEndDT   ? shtEndDT.toISOString()   : null,
+      startTime: (shtStartDate && shtStartTime) ? `${shtStartDate}T${shtStartTime}:00` : null,
+      endTime:   (shtEndDate && shtEndTime)     ? `${shtEndDate}T${shtEndTime}:00`     : null,
     });
   });
 
@@ -5108,8 +5124,8 @@ function collectEventFormData() {
 
   return {
     name,
-    startTime:      startDT ? startDT.toISOString() : null,
-    endTime:        endDT   ? endDT.toISOString()   : null,
+    startTime:      _wallClockFromInput(startTimeVal),
+    endTime:        _wallClockFromInput(endTimeVal),
     location,
     eventType,
     attendeesCount: attendees ? parseInt(attendees, 10) : null,
@@ -5257,10 +5273,8 @@ document
 document
   .getElementById("shift-edit-cancel")
   .addEventListener("click", closeShiftEditModal);
-document.getElementById("shift-edit-overlay").addEventListener("click", (e) => {
-  if (e.target === document.getElementById("shift-edit-overlay"))
-    closeShiftEditModal();
-});
+// Backdrop click intentionally does NOT close this data-entry form — prevents
+// accidental loss of unsaved changes. Use the ✕ / Cancel buttons to close.
 
 document
   .getElementById("btn-save-shift")
@@ -5475,10 +5489,8 @@ document
 document
   .getElementById("shift-add-cancel")
   .addEventListener("click", closeShiftAddModal);
-document.getElementById("shift-add-overlay").addEventListener("click", (e) => {
-  if (e.target === document.getElementById("shift-add-overlay"))
-    closeShiftAddModal();
-});
+// Backdrop click intentionally does NOT close this data-entry form — prevents
+// accidental loss of unsaved changes. Use the ✕ / Cancel buttons to close.
 
 document
   .getElementById("btn-save-shift-add")
@@ -7367,9 +7379,12 @@ function _edFormatSubtitle(ev) {
   const parts = [];
 
   if (ev.startTime) {
-    const _d = new Date(ev.startTime);
     const _mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    parts.push(`‎${_d.getDate()} ${_mo[_d.getMonth()]} ${_d.getFullYear()}`);
+    const _fmtD = (iso) => { const d = new Date(iso); return `${d.getDate()} ${_mo[d.getMonth()]} ${d.getFullYear()}`; };
+    const startLabel = _fmtD(ev.startTime);
+    // Multi-day events: show the end date too so the span is unambiguous.
+    const endLabel = ev.endTime && _fmtD(ev.endTime) !== startLabel ? ` – ${_fmtD(ev.endTime)}` : "";
+    parts.push(`‎${startLabel}${endLabel}`);
   }
 
   const statusLabels = {
@@ -10498,9 +10513,8 @@ function _closeProjEditModal() {
 
 document.getElementById("proj-edit-close").addEventListener("click", _closeProjEditModal);
 document.getElementById("proj-edit-cancel").addEventListener("click", _closeProjEditModal);
-document.getElementById("proj-edit-overlay").addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) _closeProjEditModal();
-});
+// Backdrop click intentionally does NOT close this data-entry form — prevents
+// accidental loss of unsaved changes. Use the ✕ / Cancel buttons to close.
 
 // ── Save ───────────────────────────────────────────────────────────────────
 
@@ -10653,9 +10667,8 @@ function _closeEventEditModal() {
 
 document.getElementById("event-edit-close").addEventListener("click", _closeEventEditModal);
 document.getElementById("event-edit-cancel").addEventListener("click", _closeEventEditModal);
-document.getElementById("event-edit-overlay").addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) _closeEventEditModal();
-});
+// Backdrop click intentionally does NOT close this data-entry form — prevents
+// accidental loss of unsaved changes. Use the ✕ / Cancel buttons to close.
 
 // ── Save ───────────────────────────────────────────────────────────────────
 

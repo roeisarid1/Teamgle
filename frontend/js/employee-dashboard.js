@@ -407,9 +407,10 @@ function renderOffersTab() {
     lucide.createIcons(); return;
   }
 
-  const sortedOffers = [..._msOffers].sort((a, b) =>
-    new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0)
-  );
+  // Sort by the shift/event time (not by when the manager last touched the row),
+  // soonest first — so the most imminent offer is on top.
+  const _offerTime = (o) => new Date(o.plannedStartTime || o.shiftStartTime || o.eventStartTime || 0).getTime();
+  const sortedOffers = [..._msOffers].sort((a, b) => _offerTime(a) - _offerTime(b));
   panel.innerHTML = sortedOffers.map(o => renderOfferCard(o)).join("");
   lucide.createIcons();
 
@@ -520,8 +521,11 @@ async function renderUpdatesTab() {
 
   const statusUpdates  = (_msApplications  ?? []).filter(s => isShiftInUpdatesTab(s));
   const cancellations  = (_msCancellations ?? []).map(_cancellationToUpdateItem);
+  // Order updates by the affected shift/event time (most recent first), falling
+  // back to the status-change time when no shift time is available.
+  const _updTime = (x) => new Date(x.shiftStart || x.eventStart || x.cancelledAt || x.statusUpdatedAt || 0).getTime();
   const list           = [...cancellations, ...statusUpdates]
-    .sort((a, b) => new Date(b.cancelledAt ?? b.statusUpdatedAt ?? 0) - new Date(a.cancelledAt ?? a.statusUpdatedAt ?? 0));
+    .sort((a, b) => _updTime(b) - _updTime(a));
 
   if (list.length === 0) {
     panel.innerHTML = emptyState("bell", _t("No updates.", "אין עדכונים."), _t("Status changes to your shifts will appear here.", "שינויי סטטוס במשמרות שלך יופיעו כאן."));
@@ -605,9 +609,11 @@ async function renderApprovedTab() {
   }
 
   const now = new Date();
+  // Upcoming confirmed shifts: soonest first, by actual shift/event time.
+  const _shiftTime = (s) => new Date(s.shiftStart || s.eventStart || 0).getTime();
   const approved = (_msApplications ?? [])
     .filter(s => isShiftInActiveTab(s, now))
-    .sort((a, b) => new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0));
+    .sort((a, b) => _shiftTime(a) - _shiftTime(b));
 
   if (approved.length === 0) {
     panel.innerHTML = emptyState("calendar", _t("No upcoming shifts.", "אין משמרות קרובות."), _t("Your confirmed upcoming shifts will appear here.", "המשמרות המאושרות הקרובות שלך יופיעו כאן."));
@@ -682,9 +688,11 @@ async function renderHistoryTab() {
   const now = new Date();
 
   // Approved shifts leave the active tab after clock-out or 3 hours after planned end.
+  // Past shifts: most recent first, by actual shift/event time.
+  const _shiftTime = (s) => new Date(s.shiftStart || s.eventStart || 0).getTime();
   const past = (_msApplications ?? [])
     .filter(s => isShiftInHistoryTab(s, now))
-    .sort((a, b) => new Date(b.statusUpdatedAt ?? 0) - new Date(a.statusUpdatedAt ?? 0));
+    .sort((a, b) => _shiftTime(b) - _shiftTime(a));
 
   if (past.length === 0) {
     panel.innerHTML = emptyState("archive", _t("No history yet.", "אין היסטוריה עדיין."), _t("Past shifts will appear here.", "משמרות שעברו יופיעו כאן."));
@@ -709,9 +717,11 @@ function _shiftStatus(shift) {
 }
 
 function formatPendingBriefsFlag(count) {
+  // This flags briefs the EMPLOYEE still needs to read/acknowledge — not anything
+  // awaiting manager approval. Wording must make the required action unambiguous.
   return count === 1
-    ? _t("1 brief pending approval", "תדריך אחד ממתין לאישור")
-    : _t(`${count} briefs pending approval`, `${count} תדריכים ממתינים לאישור`);
+    ? _t("1 brief to read", "תדריך אחד לקריאה")
+    : _t(`${count} briefs to read`, `${count} תדריכים לקריאה`);
 }
 
 // opts: { showAttendance: bool, compact: bool }
@@ -987,7 +997,9 @@ function wireShiftCards(panel) {
       if (!shiftId || !section) return;
 
       const field    = btn.dataset.quickDirect === "start" ? "actualStart" : "actualEnd";
-      const nowIso   = new Date().toISOString();
+      // Send local wall-clock (no Z) to match the manual report-hours form and how
+      // the backend stores/reads times — toISOString() would shift to UTC.
+      const nowIso   = toDatetimeLocal(new Date().toISOString());
       const statusEl = section.querySelector(".ms-time-save-status");
 
       btn.disabled = true;
