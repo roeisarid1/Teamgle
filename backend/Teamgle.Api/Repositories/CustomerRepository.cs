@@ -175,7 +175,15 @@ public class CustomerRepository : ICustomerRepository
         cmd.Parameters.AddWithValue("@customerId", customerId);
         cmd.Parameters.AddWithValue("@companyId",  companyId);
         await conn.OpenAsync();
-        await cmd.ExecuteNonQueryAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (SqlException ex) when (ex.State == 3)
+        {
+            // Customer still has invoices — deletion is blocked by design.
+            throw new InvalidOperationException(ex.Message);
+        }
     }
 
     // ── sp_GetContactsByCustomer ──────────────────────────────────────────

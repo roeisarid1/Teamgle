@@ -102,6 +102,7 @@ public class CustomersController : ControllerBase
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = ex.Message }); }
         catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)   { return Conflict(new { error = ex.Message }); }
         catch (Exception ex) { _logger.LogError(ex, "Error deleting customer {Id}", id); return StatusCode(500, new { error = "An unexpected error occurred." }); }
     }
 
