@@ -2402,7 +2402,9 @@ function renderGantt(schedule, container) {
                             data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
                             data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
                             data-qty="${shift.requiredQuantity}"
-                            data-staffed="${shift.staffedCount ?? 0}">
+                            data-staffed="${shift.staffedCount ?? 0}"
+                            data-event-start-iso="${escapeHtml(ev.startTime || "")}"
+                            data-event-end-iso="${escapeHtml(ev.endTime || "")}">
                       <i data-lucide="pencil" style="width:11px;height:11px"></i>
                     </button>
                     <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="Delete shift"
@@ -2440,7 +2442,9 @@ function renderGantt(schedule, container) {
                           data-start="${shift.startTime ? toLocalDateTimeInput(shift.startTime) : ""}"
                           data-end="${shift.endTime ? toLocalDateTimeInput(shift.endTime) : ""}"
                           data-qty="${shift.requiredQuantity}"
-                          data-staffed="${shift.staffedCount ?? 0}">
+                          data-staffed="${shift.staffedCount ?? 0}"
+                          data-event-start-iso="${escapeHtml(ev.startTime || "")}"
+                          data-event-end-iso="${escapeHtml(ev.endTime || "")}">
                     <i data-lucide="pencil" style="width:14px;height:14px"></i>
                   </button>
                   <button class="gantt-bar-btn gantt-bar-btn-delete" type="button" title="${_t("Delete shift", "מחק משמרת")}"
@@ -5195,6 +5199,8 @@ function escapeHtml(str) {
 
 let editingShiftId = null;
 let editingShiftApproved = 0;
+let editingShiftEventStartISO = null;
+let editingShiftEventEndISO = null;
 let deletingShiftId = null;
 
 // ── Event delegation on gantt containers ───────────────────────────────────
@@ -5223,6 +5229,8 @@ document.getElementById("ed-gantt-container")?.addEventListener("click", _handle
 async function openShiftEditModal(btn) {
   editingShiftId = btn.dataset.shiftId;
   editingShiftApproved = parseInt(btn.dataset.staffed ?? "0", 10);
+  editingShiftEventStartISO = btn.dataset.eventStartIso || null;
+  editingShiftEventEndISO   = btn.dataset.eventEndIso   || null;
   const roleId = btn.dataset.roleId;
   const startVal = btn.dataset.start; // already YYYY-MM-DDTHH:MM
   const endVal = btn.dataset.end;
@@ -5265,6 +5273,8 @@ async function openShiftEditModal(btn) {
 function closeShiftEditModal() {
   document.getElementById("shift-edit-overlay").classList.remove("open");
   editingShiftId = null;
+  editingShiftEventStartISO = null;
+  editingShiftEventEndISO = null;
 }
 
 document
@@ -5322,6 +5332,30 @@ document
       );
       errEl.style.display = "block";
       return;
+    }
+
+    // Validate shift stays within the event's time window
+    if (editingShiftEventStartISO || editingShiftEventEndISO) {
+      const shiftStart = new Date(start);
+      const shiftEnd   = new Date(end);
+      const eventStart = editingShiftEventStartISO ? new Date(editingShiftEventStartISO) : null;
+      const eventEnd   = editingShiftEventEndISO   ? new Date(editingShiftEventEndISO)   : null;
+      if (eventStart && shiftStart < eventStart) {
+        errEl.textContent = _t(
+          "Shift start time cannot be before the event start time.",
+          "שעת תחילת המשמרת לא יכולה להיות לפני תחילת האירוע.",
+        );
+        errEl.style.display = "block";
+        return;
+      }
+      if (eventEnd && shiftEnd > eventEnd) {
+        errEl.textContent = _t(
+          "Shift end time cannot be after the event end time.",
+          "שעת סיום המשמרת לא יכולה להיות לאחר סיום האירוע.",
+        );
+        errEl.style.display = "block";
+        return;
+      }
     }
 
     const btn = document.getElementById("btn-save-shift");
@@ -10704,6 +10738,29 @@ document.getElementById("event-edit-save").addEventListener("click", async () =>
     errEl.textContent  = "End time must be after start time.";
     errEl.style.display = "block";
     return;
+  }
+
+  // Block shrinking the event so that an existing shift would fall outside the
+  // new window — a shift must always stay within its event's time range.
+  try {
+    const shifts = await _getCurrentEventShiftsForChat();
+    const newStart = new Date(startTime);
+    const newEnd   = new Date(endTime);
+    const offending = shifts.find((s) => {
+      const ss = new Date(s.startTime);
+      const se = new Date(s.endTime);
+      return ss < newStart || se > newEnd;
+    });
+    if (offending) {
+      errEl.textContent = _t(
+        `Cannot apply these times — shift "${offending.roleName}" falls outside the new event window. Adjust the shift first.`,
+        `לא ניתן להחיל את הזמנים — משמרת "${offending.roleName}" חורגת מחלון הזמן החדש של האירוע. עדכן תחילה את המשמרת.`,
+      );
+      errEl.style.display = "block";
+      return;
+    }
+  } catch {
+    /* transient fetch error — don't block the save on it */
   }
 
   const saveBtn = document.getElementById("event-edit-save");
